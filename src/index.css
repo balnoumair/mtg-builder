@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@theme {
+  --color-void: #0a0a0f;
+  --color-abyss: #111118;
+  --color-obsidian: #1a1a24;
+  --color-slate-dark: #252530;
+  --color-slate-mid: #35354a;
+  --color-ash: #8888a0;
+  --color-silver: #c0c0d0;
+  --color-bone: #e8e8f0;
+
+  --color-mana-white: #f9faf4;
+  --color-mana-blue: #0e68ab;
+  --color-mana-black: #6b5c7a;
+  --color-mana-red: #d3202a;
+  --color-mana-green: #00733e;
+  --color-mana-gold: #c9a832;
+  --color-mana-colorless: #9098a0;
+
+  --color-rarity-common: #8888a0;
+  --color-rarity-uncommon: #b0b8c0;
+  --color-rarity-rare: #c9a832;
+  --color-rarity-mythic: #d35030;
+
+  --font-display: 'Cinzel', serif;
+  --font-body: 'Outfit', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--color-void);
+  color: var(--color-bone);
+  font-family: var(--font-body);
+}
+
+body {
+  -webkit-app-region: drag;
+  overflow: hidden;
+}
+
+button, input, select, textarea, a {
+  -webkit-app-region: no-drag;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-slate-mid);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ash);
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.card-skeleton {
+  background: linear-gradient(90deg, var(--color-obsidian) 25%, var(--color-slate-dark) 50%, var(--color-obsidian) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 12px;
+}
+
+.glass {
+  background: rgba(26, 26, 36, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-hover:hover {
+  background: rgba(35, 35, 50, 0.8);
+  border-color: rgba(255, 255, 255, 0.1);
+}
