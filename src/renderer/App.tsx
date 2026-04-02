@@ -47,6 +47,11 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-void">
+      {/* Titlebar drag region */}
+      <div
+        className="fixed top-0 left-0 right-0 h-10 z-50"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      />
       <Sidebar
         view={view}
         onNavigate={(v) => { setView(v); if (v !== 'deck-editor') setActiveDeckId(null); }}

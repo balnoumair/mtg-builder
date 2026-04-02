@@ -41,12 +41,7 @@ html, body, #root {
 }
 
 body {
-  -webkit-app-region: drag;
   overflow: hidden;
-}
-
-button, input, select, textarea, a {
-  -webkit-app-region: no-drag;
 }
 
 ::-webkit-scrollbar {
