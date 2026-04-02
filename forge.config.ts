@@ -12,6 +12,7 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     name: 'MTG Builder',
+    icon: './assets/icon',
   },
   rebuildConfig: {},
   makers: [

@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, nativeImage } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { registerIpcHandlers } from './main/ipc-handlers';
@@ -33,6 +33,11 @@ const createWindow = () => {
 };
 
 app.on('ready', () => {
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(
+      nativeImage.createFromPath(path.join(__dirname, '../../assets/icon.png')),
+    );
+  }
   registerIpcHandlers();
   createWindow();
 });
