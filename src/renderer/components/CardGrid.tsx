@@ -35,9 +35,9 @@ export default function CardGrid({ cards, loading, onCardClick, onAddToDeck }: P
           className="group relative cursor-pointer animate-fade-in"
           style={{ animationDelay: `${Math.min(i * 15, 300)}ms` }}
         >
-          {card.image_uri_small ? (
+          {(card.image_uri_normal || card.image_uri_small) ? (
             <img
-              src={card.image_uri_small}
+              src={card.image_uri_normal || card.image_uri_small}
               alt={card.name}
               loading="lazy"
               onClick={() => onCardClick(card)}

@@ -98,9 +98,13 @@ export function searchCards(db: Database.Database, filters: CardFilters): CardSe
   if (useUnique) {
     countSql = `SELECT COUNT(DISTINCT oracle_id) as total FROM cards ${whereClause}`;
     dataSql = `
-      SELECT * FROM cards ${whereClause}
-      GROUP BY oracle_id
-      HAVING MAX(released_at)
+      SELECT * FROM (
+        SELECT *, ROW_NUMBER() OVER (
+          PARTITION BY oracle_id
+          ORDER BY released_at DESC, CAST(collector_number AS INTEGER) ASC
+        ) AS rn
+        FROM cards ${whereClause}
+      ) WHERE rn = 1
       ORDER BY ${sort} ASC
       LIMIT @limit OFFSET @offset
     `;
