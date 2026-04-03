@@ -3,12 +3,11 @@ import type { CardFilters, Deck, ElectronAPI, ImportProgress } from './shared/ty
 
 const api: ElectronAPI = {
   getDbStatus: () => ipcRenderer.invoke('db:status'),
-  selectFile: () => ipcRenderer.invoke('dialog:selectFile'),
-  importCards: (filePath: string) => ipcRenderer.invoke('import:cards', filePath),
-  onImportProgress: (callback: (progress: ImportProgress) => void) => {
+  syncCards: () => ipcRenderer.invoke('sync:cards'),
+  onSyncProgress: (callback: (progress: ImportProgress) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, progress: ImportProgress) => callback(progress);
-    ipcRenderer.on('import:progress', handler);
-    return () => { ipcRenderer.removeListener('import:progress', handler); };
+    ipcRenderer.on('sync:progress', handler);
+    return () => { ipcRenderer.removeListener('sync:progress', handler); };
   },
   searchCards: (filters: CardFilters) => ipcRenderer.invoke('cards:search', filters),
   getCard: (id: string) => ipcRenderer.invoke('cards:get', id),

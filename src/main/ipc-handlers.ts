@@ -1,6 +1,6 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import { getDb } from './database';
-import { importCards } from './import';
+import { syncCards } from './import';
 import * as cardQueries from './queries/cards';
 import * as deckQueries from './queries/decks';
 import type { CardFilters, Deck } from '../shared/types';
@@ -12,22 +12,12 @@ export function registerIpcHandlers(): void {
     return { ready: row.count > 0, cardCount: row.count };
   });
 
-  ipcMain.handle('dialog:selectFile', async () => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: [{ name: 'JSON', extensions: ['json'] }],
-    });
-    if (result.canceled || result.filePaths.length === 0) return null;
-    return result.filePaths[0];
-  });
-
-  ipcMain.handle('import:cards', async (event, filePath: string) => {
+  ipcMain.handle('sync:cards', async (event) => {
     const db = getDb();
     const win = BrowserWindow.fromWebContents(event.sender);
-    await importCards(db, filePath, (current, total) => {
-      win?.webContents.send('import:progress', { current, total, phase: 'reading' });
+    await syncCards(db, (current, total, phase) => {
+      win?.webContents.send('sync:progress', { current, total, phase });
     });
-    win?.webContents.send('import:progress', { current: 0, total: 0, phase: 'done' });
   });
 
   ipcMain.handle('cards:search', (_event, filters: CardFilters) => {
