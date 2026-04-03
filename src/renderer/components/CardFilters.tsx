@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { CardFilters as Filters } from '../../shared/types';
 
 const COLORS = [
@@ -20,10 +20,24 @@ interface Props {
 
 export default function CardFilters({ filters, onUpdate }: Props) {
   const [sets, setSets] = useState<{ code: string; name: string }[]>([]);
+  const [setDropdownOpen, setSetDropdownOpen] = useState(false);
+  const [setSearch, setSetSearch] = useState('');
+  const setDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     window.electronAPI.getSets().then(setSets);
   }, []);
+
+  useEffect(() => {
+    if (!setDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (setDropdownRef.current && !setDropdownRef.current.contains(e.target as Node)) {
+        setSetDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [setDropdownOpen]);
 
   const toggleColor = (code: string) => {
     const current = filters.colors || [];
@@ -48,6 +62,19 @@ export default function CardFilters({ filters, onUpdate }: Props) {
       : [...current, rarity];
     onUpdate({ rarity: next.length > 0 ? next : undefined });
   };
+
+  const toggleSet = (code: string) => {
+    const current = filters.sets || [];
+    const next = current.includes(code)
+      ? current.filter(s => s !== code)
+      : [...current, code];
+    onUpdate({ sets: next.length > 0 ? next : undefined });
+  };
+
+  const filteredSets = sets.filter(s =>
+    s.name.toLowerCase().includes(setSearch.toLowerCase()) ||
+    s.code.toLowerCase().includes(setSearch.toLowerCase())
+  );
 
   const hasFilters = (filters.colors?.length || 0) > 0
     || (filters.types?.length || 0) > 0
@@ -155,6 +182,55 @@ export default function CardFilters({ filters, onUpdate }: Props) {
           className="w-12 bg-obsidian border border-slate-mid/30 rounded-md px-1.5 py-1
                      text-xs text-silver text-center focus:outline-none focus:border-mana-gold/40"
         />
+      </div>
+
+      <div className="w-px h-6 bg-slate-mid/30" />
+
+      {/* Set picker */}
+      <div className="relative" ref={setDropdownRef}>
+        <button
+          onClick={() => setSetDropdownOpen(!setDropdownOpen)}
+          className={`bg-obsidian border rounded-lg px-2 py-1 text-xs transition-all cursor-pointer
+            ${(filters.sets?.length || 0) > 0
+              ? 'border-mana-gold/40 text-mana-gold'
+              : 'border-slate-mid/30 text-silver'
+            } focus:outline-none focus:border-mana-gold/40`}
+        >
+          Sets{(filters.sets?.length || 0) > 0 ? ` (${filters.sets!.length})` : ''}
+        </button>
+        {setDropdownOpen && (
+          <div className="absolute top-full mt-1 left-0 z-50 w-64 bg-obsidian border border-slate-mid/30 rounded-lg shadow-lg">
+            <input
+              type="text"
+              placeholder="Search sets..."
+              value={setSearch}
+              onChange={e => setSetSearch(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-transparent border-b border-slate-mid/30
+                         text-bone placeholder:text-ash/50 focus:outline-none"
+              autoFocus
+            />
+            <div className="max-h-60 overflow-y-auto p-1">
+              {filteredSets.map(s => (
+                <label
+                  key={s.code}
+                  className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-mid/10 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={(filters.sets || []).includes(s.code)}
+                    onChange={() => toggleSet(s.code)}
+                    className="accent-amber-500"
+                  />
+                  <span className="text-xs text-silver truncate">{s.name}</span>
+                  <span className="text-xs text-ash ml-auto shrink-0">{s.code.toUpperCase()}</span>
+                </label>
+              ))}
+              {filteredSets.length === 0 && (
+                <p className="text-xs text-ash px-2 py-2">No sets found</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Clear button */}

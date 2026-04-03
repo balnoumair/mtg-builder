@@ -8,6 +8,8 @@ import type Database from 'better-sqlite3';
 import { createIndexes } from './database';
 import { VALID_LAYOUTS } from './queries/cards';
 
+const STANDARD_SET_TYPES = new Set(['core', 'expansion']);
+
 interface ScryCard {
   id: string;
   oracle_id: string;
@@ -26,6 +28,7 @@ interface ScryCard {
   rarity?: string;
   set?: string;
   set_name?: string;
+  set_type?: string;
   collector_number?: string;
   image_uris?: {
     small?: string;
@@ -151,6 +154,7 @@ function importCardsFromFile(
     function processCard(value: ScryCard) {
       if (value.lang !== 'en') return;
       if (!VALID_LAYOUTS.has(value.layout)) return;
+      if (!value.set_type || !STANDARD_SET_TYPES.has(value.set_type)) return;
 
       const faces = value.card_faces;
       const frontFace = faces?.[0];
