@@ -1,4 +1,8 @@
 import fs from 'node:fs';
+import https from 'node:https';
+import http from 'node:http';
+import path from 'node:path';
+import os from 'node:os';
 import readline from 'node:readline';
 import type Database from 'better-sqlite3';
 import { createIndexes } from './database';
@@ -50,12 +54,61 @@ interface ScryCard {
   artist?: string;
 }
 
-type ProgressCallback = (current: number, total: number) => void;
+interface BulkDataEntry {
+  type: string;
+  download_uri: string;
+}
 
-export function importCards(
+interface BulkDataResponse {
+  data: BulkDataEntry[];
+}
+
+type ProgressCallback = (current: number, total: number, phase: 'downloading' | 'reading' | 'indexing' | 'done') => void;
+
+async function fetchBulkDataUrl(): Promise<string> {
+  const res = await fetch('https://api.scryfall.com/bulk-data');
+  if (!res.ok) throw new Error(`Scryfall API error: ${res.status}`);
+  const body = (await res.json()) as BulkDataResponse;
+  const entry = body.data.find((d) => d.type === 'default_cards');
+  if (!entry) throw new Error('default_cards bulk data not found');
+  return entry.download_uri;
+}
+
+function downloadFile(
+  url: string,
+  dest: string,
+  onProgress: (downloaded: number, total: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proto = url.startsWith('https') ? https : http;
+    proto.get(url, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        downloadFile(res.headers.location, dest, onProgress).then(resolve, reject);
+        return;
+      }
+      if (res.statusCode && res.statusCode >= 400) {
+        reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+        return;
+      }
+      const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+      let downloaded = 0;
+      const file = fs.createWriteStream(dest);
+      res.on('data', (chunk: Buffer) => {
+        downloaded += chunk.length;
+        onProgress(downloaded, totalBytes);
+      });
+      res.pipe(file);
+      file.on('finish', () => { file.close(); resolve(); });
+      file.on('error', (err) => { fs.unlink(dest, () => {}); reject(err); });
+      res.on('error', (err) => { fs.unlink(dest, () => {}); reject(err); });
+    }).on('error', reject);
+  });
+}
+
+function importCardsFromFile(
   db: Database.Database,
   filePath: string,
-  onProgress: ProgressCallback
+  onProgress: (current: number, total: number) => void,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const fileSize = fs.statSync(filePath).size;
@@ -152,7 +205,6 @@ export function importCards(
     });
 
     rl.on('line', (line: string) => {
-      // Strip leading [ or trailing ] or comma
       let trimmed = line.trim();
       if (trimmed === '[' || trimmed === ']') return;
       if (trimmed.endsWith(',')) trimmed = trimmed.slice(0, -1);
@@ -169,7 +221,6 @@ export function importCards(
     rl.on('close', () => {
       flushBatch();
       onProgress(count, count);
-      createIndexes(db);
       resolve();
     });
 
@@ -177,4 +228,82 @@ export function importCards(
       reject(err);
     });
   });
+}
+
+export async function syncCards(
+  db: Database.Database,
+  onProgress: ProgressCallback,
+): Promise<void> {
+  // 1. Fetch the download URL from Scryfall bulk data API
+  const downloadUrl = await fetchBulkDataUrl();
+
+  // 2. Download the file to a temp location
+  const tmpDir = os.tmpdir();
+  const tmpFile = path.join(tmpDir, `scryfall-bulk-${Date.now()}.json`);
+
+  try {
+    await downloadFile(downloadUrl, tmpFile, (downloaded, total) => {
+      onProgress(downloaded, total, 'downloading');
+    });
+
+    // 3. Back up deck_cards and cover_card_id before wiping cards
+    const deckCards = db.prepare('SELECT deck_id, card_id, quantity, board FROM deck_cards').all() as Array<{
+      deck_id: number;
+      card_id: string;
+      quantity: number;
+      board: string;
+    }>;
+    const coverCards = db.prepare('SELECT id, cover_card_id FROM decks WHERE cover_card_id IS NOT NULL').all() as Array<{
+      id: number;
+      cover_card_id: string;
+    }>;
+
+    // 4. Disable FK, delete all cards (avoids cascade), re-enable FK
+    db.pragma('foreign_keys = OFF');
+    db.exec('DELETE FROM deck_cards');
+    db.exec('DELETE FROM cards');
+    db.exec('DROP INDEX IF EXISTS idx_cards_name');
+    db.exec('DROP INDEX IF EXISTS idx_cards_oracle_id');
+    db.exec('DROP INDEX IF EXISTS idx_cards_set_code');
+    db.exec('DROP INDEX IF EXISTS idx_cards_cmc');
+    db.exec('DROP INDEX IF EXISTS idx_cards_rarity');
+    db.exec('DROP INDEX IF EXISTS idx_cards_type_line');
+    db.pragma('foreign_keys = ON');
+
+    // 5. Import cards from downloaded file
+    await importCardsFromFile(db, tmpFile, (current, total) => {
+      onProgress(current, total, 'reading');
+    });
+
+    // 6. Create indexes
+    onProgress(0, 0, 'indexing');
+    createIndexes(db);
+
+    // 7. Restore deck_cards (only for cards that exist in the new data)
+    const restoreDeckCard = db.prepare(`
+      INSERT OR IGNORE INTO deck_cards (deck_id, card_id, quantity, board)
+      SELECT @deck_id, @card_id, @quantity, @board
+      WHERE EXISTS (SELECT 1 FROM cards WHERE id = @card_id)
+    `);
+    const restoreMany = db.transaction((rows: typeof deckCards) => {
+      for (const row of rows) {
+        restoreDeckCard.run(row);
+      }
+    });
+    restoreMany(deckCards);
+
+    // 8. Restore cover_card_id where card still exists
+    const restoreCover = db.prepare(`
+      UPDATE decks SET cover_card_id = @cover_card_id
+      WHERE id = @id AND EXISTS (SELECT 1 FROM cards WHERE id = @cover_card_id)
+    `);
+    for (const row of coverCards) {
+      restoreCover.run(row);
+    }
+
+    onProgress(0, 0, 'done');
+  } finally {
+    // Clean up temp file
+    fs.unlink(tmpFile, () => {});
+  }
 }

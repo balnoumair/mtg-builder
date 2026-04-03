@@ -12,14 +12,16 @@ export default function App() {
   const [dbStatus, setDbStatus] = useState<DbStatus | null>(null);
   const [view, setView] = useState<View>('collection');
   const [activeDeckId, setActiveDeckId] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const { decks, loading: decksLoading, createDeck, deleteDeck, updateDeck, refresh: refreshDecks } = useDecks();
 
   useEffect(() => {
     window.electronAPI.getDbStatus().then(setDbStatus);
   }, []);
 
-  const handleImportComplete = () => {
+  const handleSyncComplete = () => {
     window.electronAPI.getDbStatus().then(setDbStatus);
+    setSyncing(false);
   };
 
   const handleOpenDeck = (id: number) => {
@@ -33,6 +35,10 @@ export default function App() {
     setView('deck-editor');
   };
 
+  const handleSync = () => {
+    setSyncing(true);
+  };
+
   if (dbStatus === null) {
     return (
       <div className="flex h-screen items-center justify-center bg-void">
@@ -41,8 +47,8 @@ export default function App() {
     );
   }
 
-  if (!dbStatus.ready) {
-    return <ImportScreen onComplete={handleImportComplete} />;
+  if (!dbStatus.ready || syncing) {
+    return <ImportScreen onComplete={handleSyncComplete} />;
   }
 
   return (
@@ -59,6 +65,7 @@ export default function App() {
         onOpenDeck={handleOpenDeck}
         onCreateDeck={handleCreateDeck}
         activeDeckId={activeDeckId}
+        onSync={handleSync}
       />
       <main className="flex-1 overflow-hidden">
         {view === 'collection' && <CardBrowser />}

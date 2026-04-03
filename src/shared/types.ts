@@ -73,7 +73,7 @@ export interface CardSearchResult {
 export interface ImportProgress {
   current: number;
   total: number;
-  phase: 'reading' | 'indexing' | 'done';
+  phase: 'downloading' | 'reading' | 'indexing' | 'done';
 }
 
 export interface DbStatus {
@@ -83,9 +83,8 @@ export interface DbStatus {
 
 export interface ElectronAPI {
   getDbStatus(): Promise<DbStatus>;
-  importCards(filePath: string): Promise<void>;
-  onImportProgress(callback: (progress: ImportProgress) => void): () => void;
-  selectFile(): Promise<string | null>;
+  syncCards(): Promise<void>;
+  onSyncProgress(callback: (progress: ImportProgress) => void): () => void;
   searchCards(filters: CardFilters): Promise<CardSearchResult>;
   getCard(id: string): Promise<Card | null>;
   getCardPrintings(oracleId: string): Promise<Card[]>;

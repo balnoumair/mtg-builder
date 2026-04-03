@@ -9,9 +9,10 @@ interface Props {
   onOpenDeck: (id: number) => void;
   onCreateDeck: (name: string, format?: string) => void;
   activeDeckId: number | null;
+  onSync: () => void;
 }
 
-export default function Sidebar({ view, onNavigate, decks, onOpenDeck, onCreateDeck, activeDeckId }: Props) {
+export default function Sidebar({ view, onNavigate, decks, onOpenDeck, onCreateDeck, activeDeckId, onSync }: Props) {
   const [showNewDeck, setShowNewDeck] = useState(false);
   const [newDeckName, setNewDeckName] = useState('');
 
@@ -90,6 +91,17 @@ export default function Sidebar({ view, onNavigate, decks, onOpenDeck, onCreateD
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="mt-auto px-3 pb-4">
+        <button
+          onClick={onSync}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium
+                     text-ash hover:text-silver hover:bg-obsidian/50 transition-all cursor-pointer"
+        >
+          <span className="text-xs">↻</span>
+          Sync Cards
+        </button>
       </div>
     </aside>
   );
