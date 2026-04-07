@@ -13,22 +13,33 @@ export default function CardBrowser() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex-shrink-0 p-5 pb-0 space-y-4">
-        <div className="flex items-center gap-4">
-          <h2 className="font-display text-xl font-bold text-bone">Collection</h2>
-          <span className="text-ash text-sm">{result.total.toLocaleString()} cards</span>
+      <div className="flex-shrink-0 p-5 pb-4 space-y-4">
+        <div className="flex items-end gap-3">
+          <h2 className="font-display text-2xl font-normal tracking-[0.14em] text-bone/90 uppercase leading-none">
+            Collection
+          </h2>
+          <span className="text-ash/50 text-xs tracking-wide pb-0.5">{result.total.toLocaleString()} cards</span>
         </div>
 
         {/* Search */}
-        <input
-          type="text"
-          placeholder="Search cards..."
-          value={filters.query || ''}
-          onChange={e => updateFilters({ query: e.target.value || undefined })}
-          className="w-full bg-obsidian border border-slate-mid/30 rounded-xl px-4 py-2.5
-                     text-sm text-bone placeholder:text-ash/50
-                     focus:outline-none focus:border-mana-gold/40 transition-colors"
-        />
+        <div className="relative">
+          <svg
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ash/40 pointer-events-none"
+            fill="none" viewBox="0 0 16 16"
+          >
+            <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M10 10L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <input
+            type="text"
+            placeholder="Search cards…"
+            value={filters.query || ''}
+            onChange={e => updateFilters({ query: e.target.value || undefined })}
+            className="w-full bg-slate-dark/40 border border-slate-mid/20 rounded-xl pl-10 pr-4 py-2.5
+                       text-sm text-bone placeholder:text-ash/40
+                       focus:outline-none focus:border-mana-gold/35 focus:bg-slate-dark/60 transition-all"
+          />
+        </div>
 
         {/* Filters */}
         <CardFiltersBar filters={filters} onUpdate={updateFilters} />

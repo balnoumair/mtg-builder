@@ -54,11 +54,11 @@ export default function CardDetail({ card, printings, onClose, onAddToDeck }: Pr
             {onAddToDeck && (
               <button
                 onClick={() => onAddToDeck(card)}
-                className="w-full mt-3 py-2.5 rounded-xl bg-mana-green/20 border border-mana-green/30
-                           text-mana-green font-medium text-sm
-                           hover:bg-mana-green/30 transition-all cursor-pointer"
+                className="w-full mt-3 py-2 rounded-xl bg-mana-gold/10 border border-mana-gold/25
+                           text-mana-gold/80 font-medium text-xs tracking-wide
+                           hover:bg-mana-gold/18 hover:text-mana-gold transition-all cursor-pointer"
               >
-                + Add to Deck
+                Add to Deck
               </button>
             )}
           </div>

@@ -76,6 +76,7 @@ export default function App() {
             onOpenDeck={handleOpenDeck}
             onCreateDeck={handleCreateDeck}
             onDeleteDeck={deleteDeck}
+            onRenameDeck={(id, name) => updateDeck(id, { name })}
           />
         )}
         {view === 'deck-editor' && activeDeckId && (

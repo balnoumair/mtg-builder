@@ -78,16 +78,25 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
     <div className="h-full flex">
       {/* Left: Card search */}
       <div className="w-[55%] h-full flex flex-col border-r border-white/5">
-        <div className="flex-shrink-0 p-4 pb-0 space-y-3">
-          <input
-            type="text"
-            placeholder="Search cards to add..."
-            value={filters.query || ''}
-            onChange={e => updateFilters({ query: e.target.value || undefined })}
-            className="w-full bg-obsidian border border-slate-mid/30 rounded-xl px-4 py-2.5
-                       text-sm text-bone placeholder:text-ash/50
-                       focus:outline-none focus:border-mana-gold/40 transition-colors"
-          />
+        <div className="flex-shrink-0 p-4 pb-3 space-y-3">
+          <div className="relative">
+            <svg
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ash/40 pointer-events-none"
+              fill="none" viewBox="0 0 16 16"
+            >
+              <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M10 10L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="Search cards to add…"
+              value={filters.query || ''}
+              onChange={e => updateFilters({ query: e.target.value || undefined })}
+              className="w-full bg-slate-dark/40 border border-slate-mid/20 rounded-xl pl-10 pr-4 py-2.5
+                         text-sm text-bone placeholder:text-ash/40
+                         focus:outline-none focus:border-mana-gold/35 focus:bg-slate-dark/60 transition-all"
+            />
+          </div>
           <CardFiltersBar filters={filters} onUpdate={updateFilters} />
         </div>
 
@@ -126,10 +135,10 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
       </div>
 
       {/* Right: Deck contents */}
-      <div className="w-[45%] h-full flex flex-col bg-abyss/50">
+      <div className="w-[45%] h-full flex flex-col" style={{ background: 'linear-gradient(180deg, #0e0e18 0%, #0a0a12 100%)' }}>
         {/* Deck header */}
-        <div className="flex-shrink-0 p-4 border-b border-white/5">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="flex-shrink-0 px-5 pt-5 pb-4 border-b border-white/[0.05]">
+          <div className="mb-4">
             {editingName ? (
               <input
                 autoFocus
@@ -137,46 +146,48 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                 onChange={e => setNameValue(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleFinishRename(); if (e.key === 'Escape') setEditingName(false); }}
                 onBlur={handleFinishRename}
-                className="bg-transparent border-b border-mana-gold/40 text-bone font-display text-lg font-bold
-                           focus:outline-none px-0 py-0"
+                className="bg-transparent border-b border-mana-gold/40 text-bone font-display text-xl
+                           font-normal tracking-[0.12em] uppercase focus:outline-none px-0 py-0 w-full"
               />
             ) : (
               <h2
-                className="font-display text-lg font-bold text-bone cursor-pointer hover:text-mana-gold transition-colors"
+                className="font-display text-xl font-normal tracking-[0.12em] uppercase text-bone/90
+                           cursor-pointer hover:text-mana-gold/90 transition-colors leading-none"
                 onClick={handleStartRename}
                 title="Click to rename"
               >
                 {deck?.name || 'Deck'}
               </h2>
             )}
-            {deck?.format && (
-              <span className="px-2 py-0.5 rounded-md bg-mana-gold/10 text-mana-gold text-xs capitalize">
-                {deck.format}
-              </span>
-            )}
           </div>
 
           {/* Board tabs */}
-          <div className="flex gap-1 mb-3">
+          <div className="flex border-b border-white/[0.06] mb-4 -mx-5 px-5">
             <button
               onClick={() => setActiveBoard('main')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer
+              className={`pb-2.5 mr-5 text-xs font-medium tracking-wide transition-all cursor-pointer border-b-2 -mb-px
                 ${activeBoard === 'main'
-                  ? 'bg-obsidian text-bone'
-                  : 'text-ash hover:text-silver'
+                  ? 'text-bone border-mana-gold/60'
+                  : 'text-ash/50 border-transparent hover:text-ash'
                 }`}
             >
-              Main Deck ({mainCount})
+              Main
+              <span className={`ml-1.5 text-[10px] ${activeBoard === 'main' ? 'text-mana-gold/60' : 'text-ash/30'}`}>
+                {mainCount}
+              </span>
             </button>
             <button
               onClick={() => setActiveBoard('sideboard')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer
+              className={`pb-2.5 text-xs font-medium tracking-wide transition-all cursor-pointer border-b-2 -mb-px
                 ${activeBoard === 'sideboard'
-                  ? 'bg-obsidian text-bone'
-                  : 'text-ash hover:text-silver'
+                  ? 'text-bone border-mana-gold/60'
+                  : 'text-ash/50 border-transparent hover:text-ash'
                 }`}
             >
-              Sideboard ({sideCount})
+              Sideboard
+              <span className={`ml-1.5 text-[10px] ${activeBoard === 'sideboard' ? 'text-mana-gold/60' : 'text-ash/30'}`}>
+                {sideCount}
+              </span>
             </button>
           </div>
 
@@ -184,53 +195,55 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
         </div>
 
         {/* Deck card list */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto px-4 py-3">
           {groupedCards.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-ash text-sm">No cards in {activeBoard}</p>
-              <p className="text-ash/50 text-xs mt-1">Search and add cards from the left panel</p>
+            <div className="text-center py-16">
+              <p className="text-ash/50 text-sm">No cards yet</p>
+              <p className="text-ash/30 text-xs mt-1">Click any card on the left to add it</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-5">
               {groupedCards.map(group => (
                 <div key={group.type}>
-                  <h4 className="text-ash text-xs font-medium uppercase tracking-wider mb-1.5 flex items-center gap-2">
-                    {group.type}
-                    <span className="text-ash/50">({group.count})</span>
-                  </h4>
-                  <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 mb-1.5 pb-1 border-b border-white/[0.04]">
+                    <h4 className="text-[10px] font-medium uppercase tracking-[0.14em] text-ash/50">
+                      {group.type}
+                    </h4>
+                    <span className="text-[10px] text-ash/30">{group.count}</span>
+                  </div>
+                  <div className="space-y-px">
                     {group.cards.map(dc => (
                       <div
                         key={dc.id}
                         className="flex items-center gap-2 px-2 py-1.5 rounded-lg
-                                   hover:bg-obsidian/50 transition-colors group"
+                                   hover:bg-white/[0.04] transition-colors group"
                       >
-                        {/* Quantity controls */}
-                        <div className="flex items-center gap-1 flex-shrink-0">
+                        {/* Quantity badge + controls */}
+                        <div className="flex items-center gap-0.5 flex-shrink-0 w-14">
                           <button
                             onClick={() => handleQuantityChange(dc.card_id, dc.board, -1)}
-                            className="w-5 h-5 rounded flex items-center justify-center
-                                       text-ash hover:text-mana-red text-xs cursor-pointer
+                            className="w-4 h-4 rounded flex items-center justify-center text-ash/40
+                                       hover:text-mana-red text-xs cursor-pointer
                                        opacity-0 group-hover:opacity-100 transition-opacity"
                           >
-                            −
+                            <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1 4h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
                           </button>
-                          <span className="w-5 text-center text-bone text-sm font-medium">
+                          <span className="w-5 text-center text-bone/80 text-xs font-medium tabular-nums">
                             {dc.quantity}
                           </span>
                           <button
                             onClick={() => handleQuantityChange(dc.card_id, dc.board, 1)}
-                            className="w-5 h-5 rounded flex items-center justify-center
-                                       text-ash hover:text-mana-green text-xs cursor-pointer
+                            className="w-4 h-4 rounded flex items-center justify-center text-ash/40
+                                       hover:text-mana-green text-xs cursor-pointer
                                        opacity-0 group-hover:opacity-100 transition-opacity"
                           >
-                            +
+                            <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M4 1v6M1 4h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
                           </button>
                         </div>
 
                         {/* Card name */}
                         <span
-                          className="flex-1 text-silver text-sm truncate cursor-pointer hover:text-bone transition-colors"
+                          className="flex-1 text-silver/75 text-xs truncate cursor-pointer hover:text-bone transition-colors"
                           onClick={() => dc.card && showCard(dc.card)}
                         >
                           {dc.card?.name}
