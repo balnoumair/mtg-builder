@@ -97,3 +97,12 @@ body {
   background: rgba(35, 35, 50, 0.8);
   border-color: rgba(255, 255, 255, 0.1);
 }
+
+@keyframes popoverIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-popover-in {
+  animation: popoverIn 0.15s ease-out forwards;
+}
