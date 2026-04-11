@@ -22,7 +22,7 @@ export function searchCards(db: Database.Database, filters: CardFilters): CardSe
   const params: Record<string, unknown> = {};
 
   if (filters.query) {
-    conditions.push("name LIKE '%' || @query || '%'");
+    conditions.push("(name LIKE '%' || @query || '%' OR oracle_text LIKE '%' || @query || '%')");
     params.query = filters.query;
   }
 
