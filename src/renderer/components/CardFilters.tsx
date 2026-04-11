@@ -9,6 +9,8 @@ const COLORS = [
   { code: 'G', label: 'Green', color: '#1db868', glow: 'rgba(29,184,104,0.35)' },
 ];
 
+const CMC_VALUES = [0, 1, 2, 3, 4, 5, 6, 7] as const;
+
 const TYPES = ['Creature', 'Instant', 'Sorcery', 'Enchantment', 'Artifact', 'Planeswalker', 'Land'];
 const RARITIES: { key: string; label: string; color: string }[] = [
   { key: 'common',   label: 'C', color: '#8888a0' },
@@ -82,10 +84,25 @@ export default function CardFilters({ filters, onUpdate }: Props) {
     s.code.toLowerCase().includes(setSearch.toLowerCase())
   );
 
+  const toggleCmc = (val: number) => {
+    const is7Plus = val === 7;
+    const activeExact = !is7Plus && filters.cmcMin === val && filters.cmcMax === val;
+    const active7Plus = is7Plus && filters.cmcMin === 7 && filters.cmcMax === undefined;
+    if (activeExact || active7Plus) {
+      onUpdate({ cmcMin: undefined, cmcMax: undefined });
+    } else if (is7Plus) {
+      onUpdate({ cmcMin: 7, cmcMax: undefined });
+    } else {
+      onUpdate({ cmcMin: val, cmcMax: val });
+    }
+  };
+
   const hasFilters = (filters.colors?.length || 0) > 0
     || (filters.types?.length || 0) > 0
     || (filters.rarity?.length || 0) > 0
-    || (filters.sets?.length || 0) > 0;
+    || (filters.sets?.length || 0) > 0
+    || filters.cmcMin !== undefined
+    || filters.cmcMax !== undefined;
 
   return (
     <div className="flex flex-wrap items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-dark/30 border border-slate-mid/15">
@@ -182,6 +199,33 @@ export default function CardFilters({ filters, onUpdate }: Props) {
 
       <div className="w-px h-5 bg-slate-mid/25 self-center" />
 
+      {/* CMC filter */}
+      <div className="flex items-center gap-1">
+        {CMC_VALUES.map(val => {
+          const is7Plus = val === 7;
+          const active = is7Plus
+            ? filters.cmcMin === 7 && filters.cmcMax === undefined
+            : filters.cmcMin === val && filters.cmcMax === val;
+          return (
+            <button
+              key={val}
+              onClick={() => toggleCmc(val)}
+              title={is7Plus ? 'CMC 7 or more' : `CMC ${val}`}
+              className={`w-7 h-7 rounded-md border transition-all duration-150 cursor-pointer flex items-center justify-center text-[10px] font-bold select-none
+                ${active
+                  ? 'bg-violet-500/20 border-violet-400/60 text-violet-300'
+                  : 'bg-slate-dark/40 border-slate-mid/20 text-silver/50 hover:text-silver hover:border-slate-mid/40 hover:bg-slate-dark/70'
+                }`}
+              style={active ? { boxShadow: '0 0 8px rgba(139,92,246,0.4)' } : undefined}
+            >
+              {is7Plus ? '7+' : val}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="w-px h-5 bg-slate-mid/25 self-center" />
+
       {/* Type filter */}
       <div className="flex flex-wrap gap-1">
         {TYPES.map(t => {
@@ -231,7 +275,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
       {/* Clear */}
       {hasFilters && (
         <button
-          onClick={() => onUpdate({ colors: undefined, types: undefined, rarity: undefined, sets: undefined })}
+          onClick={() => onUpdate({ colors: undefined, types: undefined, rarity: undefined, sets: undefined, cmcMin: undefined, cmcMax: undefined })}
           className="ml-1 flex items-center gap-1 text-[11px] text-ash/50 hover:text-mana-red/80 transition-colors cursor-pointer"
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
