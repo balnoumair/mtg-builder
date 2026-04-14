@@ -3,6 +3,7 @@ import { getDb } from './database';
 import { syncCards } from './import';
 import * as cardQueries from './queries/cards';
 import * as deckQueries from './queries/decks';
+import * as collectionQueries from './queries/collection';
 import type { CardFilters, Deck } from '../shared/types';
 
 export function registerIpcHandlers(): void {
@@ -66,5 +67,34 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('decks:removeCard', (_event, deckId: number, cardId: string, board: string) => {
     return deckQueries.removeCardFromDeck(getDb(), deckId, cardId, board);
+  });
+
+  ipcMain.handle('decks:claim', (_event, deckId: number) => {
+    return deckQueries.claimDeckFromCollection(getDb(), deckId);
+  });
+
+  // Collection
+  ipcMain.handle('collection:get', (_event, filters: CardFilters) => {
+    return collectionQueries.getCollection(getDb(), filters);
+  });
+
+  ipcMain.handle('collection:quantities', (_event, cardIds: string[]) => {
+    return collectionQueries.getCollectionQuantities(getDb(), cardIds);
+  });
+
+  ipcMain.handle('collection:add', (_event, cardId: string, quantity?: number) => {
+    return collectionQueries.addToCollection(getDb(), cardId, quantity);
+  });
+
+  ipcMain.handle('collection:update', (_event, cardId: string, quantity: number) => {
+    return collectionQueries.updateCollectionQuantity(getDb(), cardId, quantity);
+  });
+
+  ipcMain.handle('collection:remove', (_event, cardId: string) => {
+    return collectionQueries.removeFromCollection(getDb(), cardId);
+  });
+
+  ipcMain.handle('collection:stats', () => {
+    return collectionQueries.getCollectionStats(getDb());
   });
 }

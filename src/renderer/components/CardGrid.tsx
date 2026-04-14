@@ -6,9 +6,10 @@ interface Props {
   loading: boolean;
   onCardClick: (card: Card) => void;
   onAddToDeck?: (card: Card) => void;
+  ownedQuantities?: Record<string, number>;
 }
 
-export default function CardGrid({ cards, loading, onCardClick, onAddToDeck }: Props) {
+export default function CardGrid({ cards, loading, onCardClick, onAddToDeck, ownedQuantities }: Props) {
   if (loading && cards.length === 0) {
     return (
       <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 p-1">
@@ -42,6 +43,16 @@ export default function CardGrid({ cards, loading, onCardClick, onAddToDeck }: P
           style={{ animationDelay: `${Math.min(i * 15, 300)}ms` }}
           onClick={() => handlePrimary(card)}
         >
+          {/* Owned quantity badge */}
+          {ownedQuantities?.[card.id] ? (
+            <div className="absolute top-1.5 right-1.5 bg-mana-gold/85 text-void
+                            text-[9px] font-bold rounded-full min-w-[18px] h-[18px]
+                            flex items-center justify-center px-1 shadow-sm shadow-black/30
+                            pointer-events-none z-10">
+              {ownedQuantities[card.id]}
+            </div>
+          ) : null}
+
           {(card.image_uri_normal || card.image_uri_small) ? (
             <img
               src={card.image_uri_normal || card.image_uri_small}

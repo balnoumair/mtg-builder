@@ -22,6 +22,15 @@ function IconCollection() {
   );
 }
 
+function IconMyCards() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <rect x="2" y="3" width="11" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
+      <path d="M5 1.5h5M4 6.5l3.5 3 3.5-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
 function IconDecks() {
   return (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
@@ -81,6 +90,12 @@ export default function Sidebar({ view, onNavigate, decks, onOpenDeck, onCreateD
           onClick={() => onNavigate('collection')}
         />
         <NavItem
+          label="My Cards"
+          icon={<IconMyCards />}
+          active={view === 'my-cards'}
+          onClick={() => onNavigate('my-cards')}
+        />
+        <NavItem
           label="My Decks"
           icon={<IconDecks />}
           active={view === 'decks'}
@@ -134,7 +149,12 @@ export default function Sidebar({ view, onNavigate, decks, onOpenDeck, onCreateD
                   : 'text-silver/60 hover:text-silver hover:bg-white/[0.04] border-l-2 border-transparent'
                 }`}
             >
-              <div className="font-medium truncate">{deck.name}</div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-medium truncate">{deck.name}</span>
+                {deck.owned && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-mana-green/50 flex-shrink-0" title="Owned" />
+                )}
+              </div>
               {deck.format && (
                 <div className={`text-[10px] mt-0.5 capitalize ${activeDeckId === deck.id ? 'text-mana-gold/50' : 'text-ash/40'}`}>
                   {deck.format}

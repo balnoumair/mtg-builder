@@ -1,4 +1,7 @@
+import { useMemo, useState, useCallback } from 'react';
+import type { Card } from '../../shared/types';
 import { useCards, useCardDetail } from '../hooks/useCards';
+import { useCollectionLookup, useCollectionActions } from '../hooks/useCollection';
 import CardFiltersBar from './CardFilters';
 import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
@@ -6,6 +9,17 @@ import CardDetail from './CardDetail';
 export default function CardBrowser() {
   const { filters, updateFilters, setPage, result, loading } = useCards();
   const { card, printings, open, showCard, close } = useCardDetail();
+  const [colVersion, setColVersion] = useState(0);
+
+  const cardIds = useMemo(() => result.cards.map(c => c.id), [result.cards]);
+  const ownedQuantities = useCollectionLookup(cardIds, colVersion);
+
+  const refreshCol = useCallback(() => setColVersion(v => v + 1), []);
+  const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refreshCol);
+
+  const handleAddToCollection = useCallback((c: Card) => {
+    addToCollection(c.id);
+  }, [addToCollection]);
 
   const totalPages = Math.ceil(result.total / (filters.pageSize || 60));
   const currentPage = filters.page || 1;
@@ -47,7 +61,7 @@ export default function CardBrowser() {
 
       {/* Card grid */}
       <div className="flex-1 overflow-y-auto p-5">
-        <CardGrid cards={result.cards} loading={loading} onCardClick={showCard} />
+        <CardGrid cards={result.cards} loading={loading} onCardClick={showCard} ownedQuantities={ownedQuantities} />
 
         {/* Pagination */}
         {totalPages > 1 && (
@@ -79,7 +93,15 @@ export default function CardBrowser() {
 
       {/* Detail modal */}
       {open && card && (
-        <CardDetail card={card} printings={printings} onClose={close} />
+        <CardDetail
+          card={card}
+          printings={printings}
+          onClose={close}
+          collectionQuantity={card ? (ownedQuantities[card.id] ?? 0) : 0}
+          onAddToCollection={handleAddToCollection}
+          onUpdateCollectionQuantity={updateCollectionQuantity}
+          onRemoveFromCollection={removeFromCollection}
+        />
       )}
     </div>
   );

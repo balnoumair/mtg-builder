@@ -1,4 +1,4 @@
-export type View = 'collection' | 'decks' | 'deck-editor';
+export type View = 'collection' | 'my-cards' | 'decks' | 'deck-editor';
 
 export interface AppState {
   view: View;

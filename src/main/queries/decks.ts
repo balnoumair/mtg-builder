@@ -2,13 +2,18 @@ import type Database from 'better-sqlite3';
 import type { Deck, DeckCard } from '../../shared/types';
 
 export function getDecks(db: Database.Database): Deck[] {
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT d.*, COALESCE(SUM(dc.quantity), 0) as card_count
     FROM decks d
     LEFT JOIN deck_cards dc ON dc.deck_id = d.id AND dc.board = 'main'
     GROUP BY d.id
     ORDER BY d.updated_at DESC
-  `).all() as Deck[];
+  `).all() as (Omit<Deck, 'owned'> & { owned: number })[];
+  return rows.map(r => ({ ...r, owned: !!r.owned }));
+}
+
+function rowToDeck(row: Record<string, unknown>): Deck {
+  return { ...row, owned: !!(row.owned as number) } as Deck;
 }
 
 export function createDeck(db: Database.Database, deck: { name: string; format?: string }): Deck {
@@ -16,7 +21,7 @@ export function createDeck(db: Database.Database, deck: { name: string; format?:
     "INSERT INTO decks (name, format) VALUES (@name, @format)"
   ).run({ name: deck.name, format: deck.format || '' });
 
-  return db.prepare('SELECT * FROM decks WHERE id = ?').get(result.lastInsertRowid) as Deck;
+  return rowToDeck(db.prepare('SELECT * FROM decks WHERE id = ?').get(result.lastInsertRowid) as Record<string, unknown>);
 }
 
 export function updateDeck(db: Database.Database, id: number, updates: Partial<Deck>): Deck {
@@ -27,11 +32,12 @@ export function updateDeck(db: Database.Database, id: number, updates: Partial<D
   if (updates.format !== undefined) { fields.push('format = @format'); params.format = updates.format; }
   if (updates.description !== undefined) { fields.push('description = @description'); params.description = updates.description; }
   if (updates.cover_card_id !== undefined) { fields.push('cover_card_id = @cover_card_id'); params.cover_card_id = updates.cover_card_id; }
+  if (updates.owned !== undefined) { fields.push('owned = @owned'); params.owned = updates.owned ? 1 : 0; }
 
   fields.push("updated_at = datetime('now')");
 
   db.prepare(`UPDATE decks SET ${fields.join(', ')} WHERE id = @id`).run(params);
-  return db.prepare('SELECT * FROM decks WHERE id = ?').get(id) as Deck;
+  return rowToDeck(db.prepare('SELECT * FROM decks WHERE id = ?').get(id) as Record<string, unknown>);
 }
 
 export function deleteDeck(db: Database.Database, id: number): void {
@@ -127,4 +133,39 @@ export function removeCardFromDeck(
     'DELETE FROM deck_cards WHERE deck_id = @deckId AND card_id = @cardId AND board = @board'
   ).run({ deckId, cardId, board });
   db.prepare("UPDATE decks SET updated_at = datetime('now') WHERE id = ?").run(deckId);
+}
+
+/**
+ * Marks a deck as owned and deducts matching cards from the collection.
+ * For each card in the deck, reduces the collection quantity by the deck quantity.
+ * If collection quantity drops to 0 or below, removes from collection.
+ */
+export function claimDeckFromCollection(db: Database.Database, deckId: number): void {
+  const txn = db.transaction(() => {
+    // Mark deck as owned
+    db.prepare("UPDATE decks SET owned = 1, updated_at = datetime('now') WHERE id = ?").run(deckId);
+
+    // Get all cards in this deck
+    const deckCards = db.prepare(
+      'SELECT card_id, SUM(quantity) as total_qty FROM deck_cards WHERE deck_id = ? GROUP BY card_id'
+    ).all(deckId) as { card_id: string; total_qty: number }[];
+
+    for (const dc of deckCards) {
+      // Get current collection quantity
+      const colRow = db.prepare(
+        'SELECT quantity FROM collection WHERE card_id = ?'
+      ).get(dc.card_id) as { quantity: number } | undefined;
+
+      if (!colRow) continue; // Card not in collection, skip
+
+      const remaining = colRow.quantity - dc.total_qty;
+      if (remaining <= 0) {
+        db.prepare('DELETE FROM collection WHERE card_id = ?').run(dc.card_id);
+      } else {
+        db.prepare('UPDATE collection SET quantity = ? WHERE card_id = ?').run(remaining, dc.card_id);
+      }
+    }
+  });
+
+  txn();
 }
