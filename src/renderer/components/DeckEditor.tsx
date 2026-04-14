@@ -1,13 +1,16 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import type { Card, Deck } from '../../shared/types';
 import { useCards, useCardDetail } from '../hooks/useCards';
 import { useDeckCards } from '../hooks/useDecks';
+import { useCollectionLookup, useCollectionActions } from '../hooks/useCollection';
 import { getCardTypeCategory, TYPE_ORDER } from '../lib/mana';
 import CardFiltersBar from './CardFilters';
 import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
 import DeckStats from './DeckStats';
 import ManaSymbols from './ManaSymbols';
+import ExportDeckModal from './ExportDeckModal';
+import ClaimDeckModal from './ClaimDeckModal';
 
 interface Props {
   deckId: number;
@@ -24,6 +27,31 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
   const [activeBoard, setActiveBoard] = useState<'main' | 'sideboard'>('main');
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState('');
+  const [colVersion, setColVersion] = useState(0);
+  const [showExport, setShowExport] = useState(false);
+  const [showClaim, setShowClaim] = useState(false);
+
+  // Ownership lookup for search results
+  const searchCardIds = useMemo(() => result.cards.map(c => c.id), [result.cards]);
+  const searchOwnedQtys = useCollectionLookup(searchCardIds, colVersion);
+
+  // Ownership lookup for deck cards
+  const deckCardIds = useMemo(() => deckCards.map(c => c.card_id), [deckCards]);
+  const deckOwnedQtys = useCollectionLookup(deckCardIds, colVersion);
+
+  const refreshCol = useCallback(() => setColVersion(v => v + 1), []);
+  const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refreshCol);
+
+  const handleAddToCollection = useCallback((c: Card) => {
+    addToCollection(c.id);
+  }, [addToCollection]);
+
+  const handleClaimDeck = async () => {
+    await window.electronAPI.claimDeckFromCollection(deckId);
+    onUpdateDeck(deckId, { owned: true });
+    refreshCol();
+    setShowClaim(false);
+  };
 
   const handleAddCard = async (card: Card) => {
     await addCard(card.id, activeBoard);
@@ -106,6 +134,7 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
             loading={loading}
             onCardClick={showCard}
             onAddToDeck={handleAddCard}
+            ownedQuantities={searchOwnedQtys}
           />
 
           {Math.ceil(result.total / (filters.pageSize || 60)) > 1 && (
@@ -139,26 +168,67 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
         {/* Deck header */}
         <div className="flex-shrink-0 px-5 pt-5 pb-4 border-b border-white/[0.05]">
           <div className="mb-4">
-            {editingName ? (
-              <input
-                autoFocus
-                value={nameValue}
-                onChange={e => setNameValue(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleFinishRename(); if (e.key === 'Escape') setEditingName(false); }}
-                onBlur={handleFinishRename}
-                className="bg-transparent border-b border-mana-gold/40 text-bone font-display text-xl
-                           font-normal tracking-[0.12em] uppercase focus:outline-none px-0 py-0 w-full"
-              />
-            ) : (
-              <h2
-                className="font-display text-xl font-normal tracking-[0.12em] uppercase text-bone/90
-                           cursor-pointer hover:text-mana-gold/90 transition-colors leading-none"
-                onClick={handleStartRename}
-                title="Click to rename"
+            <div className="flex items-center gap-3">
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={nameValue}
+                  onChange={e => setNameValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleFinishRename(); if (e.key === 'Escape') setEditingName(false); }}
+                  onBlur={handleFinishRename}
+                  className="bg-transparent border-b border-mana-gold/40 text-bone font-display text-xl
+                             font-normal tracking-[0.12em] uppercase focus:outline-none px-0 py-0 flex-1"
+                />
+              ) : (
+                <h2
+                  className="font-display text-xl font-normal tracking-[0.12em] uppercase text-bone/90
+                             cursor-pointer hover:text-mana-gold/90 transition-colors leading-none"
+                  onClick={handleStartRename}
+                  title="Click to rename"
+                >
+                  {deck?.name || 'Deck'}
+                </h2>
+              )}
+              {deck?.owned ? (
+                <span className="px-2 py-0.5 rounded-md bg-mana-green/10 border border-mana-green/25
+                                 text-mana-green/80 text-[9px] font-medium uppercase tracking-wider flex-shrink-0">
+                  Owned
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08]
+                                 text-ash/50 text-[9px] font-medium uppercase tracking-wider flex-shrink-0">
+                  Wishlist
+                </span>
+              )}
+            </div>
+
+            {/* Deck actions */}
+            <div className="flex items-center gap-2 mt-2.5">
+              <button
+                onClick={() => setShowExport(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium
+                           text-ash/50 hover:text-silver hover:bg-white/[0.05] transition-all cursor-pointer"
               >
-                {deck?.name || 'Deck'}
-              </h2>
-            )}
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M5 1v6M2.5 4.5L5 7l2.5-2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M1 8.5h8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                </svg>
+                Export
+              </button>
+              {!deck?.owned && (
+                <button
+                  onClick={() => setShowClaim(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium
+                             text-mana-gold/50 hover:text-mana-gold/80 hover:bg-mana-gold/8 transition-all cursor-pointer"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M3.5 5L5 6.5 7 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.1"/>
+                  </svg>
+                  Claim as Owned
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Board tabs */}
@@ -249,6 +319,25 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                           {dc.card?.name}
                         </span>
 
+                        {/* Owned indicator */}
+                        {(() => {
+                          const owned = deckOwnedQtys[dc.card_id] ?? 0;
+                          if (owned <= 0) return null;
+                          const need = dc.quantity - owned;
+                          if (need > 0) {
+                            return (
+                              <span className="text-[9px] text-mana-red/60 font-medium flex-shrink-0"
+                                    title={`Own ${owned}, need ${need} more`}>
+                                need {need}
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="w-1.5 h-1.5 rounded-full bg-mana-gold/60 flex-shrink-0"
+                                  title={`Owned: ${owned}`} />
+                          );
+                        })()}
+
                         {/* Mana cost */}
                         <ManaSymbols cost={dc.card?.mana_cost || ''} />
                       </div>
@@ -268,6 +357,28 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
           printings={printings}
           onClose={closeDetail}
           onAddToDeck={handleAddCard}
+          collectionQuantity={searchOwnedQtys[detailCard.id] ?? deckOwnedQtys[detailCard.id] ?? 0}
+          onAddToCollection={handleAddToCollection}
+          onUpdateCollectionQuantity={updateCollectionQuantity}
+          onRemoveFromCollection={removeFromCollection}
+        />
+      )}
+
+      {showExport && (
+        <ExportDeckModal
+          deckName={deck?.name || 'Deck'}
+          deckCards={deckCards}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {showClaim && (
+        <ClaimDeckModal
+          deckName={deck?.name || 'Deck'}
+          deckCards={deckCards}
+          ownedQuantities={deckOwnedQtys}
+          onConfirm={handleClaimDeck}
+          onClose={() => setShowClaim(false)}
         />
       )}
     </div>

@@ -7,6 +7,10 @@ interface Props {
   printings: Card[];
   onClose: () => void;
   onAddToDeck?: (card: Card) => void;
+  collectionQuantity?: number;
+  onAddToCollection?: (card: Card) => void;
+  onUpdateCollectionQuantity?: (cardId: string, quantity: number) => void;
+  onRemoveFromCollection?: (cardId: string) => void;
 }
 
 const RARITY_COLORS: Record<string, string> = {
@@ -16,7 +20,10 @@ const RARITY_COLORS: Record<string, string> = {
   mythic: '#d35030',
 };
 
-export default function CardDetail({ card, printings, onClose, onAddToDeck }: Props) {
+export default function CardDetail({
+  card, printings, onClose, onAddToDeck,
+  collectionQuantity, onAddToCollection, onUpdateCollectionQuantity, onRemoveFromCollection,
+}: Props) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -60,6 +67,53 @@ export default function CardDetail({ card, printings, onClose, onAddToDeck }: Pr
               >
                 Add to Deck
               </button>
+            )}
+
+            {/* Collection actions */}
+            {onAddToCollection && (
+              <div className="mt-3">
+                {(collectionQuantity ?? 0) > 0 ? (
+                  <div className="flex items-center gap-2 py-2 px-3 rounded-xl bg-obsidian/60 border border-mana-gold/10">
+                    <span className="text-[10px] text-ash/50 uppercase tracking-wider">Owned</span>
+                    <div className="flex items-center gap-1 ml-auto">
+                      <button
+                        onClick={() => {
+                          const newQty = (collectionQuantity ?? 1) - 1;
+                          if (newQty <= 0) onRemoveFromCollection?.(card.id);
+                          else onUpdateCollectionQuantity?.(card.id, newQty);
+                        }}
+                        className="w-5 h-5 rounded flex items-center justify-center text-ash/50
+                                   hover:text-mana-red hover:bg-white/[0.06] transition-all cursor-pointer"
+                      >
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                          <path d="M1 4h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                      <span className="w-6 text-center text-mana-gold/90 text-xs font-medium tabular-nums">
+                        {collectionQuantity}
+                      </span>
+                      <button
+                        onClick={() => onUpdateCollectionQuantity?.(card.id, (collectionQuantity ?? 0) + 1)}
+                        className="w-5 h-5 rounded flex items-center justify-center text-ash/50
+                                   hover:text-mana-green hover:bg-white/[0.06] transition-all cursor-pointer"
+                      >
+                        <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                          <path d="M4 1v6M1 4h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => onAddToCollection(card)}
+                    className="w-full py-2 rounded-xl bg-obsidian/60 border border-white/[0.06]
+                               text-ash/70 font-medium text-xs tracking-wide
+                               hover:bg-obsidian hover:text-silver hover:border-mana-gold/20 transition-all cursor-pointer"
+                  >
+                    Add to Collection
+                  </button>
+                )}
+              </div>
             )}
           </div>
 

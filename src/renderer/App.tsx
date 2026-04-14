@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import CardBrowser from './components/CardBrowser';
 import DeckList from './components/DeckList';
 import DeckEditor from './components/DeckEditor';
+import CollectionView from './components/CollectionView';
 import { useDecks } from './hooks/useDecks';
 
 export default function App() {
@@ -69,6 +70,7 @@ export default function App() {
       />
       <main className="flex-1 overflow-hidden">
         {view === 'collection' && <CardBrowser />}
+        {view === 'my-cards' && <CollectionView onNavigateToBrowse={() => setView('collection')} />}
         {view === 'decks' && (
           <DeckList
             decks={decks}

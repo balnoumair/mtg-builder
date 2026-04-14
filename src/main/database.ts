@@ -20,6 +20,7 @@ export function getDb(): Database.Database {
   db.pragma('foreign_keys = ON');
 
   initSchema(db);
+  runMigrations(db);
 
   return db;
 }
@@ -63,6 +64,7 @@ function initSchema(db: Database.Database): void {
       format TEXT DEFAULT '',
       description TEXT DEFAULT '',
       cover_card_id TEXT,
+      owned INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -75,7 +77,22 @@ function initSchema(db: Database.Database): void {
       board TEXT DEFAULT 'main',
       UNIQUE(deck_id, card_id, board)
     );
+
+    CREATE TABLE IF NOT EXISTS collection (
+      card_id TEXT NOT NULL REFERENCES cards(id),
+      quantity INTEGER NOT NULL DEFAULT 1,
+      added_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (card_id)
+    );
   `);
+}
+
+function runMigrations(db: Database.Database): void {
+  // Add 'owned' column if it doesn't exist (for databases created before this feature)
+  const cols = db.prepare("PRAGMA table_info(decks)").all() as { name: string }[];
+  if (!cols.some(c => c.name === 'owned')) {
+    db.exec("ALTER TABLE decks ADD COLUMN owned INTEGER DEFAULT 0");
+  }
 }
 
 export function createIndexes(db: Database.Database): void {

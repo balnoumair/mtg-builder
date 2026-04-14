@@ -21,6 +21,13 @@ const api: ElectronAPI = {
   addCardToDeck: (deckId: number, cardId: string, board?: string) => ipcRenderer.invoke('decks:addCard', deckId, cardId, board),
   updateCardQuantity: (deckId: number, cardId: string, board: string, quantity: number) => ipcRenderer.invoke('decks:updateQuantity', deckId, cardId, board, quantity),
   removeCardFromDeck: (deckId: number, cardId: string, board: string) => ipcRenderer.invoke('decks:removeCard', deckId, cardId, board),
+  claimDeckFromCollection: (deckId: number) => ipcRenderer.invoke('decks:claim', deckId),
+  getCollection: (filters: CardFilters) => ipcRenderer.invoke('collection:get', filters),
+  getCollectionQuantities: (cardIds: string[]) => ipcRenderer.invoke('collection:quantities', cardIds),
+  addToCollection: (cardId: string, quantity?: number) => ipcRenderer.invoke('collection:add', cardId, quantity),
+  updateCollectionQuantity: (cardId: string, quantity: number) => ipcRenderer.invoke('collection:update', cardId, quantity),
+  removeFromCollection: (cardId: string) => ipcRenderer.invoke('collection:remove', cardId),
+  getCollectionStats: () => ipcRenderer.invoke('collection:stats'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

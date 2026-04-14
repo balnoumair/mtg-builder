@@ -128,7 +128,20 @@ export default function DeckList({ decks, loading, onOpenDeck, onCreateDeck, onD
               </div>
 
               <div className="px-4 py-3 flex items-center justify-between">
-                <span className="text-ash/50 text-xs">{deck.card_count || 0} cards</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-ash/50 text-xs">{deck.card_count || 0} cards</span>
+                  {deck.owned ? (
+                    <span className="px-1.5 py-0.5 rounded bg-mana-green/10 border border-mana-green/20
+                                     text-mana-green/70 text-[8px] font-medium uppercase tracking-wider">
+                      Owned
+                    </span>
+                  ) : (
+                    <span className="px-1.5 py-0.5 rounded bg-white/[0.03] border border-white/[0.06]
+                                     text-ash/35 text-[8px] font-medium uppercase tracking-wider">
+                      Wishlist
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-all">
                   <button
                     onClick={(e) => startRename(deck, e)}

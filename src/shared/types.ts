@@ -35,6 +35,7 @@ export interface Deck {
   format: string;
   description: string;
   cover_card_id: string | null;
+  owned: boolean;
   created_at: string;
   updated_at: string;
   card_count?: number;
@@ -70,6 +71,19 @@ export interface CardSearchResult {
   total: number;
 }
 
+export interface CollectionCard {
+  card_id: string;
+  quantity: number;
+  added_at: string;
+  card: Card;
+}
+
+export interface CollectionStats {
+  uniqueCards: number;
+  totalCopies: number;
+  estimatedValue: number | null;
+}
+
 export interface ImportProgress {
   current: number;
   total: number;
@@ -97,6 +111,13 @@ export interface ElectronAPI {
   addCardToDeck(deckId: number, cardId: string, board?: string): Promise<void>;
   updateCardQuantity(deckId: number, cardId: string, board: string, quantity: number): Promise<void>;
   removeCardFromDeck(deckId: number, cardId: string, board: string): Promise<void>;
+  claimDeckFromCollection(deckId: number): Promise<void>;
+  getCollection(filters: CardFilters): Promise<{ cards: CollectionCard[]; total: number }>;
+  getCollectionQuantities(cardIds: string[]): Promise<Record<string, number>>;
+  addToCollection(cardId: string, quantity?: number): Promise<void>;
+  updateCollectionQuantity(cardId: string, quantity: number): Promise<void>;
+  removeFromCollection(cardId: string): Promise<void>;
+  getCollectionStats(): Promise<CollectionStats>;
 }
 
 declare global {
