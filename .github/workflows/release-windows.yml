@@ -3,6 +3,11 @@ name: Release Windows
 on:
   release:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag to upload artifacts to (e.g. v1.0.0)'
+        required: true
 
 jobs:
   build-windows:
@@ -26,5 +31,5 @@ jobs:
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ github.event.release.tag_name || inputs.tag_name }}
           files: out/make/squirrel.windows/**/*.exe
