@@ -27,6 +27,9 @@ jobs:
 
       - run: pnpm install
 
+      - name: Rebuild native modules for Electron
+        run: pnpm exec electron-rebuild -f -w better-sqlite3
+
       - run: pnpm make
 
       - name: Upload to GitHub Release

@@ -1,5 +1,6 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerZIP } from '@electron-forge/maker-zip';
+import { MakerDMG } from '@electron-forge/maker-dmg';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
@@ -10,12 +11,18 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    extraResource: [
+      'node_modules/better-sqlite3',
+      'node_modules/bindings',
+      'node_modules/file-uri-to-path',
+    ],
     name: 'MTG Builder',
     icon: './assets/icon',
   },
   rebuildConfig: {},
   makers: [
-    new MakerZIP({}, ['darwin', 'win32']),
+    new MakerZIP({}, ['win32']),
+    new MakerDMG({}, ['darwin']),
     new MakerRpm({}),
     new MakerDeb({}),
   ],
@@ -53,7 +60,7 @@ const config: ForgeConfig = {
       [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
       [FuseV1Options.EnableNodeCliInspectArguments]: false,
       [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
-      [FuseV1Options.OnlyLoadAppFromAsar]: true,
+      [FuseV1Options.OnlyLoadAppFromAsar]: false,
     }),
   ],
 };

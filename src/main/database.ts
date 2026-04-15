@@ -1,11 +1,25 @@
-import Database from 'better-sqlite3';
+import type BetterSqlite3 from 'better-sqlite3';
 import { app } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 
-let db: Database.Database | null = null;
+// better-sqlite3 is a native module that Vite cannot bundle.
+// In production it and its deps (bindings, file-uri-to-path) live in extraResources.
+// We add resourcesPath to NODE_PATH so `require('bindings')` resolves correctly
+// when called internally by better-sqlite3.
+if (app.isPackaged) {
+  process.env.NODE_PATH = process.resourcesPath;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('module').Module._initPaths();
+}
 
-export function getDb(): Database.Database {
+const Database: typeof BetterSqlite3 = app.isPackaged
+  ? require(path.join(process.resourcesPath, 'better-sqlite3'))
+  : require('better-sqlite3');
+
+let db: BetterSqlite3.Database | null = null;
+
+export function getDb(): BetterSqlite3.Database {
   if (db) return db;
 
   const userDataPath = app.getPath('userData');
@@ -25,7 +39,7 @@ export function getDb(): Database.Database {
   return db;
 }
 
-function initSchema(db: Database.Database): void {
+function initSchema(db: BetterSqlite3.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS cards (
       id TEXT PRIMARY KEY,
@@ -87,7 +101,7 @@ function initSchema(db: Database.Database): void {
   `);
 }
 
-function runMigrations(db: Database.Database): void {
+function runMigrations(db: BetterSqlite3.Database): void {
   // Add 'owned' column if it doesn't exist (for databases created before this feature)
   const cols = db.prepare("PRAGMA table_info(decks)").all() as { name: string }[];
   if (!cols.some(c => c.name === 'owned')) {
@@ -95,7 +109,7 @@ function runMigrations(db: Database.Database): void {
   }
 }
 
-export function createIndexes(db: Database.Database): void {
+export function createIndexes(db: BetterSqlite3.Database): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_cards_name ON cards(name);
     CREATE INDEX IF NOT EXISTS idx_cards_oracle_id ON cards(oracle_id);
