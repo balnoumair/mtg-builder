@@ -24,6 +24,9 @@ jobs:
 
       - run: pnpm install
 
+      - name: Add 7-Zip to PATH
+        run: echo "C:\Program Files\7-Zip" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       - run: pnpm make
 
       - name: Upload to GitHub Release
