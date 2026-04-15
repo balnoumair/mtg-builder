@@ -5,10 +5,11 @@ VERSION=$(node -p "require('./package.json').version")
 NOTES="${1:-}"
 
 echo "Building v$VERSION..."
+pnpm exec electron-rebuild -f -w better-sqlite3
 pnpm make
 
 echo "Creating GitHub release v$VERSION..."
-gh release create "v$VERSION" out/make/zip/darwin/arm64/*.zip \
+gh release create "v$VERSION" out/make/*.dmg \
   --title "v$VERSION" \
   --notes "$NOTES"
 
