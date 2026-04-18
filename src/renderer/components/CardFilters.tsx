@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { CardFilters as Filters } from '../../shared/types';
 
 const COLORS = [
@@ -26,7 +26,14 @@ interface Props {
 
 function SetRow({ s, selected, onToggle }: { s: { code: string; name: string }; selected: boolean; onToggle: (code: string) => void }) {
   return (
-    <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-mid/15 cursor-pointer group">
+    <div
+      role="checkbox"
+      aria-checked={selected}
+      tabIndex={0}
+      onClick={() => onToggle(s.code)}
+      onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onToggle(s.code); } }}
+      className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-mid/15 cursor-pointer group"
+    >
       <div className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center flex-shrink-0 transition-all
         ${selected ? 'bg-mana-gold/80 border-mana-gold' : 'border-slate-mid/40 group-hover:border-slate-mid/70'}`}>
         {selected && (
@@ -34,11 +41,10 @@ function SetRow({ s, selected, onToggle }: { s: { code: string; name: string }; 
             <path d="M1.5 4L3.5 6L6.5 2" stroke="#0a0a0f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         )}
-        <input type="checkbox" checked={selected} onChange={() => onToggle(s.code)} className="sr-only" />
       </div>
       <span className="text-xs text-silver/80 truncate group-hover:text-silver transition-colors">{s.name}</span>
       <span className="text-[10px] text-ash/50 ml-auto shrink-0 font-mono">{s.code.toUpperCase()}</span>
-    </label>
+    </div>
   );
 }
 
@@ -114,33 +120,49 @@ export default function CardFilters({ filters, onUpdate }: Props) {
     }
   };
 
-  const sortedSets = [...sets].sort((a, b) => b.releasedAt.localeCompare(a.releasedAt));
-  const filteredSets = sortedSets.filter(s =>
-    s.name.toLowerCase().includes(setSearch.toLowerCase()) ||
-    s.code.toLowerCase().includes(setSearch.toLowerCase())
-  );
-
   type SetEntry = typeof sets[number];
   type BlockGroup = { blockCode: string; blockName: string; sets: SetEntry[]; latestRelease: string };
+  type DropdownEntry =
+    | { kind: 'block'; group: BlockGroup; sortKey: string }
+    | { kind: 'standalone'; set: SetEntry; sortKey: string };
 
-  const groupedSets: { blocks: BlockGroup[]; standalone: SetEntry[] } | null = setSearch ? null : (() => {
+  const sortedSets = useMemo(
+    () => [...sets].sort((a, b) => b.releasedAt.localeCompare(a.releasedAt)),
+    [sets],
+  );
+
+  const filteredSets = useMemo(
+    () => sortedSets.filter(s =>
+      s.name.toLowerCase().includes(setSearch.toLowerCase()) ||
+      s.code.toLowerCase().includes(setSearch.toLowerCase())
+    ),
+    [sortedSets, setSearch],
+  );
+
+  const groupedEntries = useMemo<DropdownEntry[] | null>(() => {
+    if (setSearch) return null;
     const blockMap = new Map<string, BlockGroup>();
-    const standalone: SetEntry[] = [];
+    const entries: DropdownEntry[] = [];
     for (const s of sortedSets) {
-      if (s.blockCode && s.blockName) {
+      if (s.blockCode && s.blockName && s.blockName !== 'Core Set') {
         if (!blockMap.has(s.blockCode)) {
-          blockMap.set(s.blockCode, { blockCode: s.blockCode, blockName: s.blockName, sets: [], latestRelease: '' });
+          const group: BlockGroup = { blockCode: s.blockCode, blockName: s.blockName, sets: [], latestRelease: '' };
+          blockMap.set(s.blockCode, group);
+          entries.push({ kind: 'block', group, sortKey: '' });
         }
         const g = blockMap.get(s.blockCode)!;
         g.sets.push(s);
         if (s.releasedAt > g.latestRelease) g.latestRelease = s.releasedAt;
       } else {
-        standalone.push(s);
+        entries.push({ kind: 'standalone', set: s, sortKey: s.releasedAt });
       }
     }
-    const blocks = [...blockMap.values()].sort((a, b) => b.latestRelease.localeCompare(a.latestRelease));
-    return { blocks, standalone };
-  })();
+    for (const e of entries) {
+      if (e.kind === 'block') e.sortKey = e.group.latestRelease;
+    }
+    entries.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+    return entries;
+  }, [sortedSets, setSearch]);
 
   const hasFilters = (filters.colors?.length || 0) > 0
     || (filters.types?.length || 0) > 0
@@ -294,7 +316,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
           {setDropdownOpen && (
             <div
               className="absolute top-full mt-1.5 left-0 z-50 w-64 rounded-xl border border-slate-mid/25 shadow-2xl overflow-hidden animate-popover-in"
-              style={{ background: 'rgba(18,18,28,0.97)', backdropFilter: 'blur(16px)' }}
+              style={{ background: 'rgba(18,18,28,0.98)' }}
             >
               <div className="px-3 py-2 border-b border-slate-mid/20">
                 <input
@@ -307,27 +329,33 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                 />
               </div>
               <div className="max-h-60 overflow-y-auto p-1.5">
-                {groupedSets ? (
+                {groupedEntries ? (
                   <>
-                    {groupedSets.blocks.map(group => (
-                      <div key={group.blockCode}>
-                        <div className="px-2 pt-2 pb-0.5">
-                          <span className="text-[9px] tracking-[0.15em] uppercase text-ash/40 font-medium select-none">{group.blockName}</span>
-                        </div>
-                        {group.sets.map(s => <SetRow key={s.code} s={s} selected={(filters.sets || []).includes(s.code)} onToggle={toggleSet} />)}
-                      </div>
-                    ))}
-                    {groupedSets.standalone.length > 0 && (
-                      <div>
-                        {groupedSets.blocks.length > 0 && (
-                          <div className="px-2 pt-2 pb-0.5">
-                            <span className="text-[9px] tracking-[0.15em] uppercase text-ash/40 font-medium select-none">Other</span>
+                    {groupedEntries.map((entry, idx) => {
+                      if (entry.kind === 'block') {
+                        return (
+                          <div key={`b-${entry.group.blockCode}`}>
+                            <div className="px-2 pt-2 pb-0.5">
+                              <span className="text-[9px] tracking-[0.15em] uppercase text-ash/40 font-medium select-none">{entry.group.blockName}</span>
+                            </div>
+                            {entry.group.sets.map(s => <SetRow key={s.code} s={s} selected={(filters.sets || []).includes(s.code)} onToggle={toggleSet} />)}
                           </div>
-                        )}
-                        {groupedSets.standalone.map(s => <SetRow key={s.code} s={s} selected={(filters.sets || []).includes(s.code)} onToggle={toggleSet} />)}
-                      </div>
-                    )}
-                    {groupedSets.blocks.length === 0 && groupedSets.standalone.length === 0 && (
+                        );
+                      }
+                      const prev = groupedEntries[idx - 1];
+                      const showHeader = !prev || prev.kind !== 'standalone';
+                      return (
+                        <div key={`s-${entry.set.code}`}>
+                          {showHeader && (
+                            <div className="px-2 pt-2 pb-0.5">
+                              <span className="text-[9px] tracking-[0.15em] uppercase text-ash/40 font-medium select-none">Standalone</span>
+                            </div>
+                          )}
+                          <SetRow s={entry.set} selected={(filters.sets || []).includes(entry.set.code)} onToggle={toggleSet} />
+                        </div>
+                      );
+                    })}
+                    {groupedEntries.length === 0 && (
                       <p className="text-xs text-ash/50 px-2 py-3 text-center">No sets found</p>
                     )}
                   </>
