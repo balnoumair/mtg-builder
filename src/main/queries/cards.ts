@@ -141,10 +141,10 @@ export function getCardPrintings(db: Database.Database, oracleId: string): Card[
   return rows.map(rowToCard);
 }
 
-export function getSets(db: Database.Database): { code: string; name: string; releasedAt: string }[] {
+export function getSets(db: Database.Database): { code: string; name: string; releasedAt: string; blockCode: string | null; blockName: string | null }[] {
   return db.prepare(
-    'SELECT set_code as code, set_name as name, MIN(released_at) as releasedAt FROM cards GROUP BY set_code, set_name ORDER BY name ASC'
-  ).all() as { code: string; name: string; releasedAt: string }[];
+    'SELECT set_code as code, set_name as name, MIN(released_at) as releasedAt, MAX(block_code) as blockCode, MAX(block_name) as blockName FROM cards GROUP BY set_code, set_name ORDER BY name ASC'
+  ).all() as { code: string; name: string; releasedAt: string; blockCode: string | null; blockName: string | null }[];
 }
 
 export { VALID_LAYOUTS };

@@ -102,10 +102,17 @@ function initSchema(db: BetterSqlite3.Database): void {
 }
 
 function runMigrations(db: BetterSqlite3.Database): void {
-  // Add 'owned' column if it doesn't exist (for databases created before this feature)
-  const cols = db.prepare("PRAGMA table_info(decks)").all() as { name: string }[];
-  if (!cols.some(c => c.name === 'owned')) {
+  const deckCols = db.prepare("PRAGMA table_info(decks)").all() as { name: string }[];
+  if (!deckCols.some(c => c.name === 'owned')) {
     db.exec("ALTER TABLE decks ADD COLUMN owned INTEGER DEFAULT 0");
+  }
+
+  const cardCols = db.prepare("PRAGMA table_info(cards)").all() as { name: string }[];
+  if (!cardCols.some(c => c.name === 'block_code')) {
+    db.exec("ALTER TABLE cards ADD COLUMN block_code TEXT");
+  }
+  if (!cardCols.some(c => c.name === 'block_name')) {
+    db.exec("ALTER TABLE cards ADD COLUMN block_name TEXT");
   }
 }
 

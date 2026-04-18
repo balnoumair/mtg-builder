@@ -29,6 +29,8 @@ interface ScryCard {
   set?: string;
   set_name?: string;
   set_type?: string;
+  block?: string;
+  block_code?: string;
   collector_number?: string;
   image_uris?: {
     small?: string;
@@ -124,14 +126,16 @@ function importCardsFromFile(
         rarity, set_code, set_name, collector_number, layout,
         image_uri_small, image_uri_normal, image_uri_large, image_uri_art_crop,
         face_back_name, face_back_image_uri_normal,
-        legalities, price_usd, price_eur, released_at, artist
+        legalities, price_usd, price_eur, released_at, artist,
+        block_code, block_name
       ) VALUES (
         @id, @oracle_id, @name, @mana_cost, @cmc, @type_line, @oracle_text,
         @colors, @color_identity, @keywords, @power, @toughness,
         @rarity, @set_code, @set_name, @collector_number, @layout,
         @image_uri_small, @image_uri_normal, @image_uri_large, @image_uri_art_crop,
         @face_back_name, @face_back_image_uri_normal,
-        @legalities, @price_usd, @price_eur, @released_at, @artist
+        @legalities, @price_usd, @price_eur, @released_at, @artist,
+        @block_code, @block_name
       )
     `);
 
@@ -194,6 +198,8 @@ function importCardsFromFile(
         price_eur: value.prices?.eur || null,
         released_at: value.released_at || '',
         artist: value.artist || '',
+        block_code: value.block_code || null,
+        block_name: value.block || null,
       });
       count++;
 

@@ -102,7 +102,7 @@ export interface ElectronAPI {
   searchCards(filters: CardFilters): Promise<CardSearchResult>;
   getCard(id: string): Promise<Card | null>;
   getCardPrintings(oracleId: string): Promise<Card[]>;
-  getSets(): Promise<{ code: string; name: string; releasedAt: string }[]>;
+  getSets(): Promise<{ code: string; name: string; releasedAt: string; blockCode: string | null; blockName: string | null }[]>;
   getDecks(): Promise<Deck[]>;
   createDeck(deck: { name: string; format?: string }): Promise<Deck>;
   updateDeck(id: number, updates: Partial<Deck>): Promise<Deck>;
