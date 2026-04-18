@@ -29,8 +29,6 @@ interface ScryCard {
   set?: string;
   set_name?: string;
   set_type?: string;
-  block?: string;
-  block_code?: string;
   collector_number?: string;
   image_uris?: {
     small?: string;
@@ -57,6 +55,7 @@ interface ScryCard {
   };
   released_at?: string;
   artist?: string;
+  booster?: boolean;
 }
 
 interface BulkDataEntry {
@@ -66,6 +65,38 @@ interface BulkDataEntry {
 
 interface BulkDataResponse {
   data: BulkDataEntry[];
+}
+
+interface ScrySet {
+  code: string;
+  block?: string;
+  block_code?: string;
+}
+
+interface SetsResponse {
+  data: ScrySet[];
+  has_more?: boolean;
+  next_page?: string;
+}
+
+type BlockMap = Map<string, { block_code: string | null; block_name: string | null }>;
+
+async function fetchBlockMap(): Promise<BlockMap> {
+  const map: BlockMap = new Map();
+  let url: string | undefined = 'https://api.scryfall.com/sets';
+  while (url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Scryfall sets API error: ${res.status}`);
+    const body = (await res.json()) as SetsResponse;
+    for (const s of body.data) {
+      map.set(s.code.toLowerCase(), {
+        block_code: s.block_code || null,
+        block_name: s.block || null,
+      });
+    }
+    url = body.has_more ? body.next_page : undefined;
+  }
+  return map;
 }
 
 type ProgressCallback = (current: number, total: number, phase: 'downloading' | 'reading' | 'indexing' | 'done') => void;
@@ -113,6 +144,7 @@ function downloadFile(
 function importCardsFromFile(
   db: Database.Database,
   filePath: string,
+  blockMap: BlockMap,
   onProgress: (current: number, total: number) => void,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -159,6 +191,7 @@ function importCardsFromFile(
       if (value.lang !== 'en') return;
       if (!VALID_LAYOUTS.has(value.layout)) return;
       if (!value.set_type || !STANDARD_SET_TYPES.has(value.set_type)) return;
+      if (value.booster === false) return;
 
       const faces = value.card_faces;
       const frontFace = faces?.[0];
@@ -168,6 +201,8 @@ function importCardsFromFile(
       const oracleText = value.oracle_text ?? frontFace?.oracle_text ?? '';
       const manaCost = value.mana_cost ?? frontFace?.mana_cost ?? '';
       const typeLine = value.type_line ?? frontFace?.type_line ?? '';
+
+      const blockInfo = value.set ? blockMap.get(value.set.toLowerCase()) : undefined;
 
       batch.push({
         id: value.id,
@@ -198,8 +233,8 @@ function importCardsFromFile(
         price_eur: value.prices?.eur || null,
         released_at: value.released_at || '',
         artist: value.artist || '',
-        block_code: value.block_code || null,
-        block_name: value.block || null,
+        block_code: blockInfo?.block_code ?? null,
+        block_name: blockInfo?.block_name ?? null,
       });
       count++;
 
@@ -244,8 +279,8 @@ export async function syncCards(
   db: Database.Database,
   onProgress: ProgressCallback,
 ): Promise<void> {
-  // 1. Fetch the download URL from Scryfall bulk data API
-  const downloadUrl = await fetchBulkDataUrl();
+  // 1. Fetch the download URL from Scryfall bulk data API and the block map
+  const [downloadUrl, blockMap] = await Promise.all([fetchBulkDataUrl(), fetchBlockMap()]);
 
   // 2. Download the file to a temp location
   const tmpDir = os.tmpdir();
@@ -281,7 +316,7 @@ export async function syncCards(
     db.pragma('foreign_keys = ON');
 
     // 5. Import cards from downloaded file
-    await importCardsFromFile(db, tmpFile, (current, total) => {
+    await importCardsFromFile(db, tmpFile, blockMap, (current, total) => {
       onProgress(current, total, 'reading');
     });
 
