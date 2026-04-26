@@ -1,11 +1,16 @@
 import { app, BrowserWindow, nativeImage } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
+import { updateElectronApp } from 'update-electron-app';
 import { registerIpcHandlers } from './main/ipc-handlers';
 import { closeDb } from './main/database';
 
 if (started) {
   app.quit();
+}
+
+if (process.platform === 'win32' && app.isPackaged) {
+  updateElectronApp();
 }
 
 let mainWindow: BrowserWindow | null = null;

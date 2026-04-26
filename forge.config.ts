@@ -1,5 +1,5 @@
 import type { ForgeConfig } from '@electron-forge/shared-types';
-import { MakerZIP } from '@electron-forge/maker-zip';
+import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerDMG } from '@electron-forge/maker-dmg';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
@@ -21,7 +21,11 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   makers: [
-    new MakerZIP({}, ['win32']),
+    new MakerSquirrel({
+      name: 'mtg_builder',
+      setupIcon: './assets/icon.ico',
+      iconUrl: 'https://raw.githubusercontent.com/balnoumair/mtg-builder/main/assets/icon.ico',
+    }),
     new MakerDMG({}, ['darwin']),
     new MakerRpm({}),
     new MakerDeb({}),
