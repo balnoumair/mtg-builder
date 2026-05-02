@@ -34,7 +34,9 @@ export function createTestDb(): Database.Database {
       price_usd TEXT,
       price_eur TEXT,
       released_at TEXT,
-      artist TEXT
+      artist TEXT,
+      block_code TEXT,
+      block_name TEXT
     );
 
     CREATE TABLE IF NOT EXISTS decks (
