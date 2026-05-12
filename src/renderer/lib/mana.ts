@@ -1,21 +1,17 @@
-const MANA_COLORS: Record<string, string> = {
-  W: '#f9faf4',
-  U: '#0e68ab',
-  B: '#6b5c7a',
-  R: '#d3202a',
-  G: '#00733e',
-  C: '#9098a0',
-  X: '#9098a0',
-};
+export interface ManaColorMeta {
+  hex: string;
+  ring: string;
+  name: string;
+}
 
-const MANA_BG: Record<string, string> = {
-  W: 'rgba(249,250,244,0.15)',
-  U: 'rgba(14,104,171,0.2)',
-  B: 'rgba(107,92,122,0.2)',
-  R: 'rgba(211,32,42,0.2)',
-  G: 'rgba(0,115,62,0.2)',
-  C: 'rgba(144,152,160,0.15)',
-  X: 'rgba(144,152,160,0.15)',
+export const MANA_COLORS: Record<string, ManaColorMeta> = {
+  W: { hex: '#f1ead0', ring: '#c9bd84', name: 'White' },
+  U: { hex: '#9fcfee', ring: '#5a9fcf', name: 'Blue' },
+  B: { hex: '#9b948d', ring: '#5d564f', name: 'Black' },
+  R: { hex: '#e7a294', ring: '#c5654a', name: 'Red' },
+  G: { hex: '#a8c79c', ring: '#5d8c63', name: 'Green' },
+  C: { hex: '#bdb7af', ring: '#7e7870', name: 'Colorless' },
+  X: { hex: '#bdb7af', ring: '#7e7870', name: 'X' },
 };
 
 export function parseManaCost(manaCost: string): string[] {
@@ -28,27 +24,23 @@ export function parseManaCost(manaCost: string): string[] {
   return symbols;
 }
 
-export function getManaColor(symbol: string): string {
-  return MANA_COLORS[symbol] || '#9098a0';
-}
-
-export function getManaBg(symbol: string): string {
-  return MANA_BG[symbol] || 'rgba(144,152,160,0.15)';
+export function getManaMeta(symbol: string): ManaColorMeta {
+  return MANA_COLORS[symbol] || MANA_COLORS.C;
 }
 
 export function getCardTypeCategory(typeLine: string): string {
   const t = typeLine.toLowerCase();
-  if (t.includes('creature')) return 'Creatures';
-  if (t.includes('planeswalker')) return 'Planeswalkers';
-  if (t.includes('instant')) return 'Instants';
-  if (t.includes('sorcery')) return 'Sorceries';
-  if (t.includes('enchantment')) return 'Enchantments';
-  if (t.includes('artifact')) return 'Artifacts';
-  if (t.includes('land')) return 'Lands';
+  if (t.includes('creature')) return 'Creature';
+  if (t.includes('planeswalker')) return 'Planeswalker';
+  if (t.includes('instant')) return 'Instant';
+  if (t.includes('sorcery')) return 'Sorcery';
+  if (t.includes('enchantment')) return 'Enchantment';
+  if (t.includes('artifact')) return 'Artifact';
+  if (t.includes('land')) return 'Land';
   return 'Other';
 }
 
 export const TYPE_ORDER = [
-  'Creatures', 'Planeswalkers', 'Instants', 'Sorceries',
-  'Enchantments', 'Artifacts', 'Lands', 'Other',
+  'Creature', 'Planeswalker', 'Instant', 'Sorcery',
+  'Enchantment', 'Artifact', 'Land', 'Other',
 ];

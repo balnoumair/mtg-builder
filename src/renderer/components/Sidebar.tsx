@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Deck } from '../../shared/types';
 import type { View } from '../lib/types';
+import { ColorIdentity } from './ManaSymbols';
 
 interface Props {
   view: View;
@@ -10,58 +11,100 @@ interface Props {
   onCreateDeck: (name: string, format?: string) => void;
   activeDeckId: number | null;
   onSync: () => void;
+  cardCount?: number;
 }
 
-function IconCollection() {
+const NAV_ITEMS: { key: View; label: string; icon: 'grid' | 'box' | 'stack' }[] = [
+  { key: 'collection', label: 'Card Browser', icon: 'grid' },
+  { key: 'my-cards', label: 'My Cards', icon: 'box' },
+  { key: 'decks', label: 'Decks', icon: 'stack' },
+];
+
+function NavIcon({ icon }: { icon: 'grid' | 'box' | 'stack' }) {
+  const shapes = {
+    grid: (
+      <>
+        <rect x="1.5" y="1.5" width="4" height="4" rx="0.5" stroke="currentColor" />
+        <rect x="7.5" y="1.5" width="4" height="4" rx="0.5" stroke="currentColor" />
+        <rect x="1.5" y="7.5" width="4" height="4" rx="0.5" stroke="currentColor" />
+        <rect x="7.5" y="7.5" width="4" height="4" rx="0.5" stroke="currentColor" />
+      </>
+    ),
+    box: (
+      <>
+        <path d="M6.5 1L11.5 3.2v6.6L6.5 12L1.5 9.8V3.2L6.5 1z" stroke="currentColor" />
+        <path d="M1.5 3.2L6.5 5.4L11.5 3.2M6.5 5.4V12" stroke="currentColor" />
+      </>
+    ),
+    stack: (
+      <>
+        <path d="M1.5 4L6.5 1.7L11.5 4L6.5 6.3L1.5 4z" stroke="currentColor" />
+        <path d="M1.5 6.5L6.5 8.8L11.5 6.5" stroke="currentColor" />
+        <path d="M1.5 9L6.5 11.3L11.5 9" stroke="currentColor" />
+      </>
+    ),
+  };
   return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-      <rect x="1" y="4" width="9" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-      <rect x="4" y="1" width="9" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3" strokeDasharray="0"/>
-      <path d="M4 1h7a1.5 1.5 0 0 1 1.5 1.5V12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" strokeWidth="1.1">
+      {shapes[icon]}
     </svg>
   );
 }
 
-function IconMyCards() {
+function NavRow({
+  label,
+  icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  icon: 'grid' | 'box' | 'stack';
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-      <rect x="2" y="3" width="11" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
-      <path d="M5 1.5h5M4 6.5l3.5 3 3.5-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 9,
+        padding: '5px 8px',
+        borderRadius: 'var(--radius-sm)',
+        cursor: 'pointer',
+        background: active ? 'var(--bg-row-sel)' : 'transparent',
+        color: active ? 'var(--text)' : 'var(--text-dim)',
+        fontSize: 12,
+        marginBottom: 1,
+      }}
+      onMouseEnter={(e) => {
+        if (!active) e.currentTarget.style.background = 'var(--bg-row-hov)';
+      }}
+      onMouseLeave={(e) => {
+        if (!active) e.currentTarget.style.background = 'transparent';
+      }}
+    >
+      <span style={{ opacity: active ? 0.95 : 0.7, display: 'inline-flex' }}>
+        <NavIcon icon={icon} />
+      </span>
+      <span>{label}</span>
+    </div>
   );
 }
 
-function IconDecks() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-      <rect x="1" y="1" width="6" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
-      <rect x="8" y="1" width="6" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
-      <rect x="1" y="8" width="6" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
-      <rect x="8" y="8" width="6" height="6" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
-    </svg>
-  );
-}
-
-function IconSync() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-      <path d="M11.5 6.5A5 5 0 1 1 6.5 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-      <path d="M6.5 1.5L9 4M6.5 1.5L9.5 1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
-function IconPlus() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-      <path d="M5.5 1v9M1 5.5h9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-    </svg>
-  );
-}
-
-export default function Sidebar({ view, onNavigate, decks, onOpenDeck, onCreateDeck, activeDeckId, onSync }: Props) {
+export default function Sidebar({
+  view,
+  onNavigate,
+  decks,
+  onOpenDeck,
+  onCreateDeck,
+  activeDeckId,
+  onSync,
+  cardCount,
+}: Props) {
   const [showNewDeck, setShowNewDeck] = useState(false);
   const [newDeckName, setNewDeckName] = useState('');
+  const [query, setQuery] = useState('');
 
   const handleCreate = () => {
     if (!newDeckName.trim()) return;
@@ -70,134 +113,239 @@ export default function Sidebar({ view, onNavigate, decks, onOpenDeck, onCreateD
     setShowNewDeck(false);
   };
 
+  const filteredDecks = query
+    ? decks.filter((d) => d.name.toLowerCase().includes(query.toLowerCase()))
+    : decks;
+
   return (
-    <aside className="w-56 h-full flex flex-col pt-10 border-r border-white/[0.05]"
-      style={{ background: 'linear-gradient(180deg, #0e0e16 0%, #0a0a12 100%)' }}>
-
-      {/* Brand */}
-      <div className="px-5 mb-7">
-        <h1 className="font-display text-sm font-normal tracking-[0.18em] text-bone/90 uppercase">
-          MTG Builder
-        </h1>
-      </div>
-
-      {/* Main nav */}
-      <nav className="px-3 space-y-0.5">
-        <NavItem
-          label="Collection"
-          icon={<IconCollection />}
-          active={view === 'collection'}
-          onClick={() => onNavigate('collection')}
-        />
-        <NavItem
-          label="My Cards"
-          icon={<IconMyCards />}
-          active={view === 'my-cards'}
-          onClick={() => onNavigate('my-cards')}
-        />
-        <NavItem
-          label="My Decks"
-          icon={<IconDecks />}
-          active={view === 'decks'}
-          onClick={() => onNavigate('decks')}
-        />
-      </nav>
-
-      {/* Divider */}
-      <div className="mx-4 my-4 border-t border-white/[0.05]" />
-
-      {/* Decks section */}
-      <div className="px-3 flex-1 min-h-0 flex flex-col">
-        <div className="flex items-center justify-between px-2 mb-2">
-          <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-ash/50">Decks</span>
-          <button
-            onClick={() => setShowNewDeck(v => !v)}
-            className="w-5 h-5 rounded flex items-center justify-center text-ash/50 hover:text-silver
-                       hover:bg-slate-mid/20 transition-all cursor-pointer"
-            title="New deck"
-          >
-            <IconPlus />
-          </button>
-        </div>
-
-        {showNewDeck && (
-          <div className="mb-2 px-1">
-            <input
-              autoFocus
-              value={newDeckName}
-              onChange={e => setNewDeckName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleCreate();
-                if (e.key === 'Escape') setShowNewDeck(false);
-              }}
-              placeholder="Deck name…"
-              className="w-full bg-slate-dark/50 border border-slate-mid/30 rounded-lg px-3 py-1.5
-                         text-xs text-bone placeholder:text-ash/40
-                         focus:outline-none focus:border-mana-gold/40 transition-colors"
-            />
-          </div>
-        )}
-
-        <div className="space-y-0.5 overflow-y-auto flex-1">
-          {decks.map(deck => (
-            <button
-              key={deck.id}
-              onClick={() => onOpenDeck(deck.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-all cursor-pointer group
-                ${activeDeckId === deck.id
-                  ? 'bg-mana-gold/8 border-l-2 border-mana-gold/60 pl-2.5 text-mana-gold/90'
-                  : 'text-silver/60 hover:text-silver hover:bg-white/[0.04] border-l-2 border-transparent'
-                }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <span className="font-medium truncate">{deck.name}</span>
-                {deck.owned && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-mana-green/50 flex-shrink-0" title="Owned" />
-                )}
-              </div>
-              {deck.format && (
-                <div className={`text-[10px] mt-0.5 capitalize ${activeDeckId === deck.id ? 'text-mana-gold/50' : 'text-ash/40'}`}>
-                  {deck.format}
-                </div>
-              )}
-            </button>
-          ))}
-          {decks.length === 0 && !showNewDeck && (
-            <p className="text-[11px] text-ash/30 px-3 py-2 italic">No decks yet</p>
-          )}
-        </div>
-      </div>
-
-      {/* Sync */}
-      <div className="px-3 pb-5 pt-2">
-        <button
-          onClick={onSync}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium
-                     text-ash/50 hover:text-silver hover:bg-white/[0.04] transition-all cursor-pointer"
+    <aside
+      style={{
+        width: 'var(--sidebar-w)',
+        background: 'var(--bg-sidebar)',
+        borderRight: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        fontFamily: 'var(--font-ui)',
+        color: 'var(--text)',
+        flexShrink: 0,
+        height: '100%',
+      }}
+    >
+      {/* Search */}
+      <div style={{ padding: '10px 12px 8px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '5px 9px',
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border-input)',
+            borderRadius: 'var(--radius-sm)',
+          }}
         >
-          <IconSync />
-          Sync Cards
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" style={{ flexShrink: 0, opacity: 0.5 }}>
+            <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M7.5 7.5L10 10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: 'var(--text)',
+              fontSize: 12,
+            }}
+          />
+          <kbd
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9,
+              padding: '0 4px',
+              borderRadius: 3,
+              background: 'var(--bg-chip)',
+              color: 'var(--text-mute)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            ⌘K
+          </kbd>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <div style={{ padding: '0 8px 6px' }}>
+        {NAV_ITEMS.map((item) => (
+          <NavRow
+            key={item.key}
+            label={item.label}
+            icon={item.icon}
+            active={view === item.key}
+            onClick={() => onNavigate(item.key)}
+          />
+        ))}
+      </div>
+
+      {/* Decks header */}
+      <div
+        style={{
+          padding: '10px 14px 4px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            color: 'var(--text-mute)',
+          }}
+        >
+          Decks
+        </span>
+        <button
+          title="New deck"
+          onClick={() => setShowNewDeck((v) => !v)}
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: 3,
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--text-mute)',
+            fontSize: 13,
+            lineHeight: 1,
+            padding: 0,
+          }}
+        >
+          +
         </button>
       </div>
-    </aside>
-  );
-}
 
-function NavItem({ label, icon, active, onClick }: {
-  label: string; icon: React.ReactNode; active: boolean; onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium
-                  transition-all cursor-pointer border-l-2
-                  ${active
-                    ? 'bg-white/[0.06] text-bone border-mana-gold/60'
-                    : 'text-ash/60 hover:text-silver hover:bg-white/[0.04] border-transparent'
-                  }`}
-    >
-      <span className={active ? 'text-mana-gold/80' : ''}>{icon}</span>
-      {label}
-    </button>
+      {showNewDeck && (
+        <div style={{ padding: '0 12px 6px' }}>
+          <input
+            autoFocus
+            value={newDeckName}
+            onChange={(e) => setNewDeckName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleCreate();
+              if (e.key === 'Escape') setShowNewDeck(false);
+            }}
+            placeholder="Deck name…"
+            style={{
+              width: '100%',
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-input)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '5px 9px',
+              color: 'var(--text)',
+              fontSize: 12,
+              outline: 'none',
+            }}
+          />
+        </div>
+      )}
+
+      {/* Decks list */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 10px', minHeight: 0 }}>
+        {filteredDecks.map((deck) => {
+          const active = activeDeckId === deck.id && view === 'deck-editor';
+          // Stub color identity until decks have a real color identity field
+          return (
+            <div
+              key={deck.id}
+              onClick={() => onOpenDeck(deck.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '4px 8px',
+                borderRadius: 'var(--radius-sm)',
+                cursor: 'pointer',
+                background: active ? 'var(--bg-row-sel)' : 'transparent',
+                color: active ? 'var(--text)' : 'var(--text-dim)',
+                marginBottom: 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!active) e.currentTarget.style.background = 'var(--bg-row-hov)';
+              }}
+              onMouseLeave={(e) => {
+                if (!active) e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <ColorIdentity colors={['C']} size={9} />
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 12,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {deck.name}
+              </span>
+              {!deck.owned && (
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-faint)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  WL
+                </span>
+              )}
+            </div>
+          );
+        })}
+        {filteredDecks.length === 0 && !showNewDeck && (
+          <p style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic' }}>
+            {query ? 'No matches' : 'No decks yet'}
+          </p>
+        )}
+      </div>
+
+      {/* Footer */}
+      <button
+        onClick={onSync}
+        title="Sync cards"
+        style={{
+          padding: '8px 14px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 11,
+          color: 'var(--text-mute)',
+          background: 'transparent',
+          border: 'none',
+          borderTopWidth: 1,
+          borderTopStyle: 'solid',
+          borderTopColor: 'var(--border)',
+          cursor: 'pointer',
+          textAlign: 'left',
+          width: '100%',
+        }}
+      >
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--good)' }} />
+        <span style={{ flex: 1 }}>
+          {cardCount != null ? `Synced · ${cardCount.toLocaleString()} cards` : 'Sync cards'}
+        </span>
+      </button>
+    </aside>
   );
 }

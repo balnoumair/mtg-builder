@@ -1,10 +1,11 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import type { Card } from '../../shared/types';
 import { useCollection, useCollectionActions } from '../hooks/useCollection';
 import { useCardDetail } from '../hooks/useCards';
-import CardFiltersBar from './CardFilters';
+import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
+import ViewToggle from './ViewToggle';
 
 interface Props {
   onNavigateToBrowse: () => void;
@@ -14,101 +15,150 @@ export default function CollectionView({ onNavigateToBrowse }: Props) {
   const { filters, updateFilters, setPage, result, stats, loading, refresh } = useCollection();
   const { card, printings, open, showCard, close } = useCardDetail();
   const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refresh);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const totalPages = Math.ceil(result.total / (filters.pageSize || 60));
   const currentPage = filters.page || 1;
 
-  // Build ownedQuantities map from collection results
   const ownedQuantities = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const cc of result.cards) {
-      map[cc.card_id] = cc.quantity;
-    }
+    for (const cc of result.cards) map[cc.card_id] = cc.quantity;
     return map;
   }, [result.cards]);
 
-  // Extract just the Card objects for CardGrid
-  const cards = useMemo(() => result.cards.map(cc => cc.card), [result.cards]);
+  const cards = useMemo(() => result.cards.map((cc) => cc.card), [result.cards]);
 
-  const handleAddToCollection = useCallback((card: Card) => {
-    addToCollection(card.id);
-  }, [addToCollection]);
+  const handleAddToCollection = useCallback((c: Card) => addToCollection(c.id), [addToCollection]);
+  const detailQty = card ? ownedQuantities[card.id] ?? 0 : 0;
 
-  // Get the current detail card's collection quantity
-  const detailCollectionQty = card ? (ownedQuantities[card.id] ?? 0) : 0;
+  const empty = !loading && result.total === 0 && !filters.query && !filters.colors?.length;
 
   return (
-    <div className="h-full flex flex-col">
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--bg-main)',
+        overflow: 'hidden',
+        fontFamily: 'var(--font-ui)',
+        color: 'var(--text)',
+        height: '100%',
+      }}
+    >
       {/* Header */}
-      <div className="flex-shrink-0 p-5 pb-4 space-y-4">
-        <div className="flex items-end gap-3 mb-1">
-          <h2 className="font-display text-2xl font-normal tracking-[0.14em] text-bone/90 uppercase leading-none">
+      <div
+        style={{
+          padding: 'var(--pad) var(--pad) var(--pad-tight)',
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: 'var(--font-display)',
+              fontSize: 18,
+              fontWeight: 600,
+              color: 'var(--text)',
+              letterSpacing: '-0.01em',
+            }}
+          >
             My Cards
-          </h2>
-          <span className="text-ash/50 text-xs tracking-wide pb-0.5">{result.total.toLocaleString()} cards</span>
-        </div>
-
-        {/* Stats row */}
-        {stats.uniqueCards > 0 && (
-          <div className="flex gap-3">
-            <StatBlock label="Unique" value={stats.uniqueCards.toLocaleString()} />
-            <StatBlock label="Total Copies" value={stats.totalCopies.toLocaleString()} />
+          </h1>
+          <div
+            style={{
+              display: 'flex',
+              gap: 12,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: 'var(--text-mute)',
+            }}
+          >
+            <span>
+              <span style={{ color: 'var(--text-dim)' }}>{stats.uniqueCards.toLocaleString()}</span> unique
+            </span>
+            <span>
+              <span style={{ color: 'var(--text-dim)' }}>{stats.totalCopies.toLocaleString()}</span> copies
+            </span>
             {stats.estimatedValue !== null && (
-              <StatBlock label="Est. Value" value={`$${stats.estimatedValue.toFixed(2)}`} accent />
+              <span>
+                <span style={{ color: 'var(--text-dim)' }}>${stats.estimatedValue.toFixed(2)}</span> est.
+              </span>
             )}
           </div>
-        )}
+          <div style={{ flex: 1 }} />
+          <ViewToggle value={viewMode} onChange={setViewMode} />
+        </div>
 
-        {/* Search */}
-        <div className="relative">
-          <svg
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ash/40 pointer-events-none"
-            fill="none" viewBox="0 0 16 16"
-          >
-            <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M10 10L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 11px',
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border-input)',
+            borderRadius: 'var(--radius-sm)',
+            marginBottom: 10,
+            maxWidth: 360,
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ opacity: 0.5 }}>
+            <circle cx="5.5" cy="5.5" r="3.8" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M8.2 8.2L11 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
           </svg>
           <input
             type="text"
-            placeholder="Search your collection…"
             value={filters.query || ''}
-            onChange={e => updateFilters({ query: e.target.value || undefined })}
-            className="w-full bg-slate-dark/40 border border-slate-mid/20 rounded-xl pl-10 pr-4 py-2.5
-                       text-sm text-bone placeholder:text-ash/40
-                       focus:outline-none focus:border-mana-gold/35 focus:bg-slate-dark/60 transition-all"
+            onChange={(e) => updateFilters({ query: e.target.value || undefined })}
+            placeholder="Filter collection…"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              fontFamily: 'var(--font-ui)',
+              fontSize: 13,
+              color: 'var(--text)',
+            }}
           />
         </div>
 
-        {/* Filters */}
-        <CardFiltersBar filters={filters} onUpdate={updateFilters} />
+        <CardFilters filters={filters} onUpdate={updateFilters} />
       </div>
 
-      {/* Card grid */}
-      <div className="flex-1 overflow-y-auto p-5">
-        {!loading && result.total === 0 && !filters.query && (!filters.colors || filters.colors.length === 0) ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-mana-gold/8 border border-mana-gold/15
-                            flex items-center justify-center">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" strokeWidth="1.5"
-                      strokeLinejoin="round" className="text-mana-gold/60"/>
-                <path d="M2 17l10 5 10-5" stroke="currentColor" strokeWidth="1.5"
-                      strokeLinecap="round" strokeLinejoin="round" className="text-mana-gold/40"/>
-                <path d="M2 12l10 5 10-5" stroke="currentColor" strokeWidth="1.5"
-                      strokeLinecap="round" strokeLinejoin="round" className="text-mana-gold/50"/>
-              </svg>
-            </div>
-            <div className="text-center">
-              <p className="text-ash/60 text-sm">Your collection is empty</p>
-              <p className="text-ash/35 text-xs mt-1">Browse cards and add them to start tracking what you own</p>
-            </div>
+      {/* Body */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>
+        {empty ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+              padding: '48px 16px',
+            }}
+          >
+            <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>Your collection is empty</p>
+            <p style={{ color: 'var(--text-mute)', fontSize: 11, margin: 0 }}>
+              Browse cards and add them to start tracking what you own
+            </p>
             <button
               onClick={onNavigateToBrowse}
-              className="px-4 py-2 rounded-xl bg-mana-gold/10 border border-mana-gold/25
-                         text-mana-gold/80 font-medium text-xs tracking-wide
-                         hover:bg-mana-gold/18 hover:text-mana-gold transition-all cursor-pointer"
+              style={{
+                padding: '6px 12px',
+                background: 'var(--accent-soft)',
+                color: 'var(--accent)',
+                border: '1px solid var(--accent-line)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
             >
-              Browse Cards
+              Browse cards
             </button>
           </div>
         ) : (
@@ -118,29 +168,33 @@ export default function CollectionView({ onNavigateToBrowse }: Props) {
               loading={loading}
               onCardClick={showCard}
               ownedQuantities={ownedQuantities}
+              view={viewMode}
             />
-
-            {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-6 pb-4">
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  marginTop: 16,
+                  paddingBottom: 8,
+                }}
+              >
                 <button
                   onClick={() => setPage(currentPage - 1)}
                   disabled={currentPage <= 1}
-                  className="px-3 py-1.5 rounded-lg text-sm text-ash hover:text-bone
-                             disabled:opacity-30 disabled:cursor-default cursor-pointer
-                             hover:bg-obsidian transition-all"
+                  style={pageBtn(currentPage <= 1)}
                 >
                   Prev
                 </button>
-                <span className="text-ash text-sm">
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
                   {currentPage} / {totalPages}
                 </span>
                 <button
                   onClick={() => setPage(currentPage + 1)}
                   disabled={currentPage >= totalPages}
-                  className="px-3 py-1.5 rounded-lg text-sm text-ash hover:text-bone
-                             disabled:opacity-30 disabled:cursor-default cursor-pointer
-                             hover:bg-obsidian transition-all"
+                  style={pageBtn(currentPage >= totalPages)}
                 >
                   Next
                 </button>
@@ -150,13 +204,12 @@ export default function CollectionView({ onNavigateToBrowse }: Props) {
         )}
       </div>
 
-      {/* Detail modal */}
       {open && card && (
         <CardDetail
           card={card}
           printings={printings}
           onClose={close}
-          collectionQuantity={detailCollectionQty}
+          collectionQuantity={detailQty}
           onAddToCollection={handleAddToCollection}
           onUpdateCollectionQuantity={updateCollectionQuantity}
           onRemoveFromCollection={removeFromCollection}
@@ -166,13 +219,15 @@ export default function CollectionView({ onNavigateToBrowse }: Props) {
   );
 }
 
-function StatBlock({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="glass rounded-xl px-4 py-2.5 min-w-[100px]">
-      <div className={`text-sm font-medium tabular-nums ${accent ? 'text-mana-gold' : 'text-bone/85'}`}>
-        {value}
-      </div>
-      <div className="text-[10px] text-ash/50 uppercase tracking-wider mt-0.5">{label}</div>
-    </div>
-  );
+function pageBtn(disabled: boolean): React.CSSProperties {
+  return {
+    padding: '4px 10px',
+    background: 'var(--bg-chip)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 'var(--radius-sm)',
+    color: 'var(--text-dim)',
+    fontSize: 11,
+    cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.3 : 1,
+  };
 }

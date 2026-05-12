@@ -46,7 +46,7 @@ describe('CardFilters', () => {
     expect(sevenPlusActive.onUpdate).toHaveBeenCalledWith({ cmcMin: undefined, cmcMax: undefined });
   });
 
-  it('emits type and rarity toggle updates', async () => {
+  it('emits type updates as a single-element selection', async () => {
     const user = userEvent.setup();
     const typeRender = renderCardFilters();
 
@@ -54,9 +54,9 @@ describe('CardFilters', () => {
     expect(typeRender.onUpdate).toHaveBeenCalledWith({ types: ['Creature'] });
 
     cleanup();
-    const rarityRender = renderCardFilters();
-    await user.click(screen.getByTitle('common'));
-    expect(rarityRender.onUpdate).toHaveBeenCalledWith({ rarity: ['common'] });
+    const allRender = renderCardFilters({ types: ['Creature'] });
+    await user.click(screen.getByRole('button', { name: 'All' }));
+    expect(allRender.onUpdate).toHaveBeenCalledWith({ types: undefined });
   });
 
   it('loads sets, filters by search text, and emits set updates', async () => {
@@ -67,7 +67,7 @@ describe('CardFilters', () => {
     ]);
 
     const { onUpdate } = renderCardFilters();
-    await user.click(screen.getByRole('button', { name: /^Sets/ }));
+    await user.click(screen.getByRole('button', { name: /^Edition/ }));
 
     const searchInput = await screen.findByPlaceholderText('Search sets…');
     await user.type(searchInput, 'beta');
@@ -81,23 +81,23 @@ describe('CardFilters', () => {
     expect(onUpdate).toHaveBeenCalledWith({ sets: ['bet'] });
   });
 
-  it('shows clear all only when filters are active and resets all fields', async () => {
+  it('shows clear only when filters are active and resets all fields', async () => {
     const user = userEvent.setup();
     renderCardFilters();
-    expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
 
     cleanup();
     const active = renderCardFilters({
       colors: ['U'],
       types: ['Instant'],
-      rarity: ['rare'],
       sets: ['abc'],
       cmcMin: 2,
       cmcMax: 2,
     });
 
-    await user.click(screen.getByRole('button', { name: 'Clear all' }));
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
     expect(active.onUpdate).toHaveBeenCalledWith({
+      query: undefined,
       colors: undefined,
       types: undefined,
       rarity: undefined,

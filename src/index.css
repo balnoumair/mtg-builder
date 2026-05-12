@@ -1,30 +1,78 @@
 @import "tailwindcss";
 
 @theme {
-  --color-void: #0a0a0f;
-  --color-abyss: #111118;
-  --color-obsidian: #1a1a24;
-  --color-slate-dark: #252530;
-  --color-slate-mid: #35354a;
-  --color-ash: #8888a0;
-  --color-silver: #c0c0d0;
-  --color-bone: #e8e8f0;
+  --color-bg-window: #101012;
+  --color-bg-sidebar: #0d0d0f;
+  --color-bg-main: #121214;
+  --color-bg-panel: #161618;
+  --color-bg-row: #18181b;
+  --color-bg-row-hov: #1d1d21;
+  --color-bg-row-sel: #222227;
+  --color-bg-input: #0c0c0e;
+  --color-bg-chip: #1b1b1f;
 
-  --color-mana-white: #f9faf4;
-  --color-mana-blue: #0e68ab;
-  --color-mana-black: #6b5c7a;
-  --color-mana-red: #d3202a;
-  --color-mana-green: #00733e;
-  --color-mana-gold: #c9a832;
-  --color-mana-colorless: #9098a0;
+  --color-text: #e5e5e8;
+  --color-text-dim: #9a9aa3;
+  --color-text-mute: #62626c;
+  --color-text-faint: #3a3a42;
 
-  --color-rarity-common: #8888a0;
-  --color-rarity-uncommon: #b0b8c0;
-  --color-rarity-rare: #c9a832;
-  --color-rarity-mythic: #d35030;
+  --color-accent: #f2f2f5;
+  --color-accent-ink: #0a0a0c;
+  --color-danger: #c97b72;
+  --color-good: #86a98c;
 
-  --font-display: 'Cinzel', serif;
-  --font-body: 'Outfit', sans-serif;
+  --color-mana-w: #f1ead0;
+  --color-mana-u: #9fcfee;
+  --color-mana-b: #9b948d;
+  --color-mana-r: #e7a294;
+  --color-mana-g: #a8c79c;
+  --color-mana-c: #bdb7af;
+
+  --font-ui: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  --font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+
+:root {
+  --bg-window: #101012;
+  --bg-sidebar: #0d0d0f;
+  --bg-main: #121214;
+  --bg-panel: #161618;
+  --bg-row: #18181b;
+  --bg-row-hov: #1d1d21;
+  --bg-row-sel: #222227;
+  --bg-input: #0c0c0e;
+  --bg-chip: #1b1b1f;
+
+  --border: rgba(255, 255, 255, 0.05);
+  --border-strong: rgba(255, 255, 255, 0.09);
+  --border-input: rgba(255, 255, 255, 0.07);
+
+  --text: #e5e5e8;
+  --text-dim: #9a9aa3;
+  --text-mute: #62626c;
+  --text-faint: #3a3a42;
+
+  --accent: #f2f2f5;
+  --accent-soft: rgba(255, 255, 255, 0.06);
+  --accent-ink: #0a0a0c;
+  --accent-line: rgba(255, 255, 255, 0.18);
+  --danger: #c97b72;
+  --good: #86a98c;
+
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-tile: 8px;
+
+  --row-h: 28px;
+  --pad: 14px;
+  --pad-tight: 10px;
+  --titlebar-h: 40px;
+  --sidebar-w: 224px;
+
+  --font-ui: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  --font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace;
 }
 
 * {
@@ -35,17 +83,26 @@ html, body, #root {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--color-void);
-  color: var(--color-bone);
-  font-family: var(--font-body);
+  background: var(--bg-window);
+  color: var(--text);
+  font-family: var(--font-ui);
 }
 
 body {
   overflow: hidden;
 }
 
+input::placeholder {
+  color: var(--text-mute);
+}
+
+button {
+  font: inherit;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -53,12 +110,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-slate-mid);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-ash);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 @keyframes shimmer {
@@ -71,31 +128,9 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes pulse-glow {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.8; }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out forwards;
-}
-
-.card-skeleton {
-  background: linear-gradient(90deg, var(--color-obsidian) 25%, var(--color-slate-dark) 50%, var(--color-obsidian) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 12px;
-}
-
-.glass {
-  background: rgba(26, 26, 36, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.glass-hover:hover {
-  background: rgba(35, 35, 50, 0.8);
-  border-color: rgba(255, 255, 255, 0.1);
+@keyframes cardPreviewIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes popoverIn {
@@ -103,6 +138,17 @@ body {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
 .animate-popover-in {
   animation: popoverIn 0.15s ease-out forwards;
+}
+
+.card-skeleton {
+  background: linear-gradient(90deg, var(--bg-panel) 25%, var(--bg-row) 50%, var(--bg-panel) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-tile);
 }

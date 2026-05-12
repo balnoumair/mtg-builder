@@ -2,88 +2,142 @@ import { useMemo, useState, useCallback } from 'react';
 import type { Card } from '../../shared/types';
 import { useCards, useCardDetail } from '../hooks/useCards';
 import { useCollectionLookup, useCollectionActions } from '../hooks/useCollection';
-import CardFiltersBar from './CardFilters';
+import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
+import ViewToggle from './ViewToggle';
 
 export default function CardBrowser() {
   const { filters, updateFilters, setPage, result, loading } = useCards();
   const { card, printings, open, showCard, close } = useCardDetail();
   const [colVersion, setColVersion] = useState(0);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const cardIds = useMemo(() => result.cards.map(c => c.id), [result.cards]);
+  const cardIds = useMemo(() => result.cards.map((c) => c.id), [result.cards]);
   const ownedQuantities = useCollectionLookup(cardIds, colVersion);
 
-  const refreshCol = useCallback(() => setColVersion(v => v + 1), []);
+  const refreshCol = useCallback(() => setColVersion((v) => v + 1), []);
   const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refreshCol);
 
-  const handleAddToCollection = useCallback((c: Card) => {
-    addToCollection(c.id);
-  }, [addToCollection]);
+  const handleAddToCollection = useCallback((c: Card) => addToCollection(c.id), [addToCollection]);
 
   const totalPages = Math.ceil(result.total / (filters.pageSize || 60));
   const currentPage = filters.page || 1;
 
   return (
-    <div className="h-full flex flex-col">
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--bg-main)',
+        overflow: 'hidden',
+        fontFamily: 'var(--font-ui)',
+        color: 'var(--text)',
+        height: '100%',
+      }}
+    >
       {/* Header */}
-      <div className="flex-shrink-0 p-5 pb-4 space-y-4">
-        <div className="flex items-end gap-3">
-          <h2 className="font-display text-2xl font-normal tracking-[0.14em] text-bone/90 uppercase leading-none">
-            Collection
-          </h2>
-          <span className="text-ash/50 text-xs tracking-wide pb-0.5">{result.total.toLocaleString()} cards</span>
+      <div
+        style={{
+          padding: 'var(--pad) var(--pad) var(--pad-tight)',
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 12 }}>
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: 'var(--font-display)',
+              fontSize: 18,
+              fontWeight: 600,
+              color: 'var(--text)',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            Card Browser
+          </h1>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
+            {result.total.toLocaleString()}
+          </span>
+          <div style={{ flex: 1 }} />
+          <ViewToggle value={viewMode} onChange={setViewMode} />
         </div>
 
         {/* Search */}
-        <div className="relative">
-          <svg
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ash/40 pointer-events-none"
-            fill="none" viewBox="0 0 16 16"
-          >
-            <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.5"/>
-            <path d="M10 10L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '6px 11px',
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border-input)',
+            borderRadius: 'var(--radius-sm)',
+            marginBottom: 10,
+            maxWidth: 360,
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ opacity: 0.5 }}>
+            <circle cx="5.5" cy="5.5" r="3.8" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M8.2 8.2L11 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
           </svg>
           <input
             type="text"
-            placeholder="Search cards…"
             value={filters.query || ''}
-            onChange={e => updateFilters({ query: e.target.value || undefined })}
-            className="w-full bg-slate-dark/40 border border-slate-mid/20 rounded-xl pl-10 pr-4 py-2.5
-                       text-sm text-bone placeholder:text-ash/40
-                       focus:outline-none focus:border-mana-gold/35 focus:bg-slate-dark/60 transition-all"
+            onChange={(e) => updateFilters({ query: e.target.value || undefined })}
+            placeholder="Search cards…"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              fontFamily: 'var(--font-ui)',
+              fontSize: 13,
+              color: 'var(--text)',
+            }}
           />
         </div>
 
-        {/* Filters */}
-        <CardFiltersBar filters={filters} onUpdate={updateFilters} />
+        <CardFilters filters={filters} onUpdate={updateFilters} />
       </div>
 
-      {/* Card grid */}
-      <div className="flex-1 overflow-y-auto p-5">
-        <CardGrid cards={result.cards} loading={loading} onCardClick={showCard} ownedQuantities={ownedQuantities} />
+      {/* Body */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>
+        <CardGrid
+          cards={result.cards}
+          loading={loading}
+          onCardClick={showCard}
+          ownedQuantities={ownedQuantities}
+          view={viewMode}
+        />
 
-        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-6 pb-4">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              marginTop: 16,
+              paddingBottom: 8,
+            }}
+          >
             <button
               onClick={() => setPage(currentPage - 1)}
               disabled={currentPage <= 1}
-              className="px-3 py-1.5 rounded-lg text-sm text-ash hover:text-bone
-                         disabled:opacity-30 disabled:cursor-default cursor-pointer
-                         hover:bg-obsidian transition-all"
+              style={pageBtn(currentPage <= 1)}
             >
               Prev
             </button>
-            <span className="text-ash text-sm">
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
               {currentPage} / {totalPages}
             </span>
             <button
               onClick={() => setPage(currentPage + 1)}
               disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 rounded-lg text-sm text-ash hover:text-bone
-                         disabled:opacity-30 disabled:cursor-default cursor-pointer
-                         hover:bg-obsidian transition-all"
+              style={pageBtn(currentPage >= totalPages)}
             >
               Next
             </button>
@@ -91,13 +145,12 @@ export default function CardBrowser() {
         )}
       </div>
 
-      {/* Detail modal */}
       {open && card && (
         <CardDetail
           card={card}
           printings={printings}
           onClose={close}
-          collectionQuantity={card ? (ownedQuantities[card.id] ?? 0) : 0}
+          collectionQuantity={ownedQuantities[card.id] ?? 0}
           onAddToCollection={handleAddToCollection}
           onUpdateCollectionQuantity={updateCollectionQuantity}
           onRemoveFromCollection={removeFromCollection}
@@ -105,4 +158,17 @@ export default function CardBrowser() {
       )}
     </div>
   );
+}
+
+function pageBtn(disabled: boolean): React.CSSProperties {
+  return {
+    padding: '4px 10px',
+    background: 'var(--bg-chip)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 'var(--radius-sm)',
+    color: 'var(--text-dim)',
+    fontSize: 11,
+    cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.3 : 1,
+  };
 }
