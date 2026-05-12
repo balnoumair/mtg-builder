@@ -3,6 +3,7 @@ import type { ImportProgress } from '../../shared/types';
 
 interface Props {
   onComplete: () => void;
+  onCancel?: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -12,7 +13,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
-export default function ImportScreen({ onComplete }: Props) {
+export default function ImportScreen({ onComplete, onCancel }: Props) {
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +27,15 @@ export default function ImportScreen({ onComplete }: Props) {
     });
     return unsub;
   }, [onComplete]);
+
+  useEffect(() => {
+    if (!onCancel) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !syncing) onCancel();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onCancel, syncing]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -47,44 +57,101 @@ export default function ImportScreen({ onComplete }: Props) {
     if (!progress) return '';
     switch (progress.phase) {
       case 'downloading':
-        return `Downloading card data... ${formatBytes(progress.current)}${progress.total > 0 ? ` / ${formatBytes(progress.total)}` : ''}`;
+        return `Downloading… ${formatBytes(progress.current)}${progress.total > 0 ? ` / ${formatBytes(progress.total)}` : ''}`;
       case 'reading':
-        return `Importing cards... ${progress.current.toLocaleString()} cards`;
+        return `Importing… ${progress.current.toLocaleString()} cards`;
       case 'indexing':
-        return 'Building indexes...';
+        return 'Building indexes…';
       case 'done':
-        return 'Sync complete!';
+        return 'Done.';
     }
   })();
 
   return (
-    <div className="flex h-screen items-center justify-center bg-void relative overflow-hidden">
-      {/* Background arcane circles */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div
-          className="w-[600px] h-[600px] rounded-full border border-slate-mid/20"
-          style={{ animation: 'pulse-glow 4s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute w-[400px] h-[400px] rounded-full border border-mana-gold/10"
-          style={{ animation: 'pulse-glow 4s ease-in-out infinite 1s' }}
-        />
-        <div
-          className="absolute w-[200px] h-[200px] rounded-full border border-mana-blue/15"
-          style={{ animation: 'pulse-glow 4s ease-in-out infinite 2s' }}
-        />
-      </div>
-
-      <div className="glass rounded-2xl p-10 max-w-md w-full text-center relative z-10 animate-fade-in">
-        <h1 className="font-display text-3xl font-bold text-bone mb-2 tracking-wide">
+    <div
+      style={{
+        position: 'relative',
+        display: 'flex',
+        height: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg-window)',
+        color: 'var(--text)',
+        fontFamily: 'var(--font-ui)',
+      }}
+    >
+      {onCancel && !syncing && (
+        <button
+          onClick={onCancel}
+          title="Back (Esc)"
+          style={{
+            position: 'absolute',
+            top: 'calc(var(--titlebar-h) + 12px)',
+            left: 16,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '5px 9px 5px 7px',
+            background: 'transparent',
+            color: 'var(--text-dim)',
+            border: '1px solid var(--border-strong)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path
+              d="M7 2L3 5.5L7 9"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Back
+        </button>
+      )}
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 420,
+          margin: '0 24px',
+          padding: 28,
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          textAlign: 'center',
+        }}
+      >
+        <h1
+          style={{
+            margin: 0,
+            fontFamily: 'var(--font-display)',
+            fontSize: 22,
+            fontWeight: 600,
+            letterSpacing: '-0.01em',
+          }}
+        >
           MTG Builder
         </h1>
-        <p className="text-ash text-sm mb-8">
-          Sync your card database from Scryfall to begin
+        <p style={{ color: 'var(--text-dim)', fontSize: 12, marginTop: 6, marginBottom: 22 }}>
+          Sync your card database from Scryfall to begin.
         </p>
 
         {error && (
-          <div className="mb-4 px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+          <div
+            style={{
+              marginBottom: 14,
+              padding: '8px 12px',
+              borderRadius: 'var(--radius-sm)',
+              background: 'rgba(201,123,114,0.08)',
+              border: '1px solid rgba(201,123,114,0.3)',
+              color: 'var(--danger)',
+              fontSize: 12,
+              textAlign: 'left',
+            }}
+          >
             {error}
           </div>
         )}
@@ -92,23 +159,52 @@ export default function ImportScreen({ onComplete }: Props) {
         {!syncing ? (
           <button
             onClick={handleSync}
-            className="px-8 py-3 rounded-xl bg-mana-gold/20 border border-mana-gold/30
-                       text-mana-gold font-body font-medium text-sm
-                       hover:bg-mana-gold/30 hover:border-mana-gold/50
-                       transition-all duration-200 cursor-pointer"
+            style={{
+              padding: '8px 16px',
+              background: 'var(--accent-soft)',
+              color: 'var(--accent)',
+              border: '1px solid var(--accent-line)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 12,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-ui)',
+            }}
           >
             Sync from Scryfall
           </button>
         ) : (
-          <div className="space-y-4">
-            <p className="text-silver text-sm">{statusText}</p>
-            <div className="w-full h-2 bg-obsidian rounded-full overflow-hidden">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <p style={{ color: 'var(--text-dim)', fontSize: 12, margin: 0 }}>{statusText}</p>
+            <div
+              style={{
+                width: '100%',
+                height: 4,
+                background: 'var(--bg-input)',
+                borderRadius: 999,
+                overflow: 'hidden',
+                border: '1px solid var(--border)',
+              }}
+            >
               <div
-                className="h-full bg-gradient-to-r from-mana-gold/60 to-mana-gold rounded-full transition-all duration-300"
-                style={{ width: `${pct}%` }}
+                style={{
+                  height: '100%',
+                  width: `${pct}%`,
+                  background: 'var(--accent)',
+                  opacity: 0.7,
+                  transition: 'width 200ms',
+                }}
               />
             </div>
-            <p className="text-ash text-xs">{pct}%</p>
+            <p
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--text-mute)',
+                margin: 0,
+              }}
+            >
+              {pct}%
+            </p>
           </div>
         )}
       </div>

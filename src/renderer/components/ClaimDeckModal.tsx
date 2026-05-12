@@ -14,12 +14,13 @@ export default function ClaimDeckModal({ deckName, deckCards, ownedQuantities, o
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  // Aggregate deck cards by card_id (across boards)
   const aggregated = useMemo(() => {
     const map: Record<string, { name: string; manaCost: string; deckQty: number; ownedQty: number }> = {};
     for (const dc of deckCards) {
@@ -52,98 +53,162 @@ export default function ClaimDeckModal({ deckName, deckCards, ownedQuantities, o
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
       onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100,
+        background: 'rgba(0,0,0,0.55)',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 28,
+        fontFamily: 'var(--font-ui)',
+        color: 'var(--text)',
+      }}
     >
       <div
-        className="glass rounded-2xl max-w-xl w-full max-h-[80vh] flex flex-col
-                   animate-fade-in mx-4"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: 520,
+          maxHeight: '80vh',
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border-strong)',
+          borderRadius: 'var(--radius)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.55)',
+        }}
       >
-        {/* Header */}
-        <div className="p-5 pb-4 border-b border-white/[0.06]">
-          <h2 className="font-display text-lg font-normal tracking-[0.12em] text-bone/90 uppercase">
-            Claim as Owned
+        <div style={{ padding: 18, borderBottom: '1px solid var(--border)' }}>
+          <h2
+            style={{
+              margin: 0,
+              fontFamily: 'var(--font-display)',
+              fontSize: 16,
+              fontWeight: 600,
+            }}
+          >
+            Claim as owned
           </h2>
-          <p className="text-ash/50 text-xs mt-1">
-            Mark <span className="text-bone/70">{deckName}</span> as a deck you physically own
+          <p style={{ color: 'var(--text-mute)', fontSize: 12, marginTop: 4, marginBottom: 0 }}>
+            Mark <span style={{ color: 'var(--text-dim)' }}>{deckName}</span> as a deck you physically own
           </p>
         </div>
 
-        {/* Explanation */}
-        <div className="px-5 py-3 border-b border-white/[0.04]">
-          <div className="flex items-start gap-3 text-xs">
-            <div className="w-6 h-6 rounded-lg bg-mana-gold/10 border border-mana-gold/20
-                            flex items-center justify-center flex-shrink-0 mt-0.5">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M6 2v4M6 8v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-                      className="text-mana-gold/70"/>
-              </svg>
-            </div>
-            <div className="text-silver/60 leading-relaxed">
-              {fromCollection.length > 0 ? (
-                <>
-                  <span className="text-mana-gold/80 font-medium">{cardsMoving}</span> cards
-                  from your collection will be deducted (they're now part of this deck).
-                  {cardsMoving < totalDeckCards && (
-                    <span className="text-ash/50"> The remaining {totalDeckCards - cardsMoving} are
-                      cards you don't have in your singles collection.</span>
-                  )}
-                </>
-              ) : (
-                <>
-                  None of this deck's cards are in your singles collection.
-                  The deck will simply be marked as owned.
-                </>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.5 }}>
+          {fromCollection.length > 0 ? (
+            <>
+              <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{cardsMoving}</span> cards from your collection will be deducted (they’re now part of this deck).
+              {cardsMoving < totalDeckCards && (
+                <span style={{ color: 'var(--text-mute)' }}>
+                  {' '}The remaining {totalDeckCards - cardsMoving} are cards you don’t have in your singles collection.
+                </span>
               )}
-            </div>
-          </div>
+            </>
+          ) : (
+            <>None of this deck’s cards are in your singles collection. The deck will simply be marked as owned.</>
+          )}
         </div>
 
-        {/* Card list showing what moves */}
         {fromCollection.length > 0 && (
-          <div className="flex-1 overflow-y-auto px-5 py-3">
-            <div className="text-[10px] uppercase tracking-wider text-ash/40 mb-2">
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 18px' }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9,
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                color: 'var(--text-mute)',
+                marginBottom: 8,
+              }}
+            >
               Cards moving from collection
             </div>
-            <div className="space-y-px">
-              {fromCollection.map(([cardId, c]) => {
-                const moving = Math.min(c.deckQty, c.ownedQty);
-                const remaining = c.ownedQty - moving;
-                return (
-                  <div key={cardId} className="flex items-center gap-2 px-2 py-1.5 rounded-lg">
-                    <span className="text-mana-gold/70 text-xs font-medium tabular-nums w-5 text-center">
-                      -{moving}
+            {fromCollection.map(([cardId, c]) => {
+              const moving = Math.min(c.deckQty, c.ownedQty);
+              const remaining = c.ownedQty - moving;
+              return (
+                <div
+                  key={cardId}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '4px 6px',
+                    fontSize: 12,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                      color: 'var(--danger)',
+                      width: 28,
+                      textAlign: 'right',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    −{moving}
+                  </span>
+                  <span style={{ flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                    {c.name}
+                  </span>
+                  <ManaSymbols cost={c.manaCost} size={11} />
+                  {remaining > 0 && (
+                    <span
+                      title={`${remaining} will remain in collection`}
+                      style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-mute)' }}
+                    >
+                      {remaining} left
                     </span>
-                    <span className="flex-1 text-silver/70 text-xs truncate">{c.name}</span>
-                    <ManaSymbols cost={c.manaCost} />
-                    {remaining > 0 && (
-                      <span className="text-[9px] text-ash/40" title={`${remaining} will remain in collection`}>
-                        {remaining} left
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {/* Footer */}
-        <div className="p-5 pt-4 border-t border-white/[0.06] flex items-center justify-between">
+        <div
+          style={{
+            padding: 16,
+            borderTop: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 8,
+          }}
+        >
           <button
             onClick={onClose}
-            className="px-4 py-2 text-ash/60 hover:text-silver text-xs cursor-pointer transition-colors"
+            style={{
+              padding: '7px 12px',
+              background: 'transparent',
+              color: 'var(--text-mute)',
+              border: 'none',
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
             disabled={confirming}
-            className="px-5 py-2.5 rounded-xl bg-mana-gold/12 border border-mana-gold/30
-                       text-mana-gold/85 font-medium text-xs tracking-wide
-                       hover:bg-mana-gold/20 hover:text-mana-gold transition-all cursor-pointer
-                       disabled:opacity-50 disabled:cursor-default"
+            style={{
+              padding: '7px 14px',
+              background: 'var(--accent-soft)',
+              color: 'var(--accent)',
+              border: '1px solid var(--accent-line)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 12,
+              cursor: confirming ? 'default' : 'pointer',
+              opacity: confirming ? 0.6 : 1,
+            }}
           >
             {confirming ? 'Claiming…' : 'Confirm & Claim'}
           </button>

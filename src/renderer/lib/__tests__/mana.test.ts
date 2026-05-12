@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseManaCost,
-  getManaColor,
-  getManaBg,
+  getManaMeta,
   getCardTypeCategory,
   TYPE_ORDER,
 } from '../mana';
@@ -41,85 +40,68 @@ describe('parseManaCost', () => {
   });
 });
 
-describe('getManaColor', () => {
-  it('returns correct color for W', () => {
-    expect(getManaColor('W')).toBe('#f9faf4');
+describe('getManaMeta', () => {
+  it('returns Hush palette meta for W', () => {
+    expect(getManaMeta('W').hex).toBe('#f1ead0');
+    expect(getManaMeta('W').name).toBe('White');
   });
 
-  it('returns correct color for U', () => {
-    expect(getManaColor('U')).toBe('#0e68ab');
+  it('returns Hush palette meta for U', () => {
+    expect(getManaMeta('U').hex).toBe('#9fcfee');
   });
 
-  it('returns correct color for B', () => {
-    expect(getManaColor('B')).toBe('#6b5c7a');
+  it('returns Hush palette meta for B', () => {
+    expect(getManaMeta('B').hex).toBe('#9b948d');
   });
 
-  it('returns correct color for R', () => {
-    expect(getManaColor('R')).toBe('#d3202a');
+  it('returns Hush palette meta for R', () => {
+    expect(getManaMeta('R').hex).toBe('#e7a294');
   });
 
-  it('returns correct color for G', () => {
-    expect(getManaColor('G')).toBe('#00733e');
+  it('returns Hush palette meta for G', () => {
+    expect(getManaMeta('G').hex).toBe('#a8c79c');
   });
 
-  it('returns fallback color for unknown symbol', () => {
-    expect(getManaColor('Z')).toBe('#9098a0');
-  });
-
-  it('returns fallback color for empty string', () => {
-    expect(getManaColor('')).toBe('#9098a0');
-  });
-});
-
-describe('getManaBg', () => {
-  it('returns correct background for R', () => {
-    expect(getManaBg('R')).toBe('rgba(211,32,42,0.2)');
-  });
-
-  it('returns correct background for W', () => {
-    expect(getManaBg('W')).toBe('rgba(249,250,244,0.15)');
-  });
-
-  it('returns fallback background for unknown symbol', () => {
-    expect(getManaBg('Z')).toBe('rgba(144,152,160,0.15)');
+  it('returns colorless fallback for unknown symbol', () => {
+    expect(getManaMeta('Z').hex).toBe('#bdb7af');
   });
 });
 
 describe('getCardTypeCategory', () => {
   it('classifies creatures', () => {
-    expect(getCardTypeCategory('Legendary Creature — Dragon')).toBe('Creatures');
+    expect(getCardTypeCategory('Legendary Creature — Dragon')).toBe('Creature');
   });
 
   it('classifies planeswalkers', () => {
-    expect(getCardTypeCategory('Legendary Planeswalker — Jace')).toBe('Planeswalkers');
+    expect(getCardTypeCategory('Legendary Planeswalker — Jace')).toBe('Planeswalker');
   });
 
   it('classifies instants', () => {
-    expect(getCardTypeCategory('Instant')).toBe('Instants');
+    expect(getCardTypeCategory('Instant')).toBe('Instant');
   });
 
   it('classifies sorceries', () => {
-    expect(getCardTypeCategory('Sorcery')).toBe('Sorceries');
+    expect(getCardTypeCategory('Sorcery')).toBe('Sorcery');
   });
 
   it('classifies enchantments', () => {
-    expect(getCardTypeCategory('Enchantment — Aura')).toBe('Enchantments');
+    expect(getCardTypeCategory('Enchantment — Aura')).toBe('Enchantment');
   });
 
   it('classifies artifacts', () => {
-    expect(getCardTypeCategory('Artifact — Equipment')).toBe('Artifacts');
+    expect(getCardTypeCategory('Artifact — Equipment')).toBe('Artifact');
   });
 
   it('classifies lands', () => {
-    expect(getCardTypeCategory('Basic Land — Forest')).toBe('Lands');
+    expect(getCardTypeCategory('Basic Land — Forest')).toBe('Land');
   });
 
   it('classifies creature takes priority over enchantment', () => {
-    expect(getCardTypeCategory('Enchantment Creature — Spirit')).toBe('Creatures');
+    expect(getCardTypeCategory('Enchantment Creature — Spirit')).toBe('Creature');
   });
 
   it('classifies artifact creature as creature', () => {
-    expect(getCardTypeCategory('Artifact Creature — Golem')).toBe('Creatures');
+    expect(getCardTypeCategory('Artifact Creature — Golem')).toBe('Creature');
   });
 
   it('returns Other for unrecognized types', () => {
@@ -127,15 +109,15 @@ describe('getCardTypeCategory', () => {
   });
 
   it('handles case insensitivity', () => {
-    expect(getCardTypeCategory('CREATURE')).toBe('Creatures');
+    expect(getCardTypeCategory('CREATURE')).toBe('Creature');
   });
 });
 
 describe('TYPE_ORDER', () => {
   it('contains all expected categories in correct order', () => {
     expect(TYPE_ORDER).toEqual([
-      'Creatures', 'Planeswalkers', 'Instants', 'Sorceries',
-      'Enchantments', 'Artifacts', 'Lands', 'Other',
+      'Creature', 'Planeswalker', 'Instant', 'Sorcery',
+      'Enchantment', 'Artifact', 'Land', 'Other',
     ]);
   });
 });

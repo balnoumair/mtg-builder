@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { DbStatus } from '../shared/types';
 import type { View } from './lib/types';
 import ImportScreen from './components/ImportScreen';
 import Sidebar from './components/Sidebar';
+import Titlebar from './components/Titlebar';
 import CardBrowser from './components/CardBrowser';
 import DeckList from './components/DeckList';
 import DeckEditor from './components/DeckEditor';
@@ -40,56 +41,92 @@ export default function App() {
     setSyncing(true);
   };
 
+  const titleInfo = useMemo(() => {
+    if (view === 'deck-editor' && activeDeckId) {
+      const d = decks.find((x) => x.id === activeDeckId);
+      return { title: d?.name || 'Deck', subtitle: d?.format || '' };
+    }
+    if (view === 'collection') return { title: 'Card Browser', subtitle: '' };
+    if (view === 'my-cards') return { title: 'My Cards', subtitle: '' };
+    return { title: 'Decks', subtitle: '' };
+  }, [view, activeDeckId, decks]);
+
   if (dbStatus === null) {
     return (
-      <div className="flex h-screen items-center justify-center bg-void">
-        <div className="text-ash font-body text-lg">Loading...</div>
+      <div
+        style={{
+          display: 'flex',
+          height: '100vh',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg-window)',
+          color: 'var(--text-dim)',
+          fontSize: 13,
+        }}
+      >
+        Loading…
       </div>
     );
   }
 
   if (!dbStatus.ready || syncing) {
-    return <ImportScreen onComplete={handleSyncComplete} />;
+    return (
+      <ImportScreen
+        onComplete={handleSyncComplete}
+        onCancel={dbStatus.ready ? () => setSyncing(false) : undefined}
+      />
+    );
   }
 
   return (
-    <div className="flex h-screen bg-void">
-      {/* Titlebar drag region */}
-      <div
-        className="fixed top-0 left-0 right-0 h-10 z-50"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      />
-      <Sidebar
-        view={view}
-        onNavigate={(v) => { setView(v); if (v !== 'deck-editor') setActiveDeckId(null); }}
-        decks={decks}
-        onOpenDeck={handleOpenDeck}
-        onCreateDeck={handleCreateDeck}
-        activeDeckId={activeDeckId}
-        onSync={handleSync}
-      />
-      <main className="flex-1 overflow-hidden">
-        {view === 'collection' && <CardBrowser />}
-        {view === 'my-cards' && <CollectionView onNavigateToBrowse={() => setView('collection')} />}
-        {view === 'decks' && (
-          <DeckList
-            decks={decks}
-            loading={decksLoading}
-            onOpenDeck={handleOpenDeck}
-            onCreateDeck={handleCreateDeck}
-            onDeleteDeck={deleteDeck}
-            onRenameDeck={(id, name) => updateDeck(id, { name })}
-          />
-        )}
-        {view === 'deck-editor' && activeDeckId && (
-          <DeckEditor
-            deckId={activeDeckId}
-            decks={decks}
-            onUpdateDeck={updateDeck}
-            onDeckCardsChanged={refreshDecks}
-          />
-        )}
-      </main>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        background: 'var(--bg-window)',
+        color: 'var(--text)',
+        overflow: 'hidden',
+      }}
+    >
+      <Titlebar title={titleInfo.title} subtitle={titleInfo.subtitle} />
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+        <Sidebar
+          view={view}
+          onNavigate={(v) => {
+            setView(v);
+            if (v !== 'deck-editor') setActiveDeckId(null);
+          }}
+          decks={decks}
+          onOpenDeck={handleOpenDeck}
+          onCreateDeck={handleCreateDeck}
+          activeDeckId={activeDeckId}
+          onSync={handleSync}
+          cardCount={dbStatus.cardCount}
+        />
+        <main style={{ flex: 1, overflow: 'hidden', display: 'flex', minWidth: 0 }}>
+          {view === 'collection' && <CardBrowser />}
+          {view === 'my-cards' && <CollectionView onNavigateToBrowse={() => setView('collection')} />}
+          {view === 'decks' && (
+            <DeckList
+              decks={decks}
+              loading={decksLoading}
+              onOpenDeck={handleOpenDeck}
+              onCreateDeck={handleCreateDeck}
+              onDeleteDeck={deleteDeck}
+              onRenameDeck={(id, name) => updateDeck(id, { name })}
+            />
+          )}
+          {view === 'deck-editor' && activeDeckId && (
+            <DeckEditor
+              deckId={activeDeckId}
+              decks={decks}
+              onUpdateDeck={updateDeck}
+              onDeckCardsChanged={refreshDecks}
+            />
+          )}
+        </main>
+      </div>
     </div>
   );
 }

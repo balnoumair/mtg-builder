@@ -17,27 +17,33 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const mainCards = useMemo(() => deckCards.filter(dc => dc.board === 'main'), [deckCards]);
-  const sideCards = useMemo(() => deckCards.filter(dc => dc.board === 'sideboard'), [deckCards]);
+  const mainCards = useMemo(() => deckCards.filter((dc) => dc.board === 'main'), [deckCards]);
+  const sideCards = useMemo(() => deckCards.filter((dc) => dc.board === 'sideboard'), [deckCards]);
 
-  const filterCards = (cards: DeckCard[]) => {
-    return cards.filter(dc => {
+  const filterCards = (cards: DeckCard[]) =>
+    cards.filter((dc) => {
       if (!dc.card) return false;
       if (excludeBasicLands && BASIC_LANDS.has(dc.card.name)) return false;
       if (excludedCardIds.has(dc.card_id)) return false;
       return true;
     });
-  };
 
-  const filteredMain = useMemo(() => filterCards(mainCards), [mainCards, excludeBasicLands, excludedCardIds]);
-  const filteredSide = useMemo(() => filterCards(sideCards), [sideCards, excludeBasicLands, excludedCardIds]);
+  const filteredMain = useMemo(
+    () => filterCards(mainCards),
+    [mainCards, excludeBasicLands, excludedCardIds],
+  );
+  const filteredSide = useMemo(
+    () => filterCards(sideCards),
+    [sideCards, excludeBasicLands, excludedCardIds],
+  );
 
-  // Group by type for the preview
   const groupedMain = useMemo(() => {
     const groups: Record<string, DeckCard[]> = {};
     for (const dc of filteredMain) {
@@ -46,11 +52,11 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(dc);
     }
-    return TYPE_ORDER.filter(t => groups[t]?.length).map(t => ({ type: t, cards: groups[t] }));
+    return TYPE_ORDER.filter((t) => groups[t]?.length).map((t) => ({ type: t, cards: groups[t] }));
   }, [filteredMain]);
 
   const toggleExclude = (cardId: string) => {
-    setExcludedCardIds(prev => {
+    setExcludedCardIds((prev) => {
       const next = new Set(prev);
       if (next.has(cardId)) next.delete(cardId);
       else next.add(cardId);
@@ -64,24 +70,15 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
   const exportText = useMemo(() => {
     const lines: string[] = [];
     if (deckName) lines.push(`// ${deckName}`, '');
-
-    // Main deck grouped by type
     for (const group of groupedMain) {
       lines.push(`// ${group.type}`);
-      for (const dc of group.cards) {
-        lines.push(`${dc.quantity} ${dc.card?.name}`);
-      }
+      for (const dc of group.cards) lines.push(`${dc.quantity} ${dc.card?.name}`);
       lines.push('');
     }
-
-    // Sideboard
     if (filteredSide.length > 0) {
       lines.push('// Sideboard');
-      for (const dc of filteredSide) {
-        lines.push(`${dc.quantity} ${dc.card?.name}`);
-      }
+      for (const dc of filteredSide) lines.push(`${dc.quantity} ${dc.card?.name}`);
     }
-
     return lines.join('\n').trim();
   }, [deckName, groupedMain, filteredSide]);
 
@@ -91,7 +88,6 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback
       const ta = document.createElement('textarea');
       ta.value = exportText;
       document.body.appendChild(ta);
@@ -105,155 +101,271 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
       onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100,
+        background: 'rgba(0,0,0,0.55)',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 28,
+        fontFamily: 'var(--font-ui)',
+        color: 'var(--text)',
+      }}
     >
       <div
-        className="glass rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col
-                   animate-fade-in mx-4"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: 640,
+          maxHeight: '85vh',
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border-strong)',
+          borderRadius: 'var(--radius)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.55)',
+        }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-5 pb-4 border-b border-white/[0.06]">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: 18,
+            borderBottom: '1px solid var(--border)',
+          }}
+        >
           <div>
-            <h2 className="font-display text-lg font-normal tracking-[0.12em] text-bone/90 uppercase">
-              Export Deck
+            <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600 }}>
+              Export deck
             </h2>
-            <p className="text-ash/50 text-xs mt-1">{deckName}</p>
+            <p style={{ color: 'var(--text-mute)', fontSize: 12, marginTop: 2, marginBottom: 0 }}>
+              {deckName}
+            </p>
           </div>
           <button
             onClick={onClose}
-            className="text-ash hover:text-bone text-xl leading-none cursor-pointer"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-mute)',
+              fontSize: 18,
+              lineHeight: 1,
+              cursor: 'pointer',
+            }}
           >
             ×
           </button>
         </div>
 
-        {/* Options */}
-        <div className="px-5 py-3 border-b border-white/[0.04] flex items-center gap-4">
-          <label className="flex items-center gap-2 cursor-pointer">
+        <div
+          style={{
+            padding: '12px 18px',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            fontSize: 12,
+          }}
+        >
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              cursor: 'pointer',
+              color: 'var(--text-dim)',
+            }}
+          >
             <input
               type="checkbox"
               checked={excludeBasicLands}
-              onChange={e => setExcludeBasicLands(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-slate-mid/40 bg-slate-dark/50
-                         checked:bg-mana-gold/60 checked:border-mana-gold/80
-                         focus:ring-0 focus:ring-offset-0 accent-[#c9a832] cursor-pointer"
+              onChange={(e) => setExcludeBasicLands(e.target.checked)}
             />
-            <span className="text-xs text-silver/70">Exclude basic lands</span>
+            Exclude basic lands
           </label>
-          <span className="text-ash/30 text-[10px]">
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: 'var(--text-mute)',
+              marginLeft: 'auto',
+            }}
+          >
             {totalMain} main{totalSide > 0 ? ` · ${totalSide} side` : ''}
           </span>
         </div>
 
-        {/* Card list preview */}
-        <div className="flex-1 overflow-y-auto p-5">
+        <div style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
           {groupedMain.length === 0 && filteredSide.length === 0 ? (
-            <div className="text-center py-12 text-ash/40 text-sm">No cards to export</div>
-          ) : (
-            <div className="space-y-4">
-              {groupedMain.map(group => (
-                <div key={group.type}>
-                  <div className="flex items-center gap-2 mb-1.5 pb-1 border-b border-white/[0.04]">
-                    <h4 className="text-[10px] font-medium uppercase tracking-[0.14em] text-ash/50">
-                      {group.type}
-                    </h4>
-                    <span className="text-[10px] text-ash/30">
-                      {group.cards.reduce((s, c) => s + c.quantity, 0)}
-                    </span>
-                  </div>
-                  <div className="space-y-px">
-                    {group.cards.map(dc => (
-                      <div
-                        key={dc.id}
-                        className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-white/[0.03] group"
-                      >
-                        <span className="text-bone/60 text-xs font-medium tabular-nums w-5 text-center">
-                          {dc.quantity}
-                        </span>
-                        <span className="flex-1 text-silver/70 text-xs truncate">
-                          {dc.card?.name}
-                        </span>
-                        <ManaSymbols cost={dc.card?.mana_cost || ''} />
-                        <button
-                          onClick={() => toggleExclude(dc.card_id)}
-                          className="w-5 h-5 rounded flex items-center justify-center
-                                     text-ash/30 hover:text-mana-red/70 cursor-pointer
-                                     opacity-0 group-hover:opacity-100 transition-all"
-                          title="Exclude from export"
-                        >
-                          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                            <path d="M1 1l6 6M7 1l-6 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {filteredSide.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5 pb-1 border-b border-white/[0.04]">
-                    <h4 className="text-[10px] font-medium uppercase tracking-[0.14em] text-ash/50">
-                      Sideboard
-                    </h4>
-                    <span className="text-[10px] text-ash/30">{totalSide}</span>
-                  </div>
-                  <div className="space-y-px">
-                    {filteredSide.map(dc => (
-                      <div
-                        key={dc.id}
-                        className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-white/[0.03] group"
-                      >
-                        <span className="text-bone/60 text-xs font-medium tabular-nums w-5 text-center">
-                          {dc.quantity}
-                        </span>
-                        <span className="flex-1 text-silver/70 text-xs truncate">
-                          {dc.card?.name}
-                        </span>
-                        <ManaSymbols cost={dc.card?.mana_cost || ''} />
-                        <button
-                          onClick={() => toggleExclude(dc.card_id)}
-                          className="w-5 h-5 rounded flex items-center justify-center
-                                     text-ash/30 hover:text-mana-red/70 cursor-pointer
-                                     opacity-0 group-hover:opacity-100 transition-all"
-                          title="Exclude from export"
-                        >
-                          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                            <path d="M1 1l6 6M7 1l-6 6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <div
+              style={{
+                textAlign: 'center',
+                padding: 32,
+                color: 'var(--text-mute)',
+                fontSize: 12,
+              }}
+            >
+              No cards to export
             </div>
+          ) : (
+            <>
+              {groupedMain.map((group) => (
+                <ExportGroup
+                  key={group.type}
+                  title={group.type}
+                  cards={group.cards}
+                  onExclude={toggleExclude}
+                />
+              ))}
+              {filteredSide.length > 0 && (
+                <ExportGroup title="Sideboard" cards={filteredSide} onExclude={toggleExclude} />
+              )}
+            </>
           )}
         </div>
 
-        {/* Footer actions */}
-        <div className="p-5 pt-4 border-t border-white/[0.06] flex items-center justify-between">
+        <div
+          style={{
+            padding: 16,
+            borderTop: '1px solid var(--border)',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8,
+          }}
+        >
           <button
             onClick={onClose}
-            className="px-4 py-2 text-ash/60 hover:text-silver text-xs cursor-pointer transition-colors"
+            style={{
+              padding: '7px 12px',
+              background: 'transparent',
+              color: 'var(--text-mute)',
+              border: 'none',
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
           >
             Cancel
           </button>
           <button
             onClick={handleCopy}
-            className={`px-5 py-2.5 rounded-xl font-medium text-xs tracking-wide transition-all cursor-pointer
-              ${copied
-                ? 'bg-mana-green/15 border border-mana-green/30 text-mana-green'
-                : 'bg-mana-gold/10 border border-mana-gold/25 text-mana-gold/80 hover:bg-mana-gold/18 hover:text-mana-gold'
-              }`}
+            style={{
+              padding: '7px 14px',
+              background: copied ? 'rgba(134,169,140,0.12)' : 'var(--accent-soft)',
+              color: copied ? 'var(--good)' : 'var(--accent)',
+              border: `1px solid ${copied ? 'rgba(134,169,140,0.4)' : 'var(--accent-line)'}`,
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
           >
-            {copied ? 'Copied!' : 'Copy to Clipboard'}
+            {copied ? 'Copied!' : 'Copy to clipboard'}
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ExportGroup({
+  title,
+  cards,
+  onExclude,
+}: {
+  title: string;
+  cards: DeckCard[];
+  onExclude: (id: string) => void;
+}) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 6,
+          paddingBottom: 4,
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            color: 'var(--text-mute)',
+          }}
+        >
+          {title}
+        </span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)' }}>
+          {cards.reduce((s, c) => s + c.quantity, 0)}
+        </span>
+      </div>
+      {cards.map((dc) => (
+        <div
+          key={dc.id}
+          className="group"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '3px 6px',
+            fontSize: 12,
+          }}
+        >
+          <span
+            style={{
+              width: 22,
+              textAlign: 'center',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: 'var(--text-dim)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {dc.quantity}
+          </span>
+          <span
+            style={{ flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}
+          >
+            {dc.card?.name}
+          </span>
+          <ManaSymbols cost={dc.card?.mana_cost || ''} size={11} />
+          <button
+            onClick={() => onExclude(dc.card_id)}
+            className="opacity-0 group-hover:opacity-100"
+            title="Exclude from export"
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 'var(--radius-sm)',
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              color: 'var(--text-mute)',
+              cursor: 'pointer',
+              transition: 'opacity 120ms',
+              padding: 0,
+            }}
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="none" style={{ margin: 'auto' }}>
+              <path
+                d="M1 1l6 6M7 1l-6 6"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
