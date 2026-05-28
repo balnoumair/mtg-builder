@@ -29,9 +29,8 @@ export function searchCards(db: Database.Database, filters: CardFilters): CardSe
   if (filters.colors && filters.colors.length > 0) {
     const mode = filters.colorMode || 'include';
     if (mode === 'include') {
-      for (let i = 0; i < filters.colors.length; i++) {
-        conditions.push(`color_identity LIKE '%"${filters.colors[i]}"%'`);
-      }
+      const colorChecks = filters.colors.map(c => `color_identity LIKE '%"${c}"%'`);
+      conditions.push(`(${colorChecks.join(' OR ')})`);
     } else if (mode === 'exact') {
       for (let i = 0; i < filters.colors.length; i++) {
         conditions.push(`color_identity LIKE '%"${filters.colors[i]}"%'`);

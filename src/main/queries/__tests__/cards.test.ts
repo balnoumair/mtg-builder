@@ -50,6 +50,15 @@ describe('searchCards', () => {
       expect(names).not.toContain('Blue Card');
     });
 
+    it('include mode: with multiple colors returns cards containing any of them', () => {
+      const result = searchCards(db, { colors: ['R', 'U'], colorMode: 'include' });
+      const names = result.cards.map(c => c.name);
+      expect(names).toContain('Red Card');
+      expect(names).toContain('Blue Card');
+      expect(names).toContain('Red-Blue Card');
+      expect(names).not.toContain('Colorless Card');
+    });
+
     it('exact mode: returns cards with exactly those colors', () => {
       const result = searchCards(db, { colors: ['R'], colorMode: 'exact' });
       const names = result.cards.map(c => c.name);

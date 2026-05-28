@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import type { DbStatus } from '../shared/types';
 import type { View } from './lib/types';
 import ImportScreen from './components/ImportScreen';
@@ -105,9 +105,16 @@ export default function App() {
           cardCount={dbStatus.cardCount}
         />
         <main style={{ flex: 1, overflow: 'hidden', display: 'flex', minWidth: 0 }}>
-          {view === 'collection' && <CardBrowser />}
-          {view === 'my-cards' && <CollectionView onNavigateToBrowse={() => setView('collection')} />}
-          {view === 'decks' && (
+          {/* The three primary views stay mounted and toggle visibility so
+              switching between them never remounts and re-fetches (which would
+              flash a loading/empty state). The per-deck editor stays conditional. */}
+          <ViewPane active={view === 'collection'}>
+            <CardBrowser />
+          </ViewPane>
+          <ViewPane active={view === 'my-cards'}>
+            <CollectionView onNavigateToBrowse={() => setView('collection')} />
+          </ViewPane>
+          <ViewPane active={view === 'decks'}>
             <DeckList
               decks={decks}
               loading={decksLoading}
@@ -116,7 +123,7 @@ export default function App() {
               onDeleteDeck={deleteDeck}
               onRenameDeck={(id, name) => updateDeck(id, { name })}
             />
-          )}
+          </ViewPane>
           {view === 'deck-editor' && activeDeckId && (
             <DeckEditor
               deckId={activeDeckId}
@@ -127,6 +134,14 @@ export default function App() {
           )}
         </main>
       </div>
+    </div>
+  );
+}
+
+function ViewPane({ active, children }: { active: boolean; children: ReactNode }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0, display: active ? 'flex' : 'none', overflow: 'hidden' }}>
+      {children}
     </div>
   );
 }
