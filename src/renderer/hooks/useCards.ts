@@ -9,8 +9,9 @@ export function useCards() {
     uniqueBy: 'oracle_id',
   });
   const [result, setResult] = useState<CardSearchResult>({ cards: [], total: 0 });
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const didInitialSearch = useRef(false);
 
   const search = useCallback(async (f: CardFilters) => {
     setLoading(true);
@@ -25,6 +26,13 @@ export function useCards() {
   }, []);
 
   useEffect(() => {
+    // Run the first search immediately so the grid shows skeletons (not the
+    // empty state) on mount; debounce only subsequent filter changes.
+    if (!didInitialSearch.current) {
+      didInitialSearch.current = true;
+      search(filters);
+      return;
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => search(filters), 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
