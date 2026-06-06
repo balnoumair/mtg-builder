@@ -1,4 +1,5 @@
 import type { Deck } from '../../shared/types';
+import PillLabel from './PillLabel';
 
 export type DeckGroup = 'owned' | 'wishlist';
 
@@ -44,26 +45,13 @@ export default function DeckGroupLabel({ group, count, compact = false }: LabelP
         padding: compact ? '8px 8px 4px' : '0 0 8px',
       }}
     >
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 5,
-          padding: compact ? '2px 7px' : '3px 9px',
-          fontFamily: 'var(--font-mono)',
-          fontSize: compact ? 9 : 10,
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          letterSpacing: '0.07em',
-          color: meta.color,
-          background: meta.background,
-          border: `1px solid ${meta.border}`,
-          borderRadius: 'var(--radius-sm)',
-        }}
+      <PillLabel
+        style={{ color: meta.color, border: meta.border, background: meta.background }}
+        compact={compact}
+        icon={group === 'owned' ? <OwnedIcon /> : <WishlistIcon />}
       >
-        {group === 'owned' ? <OwnedIcon /> : <WishlistIcon />}
         {meta.label}
-      </span>
+      </PillLabel>
       <span
         style={{
           fontFamily: 'var(--font-mono)',

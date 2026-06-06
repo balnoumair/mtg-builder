@@ -23,9 +23,9 @@ function cmcKey(cmc: number): string {
   return cmc >= 6 ? '6+' : String(Math.floor(cmc));
 }
 
-function formatCurveTooltip(cmc: string, bucket: CurveBucket): string {
+function formatCurveTooltip(bucket: CurveBucket): string {
   const total = bucket.creatures + bucket.spells;
-  if (total === 0) return `${cmc}: no cards`;
+  if (total === 0) return 'No cards';
   const parts: string[] = [];
   if (bucket.creatures > 0) {
     parts.push(`${bucket.creatures} creature${bucket.creatures === 1 ? '' : 's'}`);
@@ -33,7 +33,7 @@ function formatCurveTooltip(cmc: string, bucket: CurveBucket): string {
   if (bucket.spells > 0) {
     parts.push(`${bucket.spells} spell${bucket.spells === 1 ? '' : 's'}`);
   }
-  return `${cmc}: ${total} card${total === 1 ? '' : 's'} (${parts.join(', ')})`;
+  return parts.join(', ');
 }
 
 export default function DeckStats({ cards, board, targetTotal = 60, targetLands = 24 }: Props) {
@@ -163,7 +163,8 @@ function ManaCurve({ curve }: { curve: Record<string, CurveBucket> }) {
               cmc={k}
               bucket={bucket}
               barHeight={barHeight}
-              tooltip={formatCurveTooltip(k, bucket)}
+              tooltip={formatCurveTooltip(bucket)}
+              total={total}
             />
           );
         })}
@@ -177,14 +178,15 @@ function CurveBar({
   bucket,
   barHeight,
   tooltip,
+  total,
 }: {
   cmc: string;
   bucket: CurveBucket;
   barHeight: number;
   tooltip: string;
+  total: number;
 }) {
   const [hover, setHover] = useState(false);
-  const total = bucket.creatures + bucket.spells;
 
   return (
     <div
@@ -203,7 +205,7 @@ function CurveBar({
       onMouseLeave={() => setHover(false)}
       title={tooltip}
     >
-      {hover && (
+      {hover && total > 0 && (
         <div
           style={{
             position: 'absolute',
@@ -224,26 +226,32 @@ function CurveBar({
             zIndex: 5,
           }}
         >
-          {total > 0 ? (
-            <>
-              <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>
-                {total} at {cmc}
-              </div>
-              {bucket.creatures > 0 && (
-                <div>
-                  {bucket.creatures} creature{bucket.creatures === 1 ? '' : 's'}
-                </div>
-              )}
-              {bucket.spells > 0 && (
-                <div>
-                  {bucket.spells} spell{bucket.spells === 1 ? '' : 's'}
-                </div>
-              )}
-            </>
-          ) : (
-            <div style={{ color: 'var(--text-mute)' }}>No cards at {cmc}</div>
+          {bucket.creatures > 0 && (
+            <div>
+              {bucket.creatures} creature{bucket.creatures === 1 ? '' : 's'}
+            </div>
+          )}
+          {bucket.spells > 0 && (
+            <div>
+              {bucket.spells} spell{bucket.spells === 1 ? '' : 's'}
+            </div>
           )}
         </div>
+      )}
+      {total > 0 && (
+        <span
+          style={{
+            fontSize: 9,
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 600,
+            fontVariantNumeric: 'tabular-nums',
+            color: hover ? 'var(--text)' : 'var(--text-dim)',
+            lineHeight: 1,
+            marginBottom: 2,
+          }}
+        >
+          {total}
+        </span>
       )}
       <div
         style={{

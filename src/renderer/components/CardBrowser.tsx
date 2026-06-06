@@ -1,19 +1,22 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useRef } from 'react';
 import type { Card } from '../../shared/types';
 import { useCards, useCardDetail } from '../hooks/useCards';
 import { useCollectionLookup, useCollectionActions } from '../hooks/useCollection';
+import { useInfiniteScrollSentinel } from '../hooks/useInfiniteScrollSentinel';
 import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
 import ViewToggle from './ViewToggle';
+import InfiniteScrollFooter from './InfiniteScrollFooter';
 
 export default function CardBrowser() {
-  const { filters, updateFilters, setPage, result, loading } = useCards();
+  const { filters, updateFilters, cards, total, loading, loadingMore, hasMore, loadMore } = useCards();
   const { card, printings, open, showCard, close } = useCardDetail();
   const [colVersion, setColVersion] = useState(0);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const cardIds = useMemo(() => result.cards.map((c) => c.id), [result.cards]);
+  const cardIds = useMemo(() => cards.map((c) => c.id), [cards]);
   const ownedQuantities = useCollectionLookup(cardIds, colVersion);
 
   const refreshCol = useCallback(() => setColVersion((v) => v + 1), []);
@@ -21,8 +24,12 @@ export default function CardBrowser() {
 
   const handleAddToCollection = useCallback((c: Card) => addToCollection(c.id), [addToCollection]);
 
-  const totalPages = Math.ceil(result.total / (filters.pageSize || 60));
-  const currentPage = filters.page || 1;
+  const sentinelRef = useInfiniteScrollSentinel(scrollRef, {
+    hasMore,
+    loading,
+    loadingMore,
+    onLoadMore: loadMore,
+  });
 
   return (
     <div
@@ -58,7 +65,7 @@ export default function CardBrowser() {
             Card Browser
           </h1>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
-            {result.total.toLocaleString()}
+            {total.toLocaleString()}
           </span>
           <div style={{ flex: 1 }} />
           <ViewToggle value={viewMode} onChange={setViewMode} />
@@ -104,45 +111,21 @@ export default function CardBrowser() {
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>
+      <div ref={scrollRef} className="scroll-hidden" style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>
         <CardGrid
-          cards={result.cards}
+          cards={cards}
           loading={loading}
           onCardClick={showCard}
           ownedQuantities={ownedQuantities}
           view={viewMode}
         />
-
-        {totalPages > 1 && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              marginTop: 16,
-              paddingBottom: 8,
-            }}
-          >
-            <button
-              onClick={() => setPage(currentPage - 1)}
-              disabled={currentPage <= 1}
-              style={pageBtn(currentPage <= 1)}
-            >
-              Prev
-            </button>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
-              {currentPage} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(currentPage + 1)}
-              disabled={currentPage >= totalPages}
-              style={pageBtn(currentPage >= totalPages)}
-            >
-              Next
-            </button>
-          </div>
-        )}
+        <div ref={sentinelRef} style={{ height: 1 }} />
+        <InfiniteScrollFooter
+          loadingMore={loadingMore}
+          hasMore={hasMore}
+          loadedCount={cards.length}
+          total={total}
+        />
       </div>
 
       {open && card && (
@@ -158,17 +141,4 @@ export default function CardBrowser() {
       )}
     </div>
   );
-}
-
-function pageBtn(disabled: boolean): React.CSSProperties {
-  return {
-    padding: '4px 10px',
-    background: 'var(--bg-chip)',
-    border: '1px solid var(--border-strong)',
-    borderRadius: 'var(--radius-sm)',
-    color: 'var(--text-dim)',
-    fontSize: 11,
-    cursor: disabled ? 'default' : 'pointer',
-    opacity: disabled ? 0.3 : 1,
-  };
 }

@@ -1,9 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef } from 'react';
 import type { Card, Deck, DeckCard } from '../../shared/types';
-import { useCards, useCardDetail } from '../hooks/useCards';
+import { useCardDetail } from '../hooks/useCards';
+import { useDeckEditorCards } from '../hooks/useDeckEditorCards';
+import { useInfiniteScrollSentinel } from '../hooks/useInfiniteScrollSentinel';
 import { useDeckCards } from '../hooks/useDecks';
 import { useCollectionLookup, useCollectionActions } from '../hooks/useCollection';
-import { getCardTypeCategory, TYPE_ORDER, getManaMeta } from '../lib/mana';
+import { getCardTypeCategory, TYPE_ORDER, CMC_GROUP_ORDER, getCmcGroup, getManaMeta } from '../lib/mana';
 import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
@@ -13,6 +15,8 @@ import ViewToggle from './ViewToggle';
 import ExportDeckModal from './ExportDeckModal';
 import ClaimDeckModal from './ClaimDeckModal';
 import SplitPane, { PanelCollapseButton } from './SplitPane';
+import InfiniteScrollFooter from './InfiniteScrollFooter';
+import { COST_PILL, TYPE_PILL, GroupPillHeader, formatCostGroupLabel } from './PillLabel';
 
 interface Props {
   deckId: number;
@@ -23,18 +27,22 @@ interface Props {
 
 export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsChanged }: Props) {
   const deck = decks.find((d) => d.id === deckId);
-  const { filters, updateFilters, result, loading } = useCards();
+  const { filters, updateFilters, cards: searchCards, total: searchTotal, loading, loadingMore, hasMore, loadMore } =
+    useDeckEditorCards(deckId);
   const { cards: deckCards, addCard, updateQuantity, removeCard } = useDeckCards(deckId);
   const { card: detailCard, printings, open: detailOpen, showCard, close: closeDetail } = useCardDetail();
   const [activeBoard, setActiveBoard] = useState<'main' | 'sideboard'>('main');
-  const [deckView, setDeckView] = useState<'list' | 'visual'>('list');
-  const [searchView, setSearchView] = useState<'grid' | 'list'>('list');
+  const [deckView, setDeckView] = useState<'list' | 'visual'>('visual');
+  const [deckGroupBy, setDeckGroupBy] = useState<'type' | 'cost'>('cost');
+  const [searchView, setSearchView] = useState<'grid' | 'list'>('grid');
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [colVersion, setColVersion] = useState(0);
   const [showExport, setShowExport] = useState(false);
   const [showClaim, setShowClaim] = useState(false);
 
-  const searchCardIds = useMemo(() => result.cards.map((c) => c.id), [result.cards]);
+  const searchScrollRef = useRef<HTMLDivElement>(null);
+
+  const searchCardIds = useMemo(() => searchCards.map((c) => c.id), [searchCards]);
   const searchOwnedQtys = useCollectionLookup(searchCardIds, colVersion);
 
   const deckCardIds = useMemo(() => deckCards.map((c) => c.card_id), [deckCards]);
@@ -97,19 +105,36 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
     const groups: Record<string, DeckCard[]> = {};
     for (const dc of boardCards) {
       if (!dc.card) continue;
-      const cat = getCardTypeCategory(dc.card.type_line);
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(dc);
+      const key =
+        deckGroupBy === 'cost'
+          ? getCmcGroup(dc.card.cmc, dc.card.type_line)
+          : getCardTypeCategory(dc.card.type_line);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(dc);
     }
     for (const k of Object.keys(groups)) {
-      groups[k].sort((a, b) => (a.card?.cmc ?? 0) - (b.card?.cmc ?? 0) || (a.card?.name || '').localeCompare(b.card?.name || ''));
+      groups[k].sort(
+        (a, b) =>
+          (a.card?.cmc ?? 0) - (b.card?.cmc ?? 0) ||
+          (a.card?.name || '').localeCompare(b.card?.name || ''),
+      );
     }
-    return TYPE_ORDER.filter((t) => groups[t]?.length).map((t) => ({
-      type: t,
-      cards: groups[t],
-      count: groups[t].reduce((s, c) => s + c.quantity, 0),
-    }));
-  }, [boardCards]);
+    const order = deckGroupBy === 'cost' ? CMC_GROUP_ORDER : TYPE_ORDER;
+    return order
+      .filter((t) => groups[t]?.length)
+      .map((t) => ({
+        key: t,
+        cards: groups[t],
+        count: groups[t].reduce((s, c) => s + c.quantity, 0),
+      }));
+  }, [boardCards, deckGroupBy]);
+
+  const searchSentinelRef = useInfiniteScrollSentinel(searchScrollRef, {
+    hasMore,
+    loading,
+    loadingMore,
+    onLoadMore: loadMore,
+  });
 
   const mainCount = deckCards.filter((c) => c.board === 'main').reduce((s, c) => s + c.quantity, 0);
   const sideCount = deckCards.filter((c) => c.board === 'sideboard').reduce((s, c) => s + c.quantity, 0);
@@ -183,7 +208,7 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                       }}
                     />
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-mute)' }}>
-                      {result.total.toLocaleString()}
+                      {searchTotal.toLocaleString()}
                     </span>
                   </div>
                   <ViewToggle value={searchView} onChange={setSearchView} />
@@ -197,11 +222,12 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
               </div>
 
               <div
+                ref={searchScrollRef}
                 className="scroll-hidden"
                 style={{ flex: 1, overflowY: 'auto', padding: searchView === 'grid' ? 'var(--pad)' : 0 }}
               >
                 <CardGrid
-                  cards={result.cards}
+                  cards={searchCards}
                   loading={loading}
                   view={searchView}
                   selectedId={selectedCardId}
@@ -209,6 +235,13 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                   ownedQuantities={searchOwnedQtys}
                   onCardClick={handleSearchCardAdd}
                   onViewCard={handleSearchCardClick}
+                />
+                <div ref={searchSentinelRef} style={{ height: 1 }} />
+                <InfiniteScrollFooter
+                  loadingMore={loadingMore}
+                  hasMore={hasMore}
+                  loadedCount={searchCards.length}
+                  total={searchTotal}
                 />
               </div>
             </div>
@@ -220,6 +253,8 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                 flexDirection: 'column',
                 overflow: 'hidden',
                 height: '100%',
+                width: '100%',
+                minWidth: 0,
                 background: 'var(--bg-panel)',
               }}
             >
@@ -300,6 +335,14 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                 { value: 'visual', label: 'visual' },
               ]}
             />
+            <ViewToggle
+              value={deckGroupBy}
+              onChange={setDeckGroupBy}
+              options={[
+                { value: 'type', label: 'type' },
+                { value: 'cost', label: 'cost' },
+              ]}
+            />
             <button onClick={() => setShowExport(true)} style={chipBtn}>
               Export
             </button>
@@ -318,6 +361,8 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
           style={{
             flex: 1,
             minHeight: 0,
+            minWidth: 0,
+            width: '100%',
             overflowY: 'auto',
             padding: deckView === 'visual' ? 'var(--pad-tight) var(--pad) var(--pad)' : '6px 0 12px',
           }}
@@ -330,17 +375,22 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
               </p>
             </div>
           ) : (
-            groupedCards.map(({ type, cards, count }) => (
-              <div key={type} style={{ marginTop: 8 }}>
+            groupedCards.map(({ key, cards, count }) => (
+              <div key={key} style={{ marginTop: 8 }}>
                 <div style={{ padding: deckView === 'visual' ? '4px 0 8px' : '4px var(--pad)' }}>
-                  <SectionLabel count={count}>{type}</SectionLabel>
+                  <GroupPillHeader
+                    label={deckGroupBy === 'cost' ? formatCostGroupLabel(key) : key}
+                    style={deckGroupBy === 'cost' ? COST_PILL : TYPE_PILL}
+                    count={count}
+                  />
                 </div>
                 {deckView === 'visual' ? (
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-                      gap: 8,
+                      width: '100%',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
+                      gap: 14,
                     }}
                   >
                     {cards.map((dc) => (
@@ -533,28 +583,6 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
   );
 }
 
-function SectionLabel({ children, count }: { children: React.ReactNode; count?: number }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        fontSize: 10,
-        fontFamily: 'var(--font-mono)',
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '0.08em',
-        color: 'var(--text-mute)',
-      }}
-    >
-      <span>{children}</span>
-      {count != null && <span style={{ color: 'var(--text-faint)' }}>{count}</span>}
-      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-    </div>
-  );
-}
-
 interface TileProps {
   deckCard: DeckCard;
   selected: boolean;
@@ -581,7 +609,7 @@ function DeckCardTile({ deckCard, selected, onClick, onAdd, onRemove }: TileProp
         background: 'var(--bg-row)',
         border: `1px solid ${selected ? 'var(--accent-line)' : 'var(--border)'}`,
         cursor: 'pointer',
-        aspectRatio: '63 / 88',
+        aspectRatio: '488 / 680',
       }}
     >
       {card.image_uri_normal ? (

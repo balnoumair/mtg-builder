@@ -9,6 +9,8 @@ import {
 
 export interface PaneControls {
   collapse: () => void;
+  /** True when the opposite pane is collapsed (more space available). */
+  expanded: boolean;
 }
 
 type PaneContent = ReactNode | ((controls: PaneControls) => ReactNode);
@@ -39,8 +41,8 @@ function loadWidth(key: string | undefined, fallback: number) {
   }
 }
 
-function renderPane(content: PaneContent, collapse: () => void) {
-  return typeof content === 'function' ? content({ collapse }) : content;
+function renderPane(content: PaneContent, collapse: () => void, expanded: boolean) {
+  return typeof content === 'function' ? content({ collapse, expanded }) : content;
 }
 
 function CollapsedRail({
@@ -216,7 +218,7 @@ export default function SplitPane({
             overflow: 'hidden',
           }}
         >
-          {renderPane(left, collapseLeft)}
+          {renderPane(left, collapseLeft, rightCollapsed)}
         </div>
       )}
 
@@ -255,7 +257,7 @@ export default function SplitPane({
             overflow: 'hidden',
           }}
         >
-          {renderPane(right, collapseRight)}
+          {renderPane(right, collapseRight, leftCollapsed)}
         </div>
       )}
     </div>

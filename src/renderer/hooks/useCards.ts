@@ -1,52 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Card, CardFilters, CardSearchResult } from '../../shared/types';
+import { useCallback, useState } from 'react';
+import type { Card } from '../../shared/types';
+import { useInfiniteCardSearch } from './useInfiniteCardSearch';
 
 export function useCards() {
-  const [filters, setFilters] = useState<CardFilters>({
-    page: 1,
-    pageSize: 60,
-    sortBy: 'name',
-    uniqueBy: 'oracle_id',
-  });
-  const [result, setResult] = useState<CardSearchResult>({ cards: [], total: 0 });
-  const [loading, setLoading] = useState(true);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const didInitialSearch = useRef(false);
-
-  const search = useCallback(async (f: CardFilters) => {
-    setLoading(true);
-    try {
-      const res = await window.electronAPI.searchCards(f);
-      setResult(res);
-    } catch (err) {
-      console.error('Search failed:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Run the first search immediately so the grid shows skeletons (not the
-    // empty state) on mount; debounce only subsequent filter changes.
-    if (!didInitialSearch.current) {
-      didInitialSearch.current = true;
-      search(filters);
-      return;
-    }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => search(filters), 300);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [filters, search]);
-
-  const updateFilters = useCallback((updates: Partial<CardFilters>) => {
-    setFilters(prev => ({ ...prev, ...updates, page: updates.page ?? 1 }));
-  }, []);
-
-  const setPage = useCallback((page: number) => {
-    setFilters(prev => ({ ...prev, page }));
-  }, []);
-
-  return { filters, updateFilters, setPage, result, loading };
+  return useInfiniteCardSearch();
 }
 
 export function useCardDetail() {

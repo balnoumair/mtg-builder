@@ -44,3 +44,11 @@ export const TYPE_ORDER = [
   'Creature', 'Planeswalker', 'Instant', 'Sorcery',
   'Enchantment', 'Artifact', 'Land', 'Other',
 ];
+
+export const CMC_GROUP_ORDER = ['0', '1', '2', '3', '4', '5', '6', '7+', 'Land'] as const;
+
+export function getCmcGroup(cmc: number, typeLine: string): string {
+  if (typeLine.toLowerCase().includes('land')) return 'Land';
+  if (cmc >= 7) return '7+';
+  return String(cmc);
+}
