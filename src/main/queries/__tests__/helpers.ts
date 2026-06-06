@@ -65,9 +65,42 @@ export function createTestDb(): Database.Database {
       added_at TEXT DEFAULT (datetime('now')),
       PRIMARY KEY (card_id)
     );
+
+    CREATE TABLE IF NOT EXISTS sets (
+      code TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      released_at TEXT,
+      block_code TEXT,
+      block_name TEXT,
+      icon_svg_uri TEXT
+    );
   `);
 
   return db;
+}
+
+export function insertTestSet(
+  db: Database.Database,
+  overrides: Partial<{
+    code: string;
+    name: string;
+    released_at: string;
+    block_code: string | null;
+    block_name: string | null;
+    icon_svg_uri: string | null;
+  }> = {},
+): void {
+  db.prepare(`
+    INSERT INTO sets (code, name, released_at, block_code, block_name, icon_svg_uri)
+    VALUES (@code, @name, @released_at, @block_code, @block_name, @icon_svg_uri)
+  `).run({
+    code: overrides.code ?? 'tst',
+    name: overrides.name ?? 'Test Set',
+    released_at: overrides.released_at ?? '2024-01-01',
+    block_code: overrides.block_code ?? null,
+    block_name: overrides.block_name ?? null,
+    icon_svg_uri: overrides.icon_svg_uri ?? null,
+  });
 }
 
 let cardSeq = 0;

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { Deck } from '../../shared/types';
 import type { View } from '../lib/types';
-import { ColorIdentity } from './ManaSymbols';
+import DeckGroupLabel, { partitionDecks } from './DeckGroupLabel';
+import DeckRowColorIdentity from './DeckRowColorIdentity';
 
 interface Props {
   view: View;
@@ -116,6 +117,48 @@ export default function Sidebar({
   const filteredDecks = query
     ? decks.filter((d) => d.name.toLowerCase().includes(query.toLowerCase()))
     : decks;
+  const { owned: ownedDecks, wishlist: wishlistDecks } = partitionDecks(filteredDecks);
+
+  const renderDeckRow = (deck: Deck) => {
+    const active = activeDeckId === deck.id && view === 'deck-editor';
+    return (
+      <div
+        key={deck.id}
+        onClick={() => onOpenDeck(deck.id)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '4px 8px',
+          borderRadius: 'var(--radius-sm)',
+          cursor: 'pointer',
+          background: active ? 'var(--bg-row-sel)' : 'transparent',
+          color: active ? 'var(--text)' : 'var(--text-dim)',
+          marginBottom: 1,
+        }}
+        onMouseEnter={(e) => {
+          if (!active) e.currentTarget.style.background = 'var(--bg-row-hov)';
+        }}
+        onMouseLeave={(e) => {
+          if (!active) e.currentTarget.style.background = 'transparent';
+        }}
+      >
+        <DeckRowColorIdentity colors={deck.color_identity} compact />
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 12,
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {deck.name}
+        </span>
+      </div>
+    );
+  };
 
   return (
     <aside
@@ -258,64 +301,29 @@ export default function Sidebar({
 
       {/* Decks list */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 10px', minHeight: 0 }}>
-        {filteredDecks.map((deck) => {
-          const active = activeDeckId === deck.id && view === 'deck-editor';
-          // Stub color identity until decks have a real color identity field
-          return (
-            <div
-              key={deck.id}
-              onClick={() => onOpenDeck(deck.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '4px 8px',
-                borderRadius: 'var(--radius-sm)',
-                cursor: 'pointer',
-                background: active ? 'var(--bg-row-sel)' : 'transparent',
-                color: active ? 'var(--text)' : 'var(--text-dim)',
-                marginBottom: 1,
-              }}
-              onMouseEnter={(e) => {
-                if (!active) e.currentTarget.style.background = 'var(--bg-row-hov)';
-              }}
-              onMouseLeave={(e) => {
-                if (!active) e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              <ColorIdentity colors={['C']} size={9} />
-              <span
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontSize: 12,
-                  overflow: 'hidden',
-                  whiteSpace: 'nowrap',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {deck.name}
-              </span>
-              {!deck.owned && (
-                <span
-                  style={{
-                    fontSize: 9,
-                    fontFamily: 'var(--font-mono)',
-                    color: 'var(--text-faint)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                  }}
-                >
-                  WL
-                </span>
-              )}
-            </div>
-          );
-        })}
-        {filteredDecks.length === 0 && !showNewDeck && (
+        {filteredDecks.length === 0 && !showNewDeck ? (
           <p style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic' }}>
             {query ? 'No matches' : 'No decks yet'}
           </p>
+        ) : (
+          <>
+            <DeckGroupLabel group="owned" count={ownedDecks.length} compact />
+            {ownedDecks.length > 0 ? (
+              ownedDecks.map(renderDeckRow)
+            ) : (
+              <p style={{ padding: '2px 10px 8px', fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic' }}>
+                No owned decks
+              </p>
+            )}
+            <DeckGroupLabel group="wishlist" count={wishlistDecks.length} compact />
+            {wishlistDecks.length > 0 ? (
+              wishlistDecks.map(renderDeckRow)
+            ) : (
+              <p style={{ padding: '2px 10px 8px', fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic' }}>
+                No wishlist decks
+              </p>
+            )}
+          </>
         )}
       </div>
 

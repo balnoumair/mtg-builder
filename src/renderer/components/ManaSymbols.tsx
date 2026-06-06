@@ -24,6 +24,7 @@ export function Mana({ symbol, size = 12 }: ManaProps) {
         fontSize: Math.max(8, size * 0.58),
         fontWeight: 700,
         lineHeight: 1,
+        textAlign: 'center',
         boxShadow: `inset 0 0 0 1px ${meta.ring}`,
         flexShrink: 0,
       }}
@@ -46,7 +47,7 @@ export default function ManaSymbols({ cost, size = 'sm' }: ManaSymbolsProps) {
     : (size === 'sm' ? 12 : 16);
 
   return (
-    <span style={{ display: 'inline-flex', gap: 2 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, verticalAlign: 'middle' }}>
       {symbols.map((s, i) => <Mana key={i} symbol={s} size={px} />)}
     </span>
   );

@@ -69,8 +69,11 @@ interface BulkDataResponse {
 
 interface ScrySet {
   code: string;
+  name: string;
+  released_at?: string;
   block?: string;
   block_code?: string;
+  icon_svg_uri?: string;
 }
 
 interface SetsResponse {
@@ -79,10 +82,18 @@ interface SetsResponse {
   next_page?: string;
 }
 
-type BlockMap = Map<string, { block_code: string | null; block_name: string | null }>;
+interface SetMetadata {
+  block_code: string | null;
+  block_name: string | null;
+  icon_svg_uri: string | null;
+  name: string;
+  released_at: string | null;
+}
 
-async function fetchBlockMap(): Promise<BlockMap> {
-  const map: BlockMap = new Map();
+type SetMetadataMap = Map<string, SetMetadata>;
+
+async function fetchSetMetadata(): Promise<SetMetadataMap> {
+  const map: SetMetadataMap = new Map();
   let url: string | undefined = 'https://api.scryfall.com/sets';
   while (url) {
     const res = await fetch(url);
@@ -92,11 +103,28 @@ async function fetchBlockMap(): Promise<BlockMap> {
       map.set(s.code.toLowerCase(), {
         block_code: s.block_code || null,
         block_name: s.block || null,
+        icon_svg_uri: s.icon_svg_uri || null,
+        name: s.name,
+        released_at: s.released_at || null,
       });
     }
     url = body.has_more ? body.next_page : undefined;
   }
   return map;
+}
+
+function syncSetsTable(db: Database.Database, setMetadata: SetMetadataMap): void {
+  db.exec('DELETE FROM sets');
+  const insertSet = db.prepare(`
+    INSERT INTO sets (code, name, released_at, block_code, block_name, icon_svg_uri)
+    VALUES (@code, @name, @released_at, @block_code, @block_name, @icon_svg_uri)
+  `);
+  const insertMany = db.transaction((rows: Array<{ code: string } & SetMetadata>) => {
+    for (const row of rows) {
+      insertSet.run(row);
+    }
+  });
+  insertMany([...setMetadata.entries()].map(([code, meta]) => ({ code, ...meta })));
 }
 
 type ProgressCallback = (current: number, total: number, phase: 'downloading' | 'reading' | 'indexing' | 'done') => void;
@@ -144,7 +172,7 @@ function downloadFile(
 function importCardsFromFile(
   db: Database.Database,
   filePath: string,
-  blockMap: BlockMap,
+  setMetadata: SetMetadataMap,
   onProgress: (current: number, total: number) => void,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -202,7 +230,7 @@ function importCardsFromFile(
       const manaCost = value.mana_cost ?? frontFace?.mana_cost ?? '';
       const typeLine = value.type_line ?? frontFace?.type_line ?? '';
 
-      const blockInfo = value.set ? blockMap.get(value.set.toLowerCase()) : undefined;
+      const blockInfo = value.set ? setMetadata.get(value.set.toLowerCase()) : undefined;
 
       batch.push({
         id: value.id,
@@ -279,8 +307,8 @@ export async function syncCards(
   db: Database.Database,
   onProgress: ProgressCallback,
 ): Promise<void> {
-  // 1. Fetch the download URL from Scryfall bulk data API and the block map
-  const [downloadUrl, blockMap] = await Promise.all([fetchBulkDataUrl(), fetchBlockMap()]);
+  // 1. Fetch the download URL from Scryfall bulk data API and set metadata
+  const [downloadUrl, setMetadata] = await Promise.all([fetchBulkDataUrl(), fetchSetMetadata()]);
 
   // 2. Download the file to a temp location
   const tmpDir = os.tmpdir();
@@ -316,15 +344,18 @@ export async function syncCards(
     db.pragma('foreign_keys = ON');
 
     // 5. Import cards from downloaded file
-    await importCardsFromFile(db, tmpFile, blockMap, (current, total) => {
+    await importCardsFromFile(db, tmpFile, setMetadata, (current, total) => {
       onProgress(current, total, 'reading');
     });
 
-    // 6. Create indexes
+    // 6. Sync set metadata (including edition icons)
+    syncSetsTable(db, setMetadata);
+
+    // 7. Create indexes
     onProgress(0, 0, 'indexing');
     createIndexes(db);
 
-    // 7. Restore deck_cards (only for cards that exist in the new data)
+    // 8. Restore deck_cards (only for cards that exist in the new data)
     const restoreDeckCard = db.prepare(`
       INSERT OR IGNORE INTO deck_cards (deck_id, card_id, quantity, board)
       SELECT @deck_id, @card_id, @quantity, @board
@@ -337,7 +368,7 @@ export async function syncCards(
     });
     restoreMany(deckCards);
 
-    // 8. Restore cover_card_id where card still exists
+    // 9. Restore cover_card_id where card still exists
     const restoreCover = db.prepare(`
       UPDATE decks SET cover_card_id = @cover_card_id
       WHERE id = @id AND EXISTS (SELECT 1 FROM cards WHERE id = @cover_card_id)

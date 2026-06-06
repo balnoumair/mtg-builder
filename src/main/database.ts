@@ -98,6 +98,15 @@ function initSchema(db: BetterSqlite3.Database): void {
       added_at TEXT DEFAULT (datetime('now')),
       PRIMARY KEY (card_id)
     );
+
+    CREATE TABLE IF NOT EXISTS sets (
+      code TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      released_at TEXT,
+      block_code TEXT,
+      block_name TEXT,
+      icon_svg_uri TEXT
+    );
   `);
 }
 

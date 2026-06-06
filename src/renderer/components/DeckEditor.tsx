@@ -5,12 +5,14 @@ import { useDeckCards } from '../hooks/useDecks';
 import { useCollectionLookup, useCollectionActions } from '../hooks/useCollection';
 import { getCardTypeCategory, TYPE_ORDER, getManaMeta } from '../lib/mana';
 import CardFilters from './CardFilters';
+import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
 import DeckStats from './DeckStats';
-import ManaSymbols, { ColorIdentity } from './ManaSymbols';
+import ManaSymbols from './ManaSymbols';
 import ViewToggle from './ViewToggle';
 import ExportDeckModal from './ExportDeckModal';
 import ClaimDeckModal from './ClaimDeckModal';
+import SplitPane, { PanelCollapseButton } from './SplitPane';
 
 interface Props {
   deckId: number;
@@ -26,6 +28,7 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
   const { card: detailCard, printings, open: detailOpen, showCard, close: closeDetail } = useCardDetail();
   const [activeBoard, setActiveBoard] = useState<'main' | 'sideboard'>('main');
   const [deckView, setDeckView] = useState<'list' | 'visual'>('list');
+  const [searchView, setSearchView] = useState<'grid' | 'list'>('list');
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [colVersion, setColVersion] = useState(0);
   const [showExport, setShowExport] = useState(false);
@@ -39,6 +42,31 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
 
   const refreshCol = useCallback(() => setColVersion((v) => v + 1), []);
   const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refreshCol);
+
+  const searchDeckQtys = useMemo(() => {
+    const qtys: Record<string, number> = {};
+    for (const dc of deckCards) {
+      qtys[dc.card_id] = (qtys[dc.card_id] ?? 0) + dc.quantity;
+    }
+    return qtys;
+  }, [deckCards]);
+
+  const handleSearchCardAdd = useCallback(
+    async (c: Card) => {
+      setSelectedCardId(c.id);
+      await addCard(c.id, activeBoard);
+      onDeckCardsChanged();
+    },
+    [addCard, activeBoard, onDeckCardsChanged],
+  );
+
+  const handleSearchCardClick = useCallback(
+    (c: Card) => {
+      setSelectedCardId(c.id);
+      showCard(c);
+    },
+    [showCard],
+  );
 
   const handleAddToCollection = useCallback((c: Card) => addToCollection(c.id), [addToCollection]);
 
@@ -90,8 +118,8 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
     <div
       style={{
         flex: 1,
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) 360px',
+        display: 'flex',
+        flexDirection: 'column',
         overflow: 'hidden',
         background: 'var(--bg-main)',
         fontFamily: 'var(--font-ui)',
@@ -99,178 +127,119 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
         height: '100%',
       }}
     >
-      {/* LEFT: search + results */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          borderRight: '1px solid var(--border)',
-        }}
-      >
+      <SplitPane
+        storageKey="deck-editor-split"
+        defaultRightWidth={360}
+        minLeft={300}
+        minRight={260}
+        leftLabel="Search"
+        rightLabel="Deck"
+        left={({ collapse }) => (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                height: '100%',
+              }}
+            >
+              <div
+                style={{
+                  padding: 'var(--pad) var(--pad) var(--pad-tight)',
+                  borderBottom: '1px solid var(--border)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '6px 11px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-input)',
+                      borderRadius: 'var(--radius-sm)',
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ opacity: 0.5 }}>
+                      <circle cx="5.5" cy="5.5" r="3.8" stroke="currentColor" strokeWidth="1.2" />
+                      <path d="M8.2 8.2L11 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                    </svg>
+                    <input
+                      value={filters.query || ''}
+                      onChange={(e) => updateFilters({ query: e.target.value || undefined })}
+                      placeholder="Search cards to add…"
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        background: 'transparent',
+                        border: 'none',
+                        outline: 'none',
+                        fontFamily: 'var(--font-ui)',
+                        fontSize: 13,
+                        color: 'var(--text)',
+                      }}
+                    />
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-mute)' }}>
+                      {result.total.toLocaleString()}
+                    </span>
+                  </div>
+                  <ViewToggle value={searchView} onChange={setSearchView} />
+                  <PanelCollapseButton
+                    direction="left"
+                    title="Hide search panel"
+                    onClick={collapse}
+                  />
+                </div>
+                <CardFilters filters={filters} onUpdate={updateFilters} />
+              </div>
+
+              <div
+                className="scroll-hidden"
+                style={{ flex: 1, overflowY: 'auto', padding: searchView === 'grid' ? 'var(--pad)' : 0 }}
+              >
+                <CardGrid
+                  cards={result.cards}
+                  loading={loading}
+                  view={searchView}
+                  selectedId={selectedCardId}
+                  deckQuantities={searchDeckQtys}
+                  ownedQuantities={searchOwnedQtys}
+                  onCardClick={handleSearchCardAdd}
+                  onViewCard={handleSearchCardClick}
+                />
+              </div>
+            </div>
+        )}
+        right={({ collapse }) => (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                height: '100%',
+                background: 'var(--bg-panel)',
+              }}
+            >
         <div
           style={{
             padding: 'var(--pad) var(--pad) var(--pad-tight)',
             borderBottom: '1px solid var(--border)',
+            flexShrink: 0,
+            minWidth: 0,
           }}
         >
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
-              padding: '6px 11px',
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border-input)',
-              borderRadius: 'var(--radius-sm)',
-              marginBottom: 10,
+              gap: 14,
+              marginBottom: 8,
+              minWidth: 0,
             }}
           >
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ opacity: 0.5 }}>
-              <circle cx="5.5" cy="5.5" r="3.8" stroke="currentColor" strokeWidth="1.2" />
-              <path d="M8.2 8.2L11 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-            </svg>
-            <input
-              value={filters.query || ''}
-              onChange={(e) => updateFilters({ query: e.target.value || undefined })}
-              placeholder="Search cards to add…"
-              style={{
-                flex: 1,
-                minWidth: 0,
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                fontFamily: 'var(--font-ui)',
-                fontSize: 13,
-                color: 'var(--text)',
-              }}
-            />
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-mute)' }}>
-              {result.total.toLocaleString()}
-            </span>
-          </div>
-          <CardFilters filters={filters} onUpdate={updateFilters} />
-        </div>
-
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {loading && result.cards.length === 0 && (
-            <div style={{ padding: 14, color: 'var(--text-mute)', fontSize: 12 }}>Searching…</div>
-          )}
-          {result.cards.map((c) => {
-            const inDeck = deckCards
-              .filter((d) => d.card_id === c.id)
-              .reduce((s, d) => s + d.quantity, 0);
-            const sel = selectedCardId === c.id;
-            return (
-              <div
-                key={c.id}
-                onClick={() => {
-                  setSelectedCardId(c.id);
-                  showCard(c);
-                }}
-                onDoubleClick={() => handleAddCard(c)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '0 var(--pad)',
-                  height: 'var(--row-h)',
-                  cursor: 'pointer',
-                  background: sel ? 'var(--bg-row-sel)' : 'transparent',
-                }}
-                onMouseEnter={(e) => {
-                  if (!sel) e.currentTarget.style.background = 'var(--bg-row-hov)';
-                }}
-                onMouseLeave={(e) => {
-                  if (!sel) e.currentTarget.style.background = 'transparent';
-                }}
-              >
-                <ColorIdentity colors={c.color_identity ?? []} size={8} />
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    fontSize: 13,
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {c.name}
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    color: 'var(--text-mute)',
-                    minWidth: 110,
-                    textAlign: 'right',
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {c.type_line}
-                </span>
-                <ManaSymbols cost={c.mana_cost} size={11} />
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAddCard(c);
-                  }}
-                  style={{
-                    width: 22,
-                    height: 20,
-                    borderRadius: 'var(--radius-sm)',
-                    background: inDeck ? 'var(--accent-soft)' : 'transparent',
-                    border: `1px solid ${inDeck ? 'var(--accent-line)' : 'var(--border-strong)'}`,
-                    color: inDeck ? 'var(--accent)' : 'var(--text-dim)',
-                    cursor: 'pointer',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    lineHeight: 1,
-                    padding: 0,
-                  }}
-                  title={inDeck ? `${inDeck} in deck — click to add another` : 'Add to deck'}
-                >
-                  {inDeck ? `×${inDeck}` : '+'}
-                </button>
-                {searchOwnedQtys[c.id] > 0 && (
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 9,
-                      color: 'var(--good)',
-                      width: 22,
-                      textAlign: 'right',
-                    }}
-                    title={`Owned: ${searchOwnedQtys[c.id]}`}
-                  >
-                    ◉
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* RIGHT: deck panel */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          background: 'var(--bg-panel)',
-        }}
-      >
-        <div
-          style={{
-            padding: 'var(--pad) var(--pad) var(--pad-tight)',
-            borderBottom: '1px solid var(--border)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 10 }}>
             {[
               { k: 'main' as const, l: 'Main', n: mainCount },
               { k: 'sideboard' as const, l: 'Sideboard', n: sideCount },
@@ -288,6 +257,7 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                     display: 'inline-flex',
                     alignItems: 'baseline',
                     gap: 5,
+                    flexShrink: 0,
                     color: active ? 'var(--text)' : 'var(--text-mute)',
                     fontFamily: 'var(--font-ui)',
                     fontSize: 14,
@@ -309,7 +279,19 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                 </button>
               );
             })}
-            <div style={{ flex: 1 }} />
+            <div style={{ flex: 1, minWidth: 0 }} />
+            <PanelCollapseButton direction="right" title="Hide deck panel" onClick={collapse} />
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 6,
+              marginBottom: 10,
+            }}
+          >
             <ViewToggle
               value={deckView}
               onChange={setDeckView}
@@ -332,8 +314,10 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
         </div>
 
         <div
+          className="scroll-hidden"
           style={{
             flex: 1,
+            minHeight: 0,
             overflowY: 'auto',
             padding: deckView === 'visual' ? 'var(--pad-tight) var(--pad) var(--pad)' : '6px 0 12px',
           }}
@@ -427,31 +411,61 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                         >
                           {dc.card?.name}
                         </span>
-                        {owned > 0 && need > 0 && (
-                          <span
-                            title={`Own ${owned}, need ${need} more`}
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: 9,
-                              color: 'var(--danger)',
-                            }}
-                          >
-                            need {need}
-                          </span>
-                        )}
-                        {owned > 0 && need <= 0 && (
-                          <span
-                            title={`Owned: ${owned}`}
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: 'var(--good)',
-                            }}
-                          />
-                        )}
-                        <ManaSymbols cost={dc.card?.mana_cost || ''} size={11} />
-                        <div style={{ display: 'flex', gap: 2, marginLeft: 4 }}>
+                        <span
+                          style={{
+                            width: 48,
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                          }}
+                        >
+                          {owned > 0 && need > 0 && (
+                            <span
+                              title={`Own ${owned}, need ${need} more`}
+                              style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: 9,
+                                color: 'var(--danger)',
+                              }}
+                            >
+                              need {need}
+                            </span>
+                          )}
+                          {owned > 0 && need <= 0 && (
+                            <span
+                              title={`Owned: ${owned}`}
+                              style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                background: 'var(--good)',
+                              }}
+                            />
+                          )}
+                        </span>
+                        <span
+                          style={{
+                            width: 52,
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <ManaSymbols cost={dc.card?.mana_cost || ''} size={11} />
+                        </span>
+                        <div
+                          className="opacity-0 group-hover:opacity-100"
+                          style={{
+                            width: 40,
+                            display: 'flex',
+                            gap: 2,
+                            flexShrink: 0,
+                            justifyContent: 'flex-end',
+                            transition: 'opacity 120ms',
+                          }}
+                        >
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -481,7 +495,9 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
             ))
           )}
         </div>
-      </div>
+            </div>
+        )}
+      />
 
       {detailOpen && detailCard && (
         <CardDetail
@@ -627,7 +643,7 @@ function DeckCardTile({ deckCard, selected, onClick, onAdd, onRemove }: TileProp
         style={{
           position: 'absolute',
           top: 5,
-          right: 6,
+          left: 6,
           padding: '1px 5px',
           fontSize: 9,
           fontFamily: 'var(--font-mono)',
@@ -689,6 +705,7 @@ const chipBtn: React.CSSProperties = {
   fontFamily: 'var(--font-ui)',
   fontSize: 11,
   cursor: 'pointer',
+  flexShrink: 0,
 };
 
 const miniBtn: React.CSSProperties = {

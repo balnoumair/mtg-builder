@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type Database from 'better-sqlite3';
 import { searchCards, getCard, getCardPrintings, getSets } from '../cards';
-import { createTestDb, insertTestCard } from './helpers';
+import { createTestDb, insertTestCard, insertTestSet } from './helpers';
 
 let db: Database.Database;
 
@@ -212,5 +212,17 @@ describe('getSets', () => {
 
   it('returns empty array when no cards exist', () => {
     expect(getSets(db)).toEqual([]);
+  });
+
+  it('includes iconSvgUri from sets table when available', () => {
+    insertTestCard(db, { set_code: 'znr', set_name: 'Zendikar Rising' });
+    insertTestSet(db, {
+      code: 'znr',
+      name: 'Zendikar Rising',
+      icon_svg_uri: 'https://svgs.scryfall.io/sets/znr.svg',
+    });
+    const sets = getSets(db);
+    expect(sets).toHaveLength(1);
+    expect(sets[0].iconSvgUri).toBe('https://svgs.scryfall.io/sets/znr.svg');
   });
 });

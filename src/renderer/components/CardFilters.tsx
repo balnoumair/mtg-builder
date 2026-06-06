@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import type { CardFilters as Filters } from '../../shared/types';
+import type { CardFilters as Filters, CardSet } from '../../shared/types';
 import { Mana } from './ManaSymbols';
 import { getManaMeta } from '../lib/mana';
 
@@ -31,8 +31,30 @@ function FilterGroup({ label, children }: { label: string; children: React.React
   );
 }
 
+function SetIcon({ uri, code, size = 16 }: { uri?: string | null; code: string; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  const src = uri ?? `https://svgs.scryfall.io/sets/${code.toLowerCase()}.svg`;
+  if (failed) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      width={size}
+      height={size}
+      onError={() => setFailed(true)}
+      style={{
+        flexShrink: 0,
+        objectFit: 'contain',
+        display: 'block',
+        filter: 'brightness(0) invert(1)',
+        opacity: 0.72,
+      }}
+    />
+  );
+}
+
 export default function CardFilters({ filters, onUpdate }: Props) {
-  const [sets, setSets] = useState<{ code: string; name: string; releasedAt: string; blockCode: string | null; blockName: string | null }[]>([]);
+  const [sets, setSets] = useState<CardSet[]>([]);
   const [setMenuOpen, setSetMenuOpen] = useState(false);
   const [setSearch, setSetSearch] = useState('');
   const setMenuRef = useRef<HTMLDivElement>(null);
@@ -323,6 +345,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                           </svg>
                         )}
                       </div>
+                      <SetIcon uri={s.iconSvgUri} code={s.code} size={16} />
                       <span
                         style={{
                           flex: 1,
