@@ -30,12 +30,23 @@ jobs:
       - name: Rebuild native modules for Electron
         run: pnpm exec electron-rebuild -f -w better-sqlite3
 
-      - run: pnpm make
+      - name: Build distributables
+        run: pnpm make
+        env:
+          DEBUG: electron-forge:*
+
+      - name: List build output
+        if: always()
+        shell: bash
+        run: |
+          echo "===== out/make tree ====="
+          ls -R out/make || echo "out/make does not exist"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name || inputs.tag_name }}
+          fail_on_unmatched_files: true
           files: |
             out/make/squirrel.windows/**/*.exe
             out/make/squirrel.windows/**/*.nupkg
