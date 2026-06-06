@@ -53,6 +53,112 @@ function SetIcon({ uri, code, size = 16 }: { uri?: string | null; code: string; 
   );
 }
 
+function SetRow({
+  s,
+  checked,
+  onToggle,
+}: {
+  s: CardSet;
+  checked: boolean;
+  onToggle: (code: string) => void;
+}) {
+  return (
+    <div
+      role="checkbox"
+      aria-checked={checked}
+      tabIndex={0}
+      onClick={() => onToggle(s.code)}
+      onKeyDown={(e) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          onToggle(s.code);
+        }
+      }}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '5px 8px',
+        borderRadius: 'var(--radius-sm)',
+        cursor: 'pointer',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'var(--bg-row-hov)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+      }}
+    >
+      <div
+        style={{
+          width: 13,
+          height: 13,
+          borderRadius: 3,
+          background: checked ? 'var(--accent)' : 'transparent',
+          border: `1px solid ${checked ? 'var(--accent)' : 'var(--border-strong)'}`,
+          display: 'grid',
+          placeItems: 'center',
+          flexShrink: 0,
+        }}
+      >
+        {checked && (
+          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+            <path
+              d="M1.5 4L3.5 6L6.5 2"
+              stroke="var(--accent-ink)"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
+      </div>
+      <SetIcon uri={s.iconSvgUri} code={s.code} size={16} />
+      <span
+        style={{
+          flex: 1,
+          fontSize: 12,
+          color: 'var(--text-dim)',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {s.name}
+      </span>
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          color: 'var(--text-mute)',
+          textTransform: 'uppercase',
+        }}
+      >
+        {s.code}
+      </span>
+    </div>
+  );
+}
+
+function BlockHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ padding: '8px 8px 2px' }}>
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          color: 'var(--text-faint)',
+          userSelect: 'none',
+        }}
+      >
+        {children}
+      </span>
+    </div>
+  );
+}
+
 export default function CardFilters({ filters, onUpdate }: Props) {
   const [sets, setSets] = useState<CardSet[]>([]);
   const [setMenuOpen, setSetMenuOpen] = useState(false);
@@ -122,6 +228,41 @@ export default function CardFilters({ filters, onUpdate }: Props) {
     return sortedSets.filter(
       (x) => !s || x.name.toLowerCase().includes(s) || x.code.toLowerCase().includes(s),
     );
+  }, [sortedSets, setSearch]);
+
+  type BlockGroup = { blockCode: string; blockName: string; sets: CardSet[]; latestRelease: string };
+  type DropdownEntry =
+    | { kind: 'block'; group: BlockGroup; sortKey: string }
+    | { kind: 'standalone'; set: CardSet; sortKey: string };
+
+  const groupedEntries = useMemo<DropdownEntry[] | null>(() => {
+    if (setSearch) return null;
+    const blockMap = new Map<string, BlockGroup>();
+    const entries: DropdownEntry[] = [];
+    for (const s of sortedSets) {
+      if (s.blockCode && s.blockName && s.blockName !== 'Core Set') {
+        if (!blockMap.has(s.blockCode)) {
+          const group: BlockGroup = {
+            blockCode: s.blockCode,
+            blockName: s.blockName,
+            sets: [],
+            latestRelease: '',
+          };
+          blockMap.set(s.blockCode, group);
+          entries.push({ kind: 'block', group, sortKey: '' });
+        }
+        const g = blockMap.get(s.blockCode)!;
+        g.sets.push(s);
+        if (s.releasedAt > g.latestRelease) g.latestRelease = s.releasedAt;
+      } else {
+        entries.push({ kind: 'standalone', set: s, sortKey: s.releasedAt });
+      }
+    }
+    for (const e of entries) {
+      if (e.kind === 'block') e.sortKey = e.group.latestRelease;
+    }
+    entries.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+    return entries;
   }, [sortedSets, setSearch]);
 
   const hasFilters =
@@ -291,87 +432,50 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                 />
               </div>
               <div style={{ maxHeight: 280, overflowY: 'auto', padding: 4 }}>
-                {filteredSets.map((s) => {
-                  const checked = activeSets.includes(s.code);
-                  return (
+                {groupedEntries ? (
+                  groupedEntries.length === 0 ? (
                     <div
-                      key={s.code}
-                      role="checkbox"
-                      aria-checked={checked}
-                      tabIndex={0}
-                      onClick={() => toggleSet(s.code)}
-                      onKeyDown={(e) => {
-                        if (e.key === ' ' || e.key === 'Enter') {
-                          e.preventDefault();
-                          toggleSet(s.code);
-                        }
-                      }}
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '5px 8px',
-                        borderRadius: 'var(--radius-sm)',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--bg-row-hov)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent';
+                        padding: '10px',
+                        fontSize: 11,
+                        color: 'var(--text-mute)',
+                        textAlign: 'center',
                       }}
                     >
-                      <div
-                        style={{
-                          width: 13,
-                          height: 13,
-                          borderRadius: 3,
-                          background: checked ? 'var(--accent)' : 'transparent',
-                          border: `1px solid ${checked ? 'var(--accent)' : 'var(--border-strong)'}`,
-                          display: 'grid',
-                          placeItems: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {checked && (
-                          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                            <path
-                              d="M1.5 4L3.5 6L6.5 2"
-                              stroke="var(--accent-ink)"
-                              strokeWidth="1.6"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        )}
-                      </div>
-                      <SetIcon uri={s.iconSvgUri} code={s.code} size={16} />
-                      <span
-                        style={{
-                          flex: 1,
-                          fontSize: 12,
-                          color: 'var(--text-dim)',
-                          overflow: 'hidden',
-                          whiteSpace: 'nowrap',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {s.name}
-                      </span>
-                      <span
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 10,
-                          color: 'var(--text-mute)',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {s.code}
-                      </span>
+                      No sets found
                     </div>
-                  );
-                })}
-                {filteredSets.length === 0 && (
+                  ) : (
+                    groupedEntries.map((entry, idx) => {
+                      if (entry.kind === 'block') {
+                        return (
+                          <div key={`b-${entry.group.blockCode}`}>
+                            <BlockHeader>{entry.group.blockName}</BlockHeader>
+                            {entry.group.sets.map((s) => (
+                              <SetRow
+                                key={s.code}
+                                s={s}
+                                checked={activeSets.includes(s.code)}
+                                onToggle={toggleSet}
+                              />
+                            ))}
+                          </div>
+                        );
+                      }
+                      const prev = groupedEntries[idx - 1];
+                      const showHeader = !prev || prev.kind !== 'standalone';
+                      return (
+                        <div key={`s-${entry.set.code}`}>
+                          {showHeader && <BlockHeader>Standalone</BlockHeader>}
+                          <SetRow
+                            s={entry.set}
+                            checked={activeSets.includes(entry.set.code)}
+                            onToggle={toggleSet}
+                          />
+                        </div>
+                      );
+                    })
+                  )
+                ) : filteredSets.length === 0 ? (
                   <div
                     style={{
                       padding: '10px',
@@ -382,6 +486,15 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                   >
                     No sets found
                   </div>
+                ) : (
+                  filteredSets.map((s) => (
+                    <SetRow
+                      key={s.code}
+                      s={s}
+                      checked={activeSets.includes(s.code)}
+                      onToggle={toggleSet}
+                    />
+                  ))
                 )}
               </div>
               {activeSets.length > 0 && (
