@@ -65,6 +65,9 @@
       "electron",
       "electron-winstaller",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "yauzl": "^3.3.1"
+    }
   }
 }
