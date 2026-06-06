@@ -5,6 +5,7 @@ VERSION=$(node -p "require('./package.json').version")
 NOTES="${1:-}"
 
 echo "Building v$VERSION..."
+rm -rf out/make
 pnpm exec electron-rebuild -f -w better-sqlite3
 pnpm make
 
