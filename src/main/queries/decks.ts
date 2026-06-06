@@ -1,7 +1,35 @@
 import type Database from 'better-sqlite3';
 import type { Deck, DeckCard } from '../../shared/types';
 
+const COLOR_ORDER = ['W', 'U', 'B', 'R', 'G'] as const;
+
+function getDeckColorIdentities(db: Database.Database): Map<number, string[]> {
+  const rows = db.prepare(`
+    SELECT dc.deck_id, c.color_identity
+    FROM deck_cards dc
+    JOIN cards c ON c.id = dc.card_id
+    WHERE dc.board = 'main'
+  `).all() as { deck_id: number; color_identity: string }[];
+
+  const sets = new Map<number, Set<string>>();
+  for (const row of rows) {
+    const colors = JSON.parse(row.color_identity || '[]') as string[];
+    if (!sets.has(row.deck_id)) sets.set(row.deck_id, new Set());
+    const set = sets.get(row.deck_id)!;
+    for (const c of colors) {
+      if ((COLOR_ORDER as readonly string[]).includes(c)) set.add(c);
+    }
+  }
+
+  const result = new Map<number, string[]>();
+  for (const [deckId, set] of sets) {
+    result.set(deckId, COLOR_ORDER.filter((c) => set.has(c)));
+  }
+  return result;
+}
+
 export function getDecks(db: Database.Database): Deck[] {
+  const colorIdentities = getDeckColorIdentities(db);
   const rows = db.prepare(`
     SELECT d.*, COALESCE(SUM(dc.quantity), 0) as card_count
     FROM decks d
@@ -9,7 +37,11 @@ export function getDecks(db: Database.Database): Deck[] {
     GROUP BY d.id
     ORDER BY d.updated_at DESC
   `).all() as (Omit<Deck, 'owned'> & { owned: number })[];
-  return rows.map(r => ({ ...r, owned: !!r.owned }));
+  return rows.map((r) => ({
+    ...r,
+    owned: !!r.owned,
+    color_identity: colorIdentities.get(r.id) ?? [],
+  }));
 }
 
 function rowToDeck(row: Record<string, unknown>): Deck {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Deck } from '../../shared/types';
-import { ColorIdentity } from './ManaSymbols';
+import DeckGroupLabel, { partitionDecks } from './DeckGroupLabel';
+import DeckRowColorIdentity from './DeckRowColorIdentity';
 
 interface Props {
   decks: Deck[];
@@ -55,6 +56,175 @@ export default function DeckList({
     }
     setRenamingId(null);
   };
+
+  const { owned: ownedDecks, wishlist: wishlistDecks } = partitionDecks(decks);
+
+  const renderDeckRow = (deck: Deck, rowIndex: number) => {
+    const renaming = renamingId === deck.id;
+    return (
+      <div
+        key={deck.id}
+        className="group"
+        onClick={() => !renaming && onOpenDeck(deck.id)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '0 14px',
+          height: 44,
+          borderTop: rowIndex ? '1px solid var(--border)' : 'none',
+          cursor: renaming ? 'default' : 'pointer',
+        }}
+        onMouseEnter={(e) => {
+          if (!renaming) e.currentTarget.style.background = 'var(--bg-row-hov)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'transparent';
+        }}
+      >
+        <DeckRowColorIdentity colors={deck.color_identity} />
+        {renaming ? (
+          <input
+            autoFocus
+            value={renameValue}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename(deck.id);
+              if (e.key === 'Escape') setRenamingId(null);
+            }}
+            onBlur={() => commitRename(deck.id)}
+            style={{
+              flex: 1,
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-input)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '3px 8px',
+              color: 'var(--text)',
+              fontSize: 13,
+              outline: 'none',
+            }}
+          />
+        ) : (
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 13,
+              fontWeight: 500,
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {deck.name}
+          </span>
+        )}
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--text-mute)',
+            width: 90,
+          }}
+        >
+          {deck.format || ''}
+        </span>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--text-mute)',
+            width: 50,
+            textAlign: 'right',
+          }}
+        >
+          {deck.card_count ?? 0}
+        </span>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--text-faint)',
+            width: 90,
+            textAlign: 'right',
+          }}
+        >
+          {relativeUpdated(deck.updated_at)}
+        </span>
+        <div
+          style={{ display: 'inline-flex', gap: 6, opacity: 0, transition: 'opacity 120ms' }}
+          className="group-hover:opacity-100"
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setRenamingId(deck.id);
+              setRenameValue(deck.name);
+            }}
+            style={iconBtn}
+            title="Rename"
+          >
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+              <path
+                d="M7.5 1.5L9.5 3.5L3.5 9.5H1.5V7.5L7.5 1.5Z"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm(`Delete "${deck.name}"?`)) onDeleteDeck(deck.id);
+            }}
+            style={iconBtn}
+            title="Delete"
+          >
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+              <path
+                d="M2 3h7M4 3V2h3v1M3 3l.5 7h4l.5-7"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDeckSection = (group: 'owned' | 'wishlist', sectionDecks: Deck[]) => (
+    <section style={{ marginBottom: 20 }}>
+      <DeckGroupLabel group={group} count={sectionDecks.length} />
+      <div
+        style={{
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          overflow: 'hidden',
+        }}
+      >
+        {sectionDecks.length > 0 ? (
+          sectionDecks.map((deck, i) => renderDeckRow(deck, i))
+        ) : (
+          <div
+            style={{
+              padding: '16px 14px',
+              fontSize: 12,
+              color: 'var(--text-faint)',
+              fontStyle: 'italic',
+            }}
+          >
+            {group === 'owned' ? 'No owned decks yet — use Claim in a deck to mark it owned.' : 'No wishlist decks'}
+          </div>
+        )}
+      </div>
+    </section>
+  );
 
   return (
     <div
@@ -172,169 +342,10 @@ export default function DeckList({
             </p>
           </div>
         ) : (
-          <div
-            style={{
-              background: 'var(--bg-panel)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              overflow: 'hidden',
-            }}
-          >
-            {decks.map((deck, i) => {
-              const renaming = renamingId === deck.id;
-              return (
-                <div
-                  key={deck.id}
-                  className="group"
-                  onClick={() => !renaming && onOpenDeck(deck.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '0 14px',
-                    height: 44,
-                    borderTop: i ? '1px solid var(--border)' : 'none',
-                    cursor: renaming ? 'default' : 'pointer',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!renaming) e.currentTarget.style.background = 'var(--bg-row-hov)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                  }}
-                >
-                  <ColorIdentity colors={['C']} size={11} />
-                  {renaming ? (
-                    <input
-                      autoFocus
-                      value={renameValue}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') commitRename(deck.id);
-                        if (e.key === 'Escape') setRenamingId(null);
-                      }}
-                      onBlur={() => commitRename(deck.id)}
-                      style={{
-                        flex: 1,
-                        background: 'var(--bg-input)',
-                        border: '1px solid var(--border-input)',
-                        borderRadius: 'var(--radius-sm)',
-                        padding: '3px 8px',
-                        color: 'var(--text)',
-                        fontSize: 13,
-                        outline: 'none',
-                      }}
-                    />
-                  ) : (
-                    <span
-                      style={{
-                        flex: 1,
-                        fontSize: 13,
-                        fontWeight: 500,
-                        overflow: 'hidden',
-                        whiteSpace: 'nowrap',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
-                      {deck.name}
-                    </span>
-                  )}
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 11,
-                      color: 'var(--text-mute)',
-                      width: 90,
-                    }}
-                  >
-                    {deck.format || ''}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 11,
-                      color: 'var(--text-mute)',
-                      width: 50,
-                      textAlign: 'right',
-                    }}
-                  >
-                    {deck.card_count ?? 0}
-                  </span>
-                  <span
-                    style={{
-                      padding: '2px 7px',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 9,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      color: deck.owned ? 'var(--good)' : 'var(--text-faint)',
-                      border: `1px solid ${
-                        deck.owned ? 'rgba(134,169,140,0.25)' : 'var(--border)'
-                      }`,
-                      borderRadius: 3,
-                      width: 64,
-                      textAlign: 'center',
-                    }}
-                  >
-                    {deck.owned ? 'Owned' : 'Wishlist'}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 10,
-                      color: 'var(--text-faint)',
-                      width: 90,
-                      textAlign: 'right',
-                    }}
-                  >
-                    {relativeUpdated(deck.updated_at)}
-                  </span>
-                  <div
-                    style={{ display: 'inline-flex', gap: 6, opacity: 0, transition: 'opacity 120ms' }}
-                    className="group-hover:opacity-100"
-                  >
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRenamingId(deck.id);
-                        setRenameValue(deck.name);
-                      }}
-                      style={iconBtn}
-                      title="Rename"
-                    >
-                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                        <path
-                          d="M7.5 1.5L9.5 3.5L3.5 9.5H1.5V7.5L7.5 1.5Z"
-                          stroke="currentColor"
-                          strokeWidth="1.2"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Delete "${deck.name}"?`)) onDeleteDeck(deck.id);
-                      }}
-                      style={iconBtn}
-                      title="Delete"
-                    >
-                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                        <path
-                          d="M2 3h7M4 3V2h3v1M3 3l.5 7h4l.5-7"
-                          stroke="currentColor"
-                          strokeWidth="1.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <>
+            {renderDeckSection('owned', ownedDecks)}
+            {renderDeckSection('wishlist', wishlistDecks)}
+          </>
         )}
       </div>
     </div>

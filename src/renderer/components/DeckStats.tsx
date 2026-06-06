@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { DeckCard } from '../../shared/types';
 
 interface Props {
@@ -7,6 +8,34 @@ interface Props {
   targetLands?: number;
 }
 
+interface CurveBucket {
+  creatures: number;
+  spells: number;
+}
+
+const CURVE_KEYS = ['0', '1', '2', '3', '4', '5', '6+'] as const;
+
+function emptyCurve(): Record<string, CurveBucket> {
+  return Object.fromEntries(CURVE_KEYS.map((k) => [k, { creatures: 0, spells: 0 }]));
+}
+
+function cmcKey(cmc: number): string {
+  return cmc >= 6 ? '6+' : String(Math.floor(cmc));
+}
+
+function formatCurveTooltip(cmc: string, bucket: CurveBucket): string {
+  const total = bucket.creatures + bucket.spells;
+  if (total === 0) return `${cmc}: no cards`;
+  const parts: string[] = [];
+  if (bucket.creatures > 0) {
+    parts.push(`${bucket.creatures} creature${bucket.creatures === 1 ? '' : 's'}`);
+  }
+  if (bucket.spells > 0) {
+    parts.push(`${bucket.spells} spell${bucket.spells === 1 ? '' : 's'}`);
+  }
+  return `${cmc}: ${total} card${total === 1 ? '' : 's'} (${parts.join(', ')})`;
+}
+
 export default function DeckStats({ cards, board, targetTotal = 60, targetLands = 24 }: Props) {
   const boardCards = cards.filter((c) => c.board === board);
 
@@ -14,7 +43,7 @@ export default function DeckStats({ cards, board, targetTotal = 60, targetLands 
   let lands = 0;
   let creatures = 0;
   let spells = 0;
-  const curve: Record<string, number> = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6+': 0 };
+  const curve = emptyCurve();
 
   for (const dc of boardCards) {
     if (!dc.card) continue;
@@ -24,12 +53,12 @@ export default function DeckStats({ cards, board, targetTotal = 60, targetLands 
       lands += dc.quantity;
     } else if (tl.includes('creature')) {
       creatures += dc.quantity;
-      const k = dc.card.cmc >= 6 ? '6+' : String(Math.floor(dc.card.cmc));
-      curve[k] = (curve[k] || 0) + dc.quantity;
+      const k = cmcKey(dc.card.cmc);
+      curve[k].creatures += dc.quantity;
     } else {
       spells += dc.quantity;
-      const k = dc.card.cmc >= 6 ? '6+' : String(Math.floor(dc.card.cmc));
-      curve[k] = (curve[k] || 0) + dc.quantity;
+      const k = cmcKey(dc.card.cmc);
+      curve[k].spells += dc.quantity;
     }
   }
 
@@ -45,7 +74,7 @@ export default function DeckStats({ cards, board, targetTotal = 60, targetLands 
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
           gap: 1,
           background: 'var(--border)',
           border: '1px solid var(--border)',
@@ -91,9 +120,16 @@ export default function DeckStats({ cards, board, targetTotal = 60, targetLands 
   );
 }
 
-function ManaCurve({ curve }: { curve: Record<string, number> }) {
-  const keys = ['0', '1', '2', '3', '4', '5', '6+'];
-  const max = Math.max(1, ...keys.map((k) => curve[k] || 0));
+function ManaCurve({ curve }: { curve: Record<string, CurveBucket> }) {
+  const max = Math.max(
+    1,
+    ...CURVE_KEYS.map((k) => {
+      const b = curve[k];
+      return (b?.creatures ?? 0) + (b?.spells ?? 0);
+    }),
+  );
+  const chartHeight = 34;
+
   return (
     <div>
       <div
@@ -108,47 +144,125 @@ function ManaCurve({ curve }: { curve: Record<string, number> }) {
       >
         Curve
       </div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 42 }}>
-        {keys.map((k) => {
-          const v = curve[k] || 0;
-          const h = (v / max) * 100;
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: 4,
+          height: chartHeight + 18,
+          maxWidth: 260,
+        }}
+      >
+        {CURVE_KEYS.map((k) => {
+          const bucket = curve[k] ?? { creatures: 0, spells: 0 };
+          const total = bucket.creatures + bucket.spells;
+          const barHeight = total > 0 ? Math.max(2, Math.round((total / max) * chartHeight)) : 0;
           return (
-            <div
+            <CurveBar
               key={k}
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 3,
-              }}
-            >
-              <div
-                style={{
-                  flex: 1,
-                  width: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'flex-end',
-                }}
-              >
-                <div
-                  style={{
-                    width: '100%',
-                    height: `${h}%`,
-                    minHeight: v ? 2 : 0,
-                    background: 'var(--accent)',
-                    opacity: 0.7,
-                    borderRadius: 2,
-                  }}
-                />
-              </div>
-              <div style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-mute)' }}>
-                {k}
-              </div>
-            </div>
+              cmc={k}
+              bucket={bucket}
+              barHeight={barHeight}
+              tooltip={formatCurveTooltip(k, bucket)}
+            />
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function CurveBar({
+  cmc,
+  bucket,
+  barHeight,
+  tooltip,
+}: {
+  cmc: string;
+  bucket: CurveBucket;
+  barHeight: number;
+  tooltip: string;
+}) {
+  const [hover, setHover] = useState(false);
+  const total = bucket.creatures + bucket.spells;
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        minWidth: 0,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        gap: 3,
+        position: 'relative',
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      title={tooltip}
+    >
+      {hover && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '100%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            marginBottom: 6,
+            padding: '5px 7px',
+            background: 'var(--bg-panel)',
+            border: '1px solid var(--border-strong)',
+            borderRadius: 'var(--radius-sm)',
+            boxShadow: '0 8px 20px rgba(0,0,0,0.45)',
+            fontSize: 10,
+            lineHeight: 1.35,
+            color: 'var(--text-dim)',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            zIndex: 5,
+          }}
+        >
+          {total > 0 ? (
+            <>
+              <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>
+                {total} at {cmc}
+              </div>
+              {bucket.creatures > 0 && (
+                <div>
+                  {bucket.creatures} creature{bucket.creatures === 1 ? '' : 's'}
+                </div>
+              )}
+              {bucket.spells > 0 && (
+                <div>
+                  {bucket.spells} spell{bucket.spells === 1 ? '' : 's'}
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ color: 'var(--text-mute)' }}>No cards at {cmc}</div>
+          )}
+        </div>
+      )}
+      <div
+        style={{
+          width: '100%',
+          height: barHeight,
+          background: 'var(--accent)',
+          opacity: total > 0 ? (hover ? 1 : 0.85) : 0,
+          borderRadius: 2,
+          transition: 'opacity 120ms',
+        }}
+      />
+      <div
+        style={{
+          fontSize: 9,
+          fontFamily: 'var(--font-mono)',
+          color: hover ? 'var(--text-dim)' : 'var(--text-mute)',
+        }}
+      >
+        {cmc}
       </div>
     </div>
   );

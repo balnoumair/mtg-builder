@@ -74,6 +74,26 @@ describe('getDecks', () => {
     const found = decks.find(d => d.id === deck.id);
     expect(found?.owned).toBe(true);
   });
+
+  it('aggregates main-board color identity in WUBRG order', () => {
+    const deck = createDeck(db, { name: 'Colors' });
+    const red = insertTestCard(db, { color_identity: ['R'] });
+    const blue = insertTestCard(db, { color_identity: ['U'] });
+    const green = insertTestCard(db, { color_identity: ['G'] });
+    const sideOnly = insertTestCard(db, { color_identity: ['W'] });
+    addCardToDeck(db, deck.id, red, 'main');
+    addCardToDeck(db, deck.id, blue, 'main');
+    addCardToDeck(db, deck.id, green, 'main');
+    addCardToDeck(db, deck.id, sideOnly, 'sideboard');
+
+    const found = getDecks(db).find((d) => d.id === deck.id);
+    expect(found?.color_identity).toEqual(['U', 'R', 'G']);
+  });
+
+  it('returns empty color identity for decks with no main-board cards', () => {
+    const deck = createDeck(db, { name: 'Empty' });
+    expect(getDecks(db).find((d) => d.id === deck.id)?.color_identity).toEqual([]);
+  });
 });
 
 describe('updateDeck', () => {

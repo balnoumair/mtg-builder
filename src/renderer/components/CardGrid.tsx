@@ -6,8 +6,12 @@ interface Props {
   cards: Card[];
   loading: boolean;
   onCardClick: (card: Card) => void;
+  onCardDoubleClick?: (card: Card) => void;
+  onViewCard?: (card: Card) => void;
   onAddToDeck?: (card: Card) => void;
   ownedQuantities?: Record<string, number>;
+  deckQuantities?: Record<string, number>;
+  selectedId?: string | null;
   view?: 'grid' | 'list';
 }
 
@@ -22,8 +26,12 @@ export default function CardGrid({
   cards,
   loading,
   onCardClick,
+  onCardDoubleClick,
+  onViewCard,
   onAddToDeck,
   ownedQuantities,
+  deckQuantities,
+  selectedId,
   view = 'grid',
 }: Props) {
   if (loading && cards.length === 0) {
@@ -71,10 +79,19 @@ export default function CardGrid({
       >
         {cards.map((card, i) => {
           const qty = ownedQuantities?.[card.id] ?? 0;
+          const inDeck = deckQuantities?.[card.id] ?? 0;
+          const sel = selectedId === card.id;
           return (
             <div
               key={card.id}
               onClick={() => onCardClick(card)}
+              onDoubleClick={
+                onViewCard
+                  ? () => onViewCard(card)
+                  : onCardDoubleClick
+                    ? () => onCardDoubleClick(card)
+                    : undefined
+              }
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -83,12 +100,13 @@ export default function CardGrid({
                 height: 'var(--row-h)',
                 borderTop: i ? '1px solid var(--border)' : 'none',
                 cursor: 'pointer',
+                background: sel ? 'var(--bg-row-sel)' : 'transparent',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--bg-row-hov)';
+                if (!sel) e.currentTarget.style.background = 'var(--bg-row-hov)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
+                if (!sel) e.currentTarget.style.background = 'transparent';
               }}
             >
               {qty > 0 && (
@@ -131,28 +149,56 @@ export default function CardGrid({
                 {card.type_line}
               </span>
               <ManaSymbols cost={card.mana_cost} size={11} />
-              {onAddToDeck && (
+              {onViewCard ? (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onAddToDeck(card);
+                    onViewCard(card);
                   }}
-                  style={{
-                    width: 22,
-                    height: 20,
-                    borderRadius: 'var(--radius-sm)',
-                    background: 'transparent',
-                    border: '1px solid var(--border-strong)',
-                    color: 'var(--text-dim)',
-                    cursor: 'pointer',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    lineHeight: 1,
-                    padding: 0,
-                  }}
+                  style={detailBtnStyle}
+                  title="View card details"
                 >
-                  +
+                  <ViewIcon />
                 </button>
+              ) : (
+                onAddToDeck && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddToDeck(card);
+                    }}
+                    style={{
+                      width: 22,
+                      height: 20,
+                      borderRadius: 'var(--radius-sm)',
+                      background: inDeck ? 'var(--accent-soft)' : 'transparent',
+                      border: `1px solid ${inDeck ? 'var(--accent-line)' : 'var(--border-strong)'}`,
+                      color: inDeck ? 'var(--accent)' : 'var(--text-dim)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                      lineHeight: 1,
+                      padding: 0,
+                    }}
+                    title={inDeck ? `${inDeck} in deck — click to add another` : 'Add to deck'}
+                  >
+                    {inDeck ? `×${inDeck}` : '+'}
+                  </button>
+                )
+              )}
+              {qty > 0 && (
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    color: 'var(--good)',
+                    width: 22,
+                    textAlign: 'right',
+                  }}
+                  title={`Owned: ${qty}`}
+                >
+                  ◉
+                </span>
               )}
             </div>
           );
@@ -174,8 +220,18 @@ export default function CardGrid({
           key={card.id}
           card={card}
           owned={ownedQuantities?.[card.id] ?? 0}
+          inDeck={deckQuantities?.[card.id] ?? 0}
+          selected={selectedId === card.id}
           onClick={() => onCardClick(card)}
-          onAdd={onAddToDeck ? () => onAddToDeck(card) : undefined}
+          onDoubleClick={
+            onViewCard
+              ? () => onViewCard(card)
+              : onCardDoubleClick
+                ? () => onCardDoubleClick(card)
+                : undefined
+          }
+          onView={onViewCard ? () => onViewCard(card) : undefined}
+          onAdd={!onViewCard && onAddToDeck ? () => onAddToDeck(card) : undefined}
         />
       ))}
     </div>
@@ -185,11 +241,15 @@ export default function CardGrid({
 interface TileProps {
   card: Card;
   owned: number;
+  inDeck: number;
+  selected: boolean;
   onClick: () => void;
+  onDoubleClick?: () => void;
+  onView?: () => void;
   onAdd?: () => void;
 }
 
-function CardTile({ card, owned, onClick, onAdd }: TileProps) {
+function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onView, onAdd }: TileProps) {
   const hasImage = !!card.image_uri_normal;
   const tint = card.color_identity?.[0] ? getManaMeta(card.color_identity[0]) : null;
   const rarityShort = RARITY_SHORT[card.rarity];
@@ -198,21 +258,22 @@ function CardTile({ card, owned, onClick, onAdd }: TileProps) {
     return (
       <div
         onClick={onClick}
+        onDoubleClick={onDoubleClick}
         className="group"
         style={{
           position: 'relative',
           borderRadius: 'var(--radius-tile)',
           overflow: 'hidden',
           background: 'var(--bg-panel)',
-          border: '1px solid var(--border)',
+          border: `1px solid ${selected ? 'var(--accent-line)' : 'var(--border)'}`,
           cursor: 'pointer',
           aspectRatio: '488 / 680',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = 'var(--border-strong)';
+          if (!selected) e.currentTarget.style.borderColor = 'var(--border-strong)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = 'var(--border)';
+          if (!selected) e.currentTarget.style.borderColor = 'var(--border)';
         }}
       >
         <img
@@ -221,6 +282,26 @@ function CardTile({ card, owned, onClick, onAdd }: TileProps) {
           loading="lazy"
           style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
         />
+        {inDeck > 0 && (
+          <span
+            style={{
+              position: 'absolute',
+              top: 8,
+              left: 8,
+              padding: '2px 7px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              background: 'rgba(0,0,0,0.65)',
+              color: 'var(--accent)',
+              border: '1px solid var(--accent-line)',
+              borderRadius: 3,
+              fontVariantNumeric: 'tabular-nums',
+              backdropFilter: 'blur(4px)',
+            }}
+          >
+            ×{inDeck}
+          </span>
+        )}
         {owned > 0 && (
           <span
             style={{
@@ -240,6 +321,35 @@ function CardTile({ card, owned, onClick, onAdd }: TileProps) {
           >
             ×{owned}
           </span>
+        )}
+        {onView && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onView();
+            }}
+            className="opacity-0 group-hover:opacity-100"
+            style={{
+              position: 'absolute',
+              bottom: 8,
+              right: 8,
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              background: 'rgba(0,0,0,0.65)',
+              border: '1px solid rgba(255,255,255,0.18)',
+              color: 'var(--text)',
+              cursor: 'pointer',
+              display: 'grid',
+              placeItems: 'center',
+              padding: 0,
+              transition: 'opacity 120ms',
+              backdropFilter: 'blur(6px)',
+            }}
+            title="View card details"
+          >
+            <ViewIcon size={13} />
+          </button>
         )}
         {onAdd && (
           <button
@@ -420,3 +530,30 @@ function CardTile({ card, owned, onClick, onAdd }: TileProps) {
     </div>
   );
 }
+
+function ViewIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" aria-hidden>
+      <circle cx="6" cy="6" r="2.2" stroke="currentColor" strokeWidth="1.2" />
+      <path
+        d="M1 6s1.6-3.5 5-3.5 5 3.5 5 3.5-1.6 3.5-5 3.5S1 6 1 6z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+const detailBtnStyle: React.CSSProperties = {
+  width: 22,
+  height: 20,
+  borderRadius: 'var(--radius-sm)',
+  background: 'transparent',
+  border: '1px solid var(--border-strong)',
+  color: 'var(--text-dim)',
+  cursor: 'pointer',
+  display: 'grid',
+  placeItems: 'center',
+  padding: 0,
+};

@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { Card, CardFilters, CardSearchResult } from '../../shared/types';
+import type { Card, CardFilters, CardSearchResult, CardSet } from '../../shared/types';
 
 const VALID_LAYOUTS = new Set([
   'normal', 'split', 'flip', 'transform', 'modal_dfc', 'meld',
@@ -140,10 +140,20 @@ export function getCardPrintings(db: Database.Database, oracleId: string): Card[
   return rows.map(rowToCard);
 }
 
-export function getSets(db: Database.Database): { code: string; name: string; releasedAt: string; blockCode: string | null; blockName: string | null }[] {
-  return db.prepare(
-    'SELECT set_code as code, set_name as name, MIN(released_at) as releasedAt, MAX(block_code) as blockCode, MAX(block_name) as blockName FROM cards GROUP BY set_code, set_name ORDER BY name ASC'
-  ).all() as { code: string; name: string; releasedAt: string; blockCode: string | null; blockName: string | null }[];
+export function getSets(db: Database.Database): CardSet[] {
+  return db.prepare(`
+    SELECT
+      c.set_code as code,
+      c.set_name as name,
+      MIN(c.released_at) as releasedAt,
+      MAX(c.block_code) as blockCode,
+      MAX(c.block_name) as blockName,
+      MAX(s.icon_svg_uri) as iconSvgUri
+    FROM cards c
+    LEFT JOIN sets s ON LOWER(s.code) = LOWER(c.set_code)
+    GROUP BY c.set_code, c.set_name
+    ORDER BY name ASC
+  `).all() as CardSet[];
 }
 
 export { VALID_LAYOUTS };
