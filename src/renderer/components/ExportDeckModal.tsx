@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import type { DeckCard } from '../../shared/types';
+import { BASIC_LAND_NAMES } from '../../shared/basicLands';
 import { getCardTypeCategory, TYPE_ORDER } from '../lib/mana';
 import ManaSymbols from './ManaSymbols';
 
@@ -8,8 +9,6 @@ interface Props {
   deckCards: DeckCard[];
   onClose: () => void;
 }
-
-const BASIC_LANDS = new Set(['Plains', 'Island', 'Swamp', 'Mountain', 'Forest', 'Wastes']);
 
 export default function ExportDeckModal({ deckName, deckCards, onClose }: Props) {
   const [excludeBasicLands, setExcludeBasicLands] = useState(false);
@@ -30,7 +29,7 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
   const filterCards = (cards: DeckCard[]) =>
     cards.filter((dc) => {
       if (!dc.card) return false;
-      if (excludeBasicLands && BASIC_LANDS.has(dc.card.name)) return false;
+      if (excludeBasicLands && BASIC_LAND_NAMES.has(dc.card.name)) return false;
       if (excludedCardIds.has(dc.card_id)) return false;
       return true;
     });

@@ -1,3 +1,5 @@
+import type { DeckSetGroup } from './deckSetGroup';
+
 export interface Card {
   id: string;
   oracle_id: string;
@@ -40,6 +42,7 @@ export interface Deck {
   updated_at: string;
   card_count?: number;
   color_identity?: string[];
+  set_group?: DeckSetGroup;
 }
 
 export interface DeckCard {

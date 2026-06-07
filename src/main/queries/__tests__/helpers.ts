@@ -126,6 +126,8 @@ export function insertTestCard(
     released_at: string;
     price_usd: string | null;
     artist: string;
+    block_code: string | null;
+    block_name: string | null;
   }> = {}
 ): string {
   cardSeq++;
@@ -136,11 +138,13 @@ export function insertTestCard(
     INSERT INTO cards (
       id, oracle_id, name, mana_cost, cmc, type_line, oracle_text,
       colors, color_identity, keywords, rarity, set_code, set_name,
-      collector_number, legalities, released_at, price_usd, artist
+      collector_number, legalities, released_at, price_usd, artist,
+      block_code, block_name
     ) VALUES (
       @id, @oracle_id, @name, @mana_cost, @cmc, @type_line, @oracle_text,
       @colors, @color_identity, @keywords, @rarity, @set_code, @set_name,
-      @collector_number, @legalities, @released_at, @price_usd, @artist
+      @collector_number, @legalities, @released_at, @price_usd, @artist,
+      @block_code, @block_name
     )
   `).run({
     id,
@@ -161,6 +165,8 @@ export function insertTestCard(
     released_at: overrides.released_at ?? '2024-01-01',
     price_usd: overrides.price_usd ?? null,
     artist: overrides.artist ?? 'Test Artist',
+    block_code: overrides.block_code ?? null,
+    block_name: overrides.block_name ?? null,
   });
 
   return id;

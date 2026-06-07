@@ -11,7 +11,7 @@ import {
   removeCardFromDeck,
   claimDeckFromCollection,
 } from '../decks';
-import { createTestDb, insertTestCard } from './helpers';
+import { createTestDb, insertTestCard, insertTestSet } from './helpers';
 
 let db: Database.Database;
 
@@ -93,6 +93,84 @@ describe('getDecks', () => {
   it('returns empty color identity for decks with no main-board cards', () => {
     const deck = createDeck(db, { name: 'Empty' });
     expect(getDecks(db).find((d) => d.id === deck.id)?.color_identity).toEqual([]);
+  });
+
+  it('derives set_group from main-board cards, ignoring basics', () => {
+    insertTestSet(db, {
+      code: 'znr',
+      name: 'Zendikar Rising',
+      released_at: '2020-09-25',
+    });
+    insertTestSet(db, {
+      code: 'm21',
+      name: 'Core Set 2021',
+      released_at: '2020-07-03',
+    });
+
+    const deck = createDeck(db, { name: 'ZNR Draft' });
+    const nonBasic = insertTestCard(db, {
+      set_code: 'znr',
+      set_name: 'Zendikar Rising',
+      released_at: '2020-09-25',
+    });
+    const basic = insertTestCard(db, {
+      name: 'Forest',
+      set_code: 'm21',
+      set_name: 'Core Set 2021',
+    });
+    addCardToDeck(db, deck.id, nonBasic, 'main');
+    addCardToDeck(db, deck.id, basic, 'main');
+
+    const found = getDecks(db).find((d) => d.id === deck.id);
+    expect(found?.set_group).toEqual({
+      kind: 'set',
+      label: 'Zendikar Rising',
+      sortKey: '2020-09-25',
+    });
+  });
+
+  it('groups block decks across multiple sets in the same block', () => {
+    insertTestSet(db, {
+      code: 'isd',
+      name: 'Innistrad',
+      released_at: '2011-09-30',
+      block_code: 'innistrad',
+      block_name: 'Innistrad',
+    });
+    insertTestSet(db, {
+      code: 'dka',
+      name: 'Dark Ascension',
+      released_at: '2012-02-03',
+      block_code: 'innistrad',
+      block_name: 'Innistrad',
+    });
+
+    const deck = createDeck(db, { name: 'Innistrad Block' });
+    const isd = insertTestCard(db, {
+      set_code: 'isd',
+      set_name: 'Innistrad',
+      block_code: 'innistrad',
+      block_name: 'Innistrad',
+      released_at: '2011-09-30',
+    });
+    const dka = insertTestCard(db, {
+      set_code: 'dka',
+      set_name: 'Dark Ascension',
+      block_code: 'innistrad',
+      block_name: 'Innistrad',
+      released_at: '2012-02-03',
+    });
+    addCardToDeck(db, deck.id, isd, 'main');
+    addCardToDeck(db, deck.id, dka, 'main');
+
+    const found = getDecks(db).find((d) => d.id === deck.id);
+    expect(found?.set_group?.kind).toBe('block');
+    expect(found?.set_group?.label).toBe('Innistrad');
+  });
+
+  it('returns mixed set_group for empty decks', () => {
+    const deck = createDeck(db, { name: 'Empty' });
+    expect(getDecks(db).find((d) => d.id === deck.id)?.set_group?.kind).toBe('mixed');
   });
 });
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { CardFilters as Filters, CardSet } from '../../shared/types';
+import { buildSetDropdownEntries } from '../../shared/setOrdering';
 import { Mana } from './ManaSymbols';
 import { getManaMeta } from '../lib/mana';
 
@@ -230,40 +231,10 @@ export default function CardFilters({ filters, onUpdate }: Props) {
     );
   }, [sortedSets, setSearch]);
 
-  type BlockGroup = { blockCode: string; blockName: string; sets: CardSet[]; latestRelease: string };
-  type DropdownEntry =
-    | { kind: 'block'; group: BlockGroup; sortKey: string }
-    | { kind: 'standalone'; set: CardSet; sortKey: string };
-
-  const groupedEntries = useMemo<DropdownEntry[] | null>(() => {
+  const groupedEntries = useMemo(() => {
     if (setSearch) return null;
-    const blockMap = new Map<string, BlockGroup>();
-    const entries: DropdownEntry[] = [];
-    for (const s of sortedSets) {
-      if (s.blockCode && s.blockName && s.blockName !== 'Core Set') {
-        if (!blockMap.has(s.blockCode)) {
-          const group: BlockGroup = {
-            blockCode: s.blockCode,
-            blockName: s.blockName,
-            sets: [],
-            latestRelease: '',
-          };
-          blockMap.set(s.blockCode, group);
-          entries.push({ kind: 'block', group, sortKey: '' });
-        }
-        const g = blockMap.get(s.blockCode)!;
-        g.sets.push(s);
-        if (s.releasedAt > g.latestRelease) g.latestRelease = s.releasedAt;
-      } else {
-        entries.push({ kind: 'standalone', set: s, sortKey: s.releasedAt });
-      }
-    }
-    for (const e of entries) {
-      if (e.kind === 'block') e.sortKey = e.group.latestRelease;
-    }
-    entries.sort((a, b) => b.sortKey.localeCompare(a.sortKey));
-    return entries;
-  }, [sortedSets, setSearch]);
+    return buildSetDropdownEntries(sets);
+  }, [sets, setSearch]);
 
   const hasFilters =
     activeColors.length > 0 ||
