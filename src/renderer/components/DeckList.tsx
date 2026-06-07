@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import type { Deck } from '../../shared/types';
+import { groupDecksBySetGroup } from '../../shared/deckSetGroup';
 import DeckGroupLabel, { partitionDecks } from './DeckGroupLabel';
 import DeckRowColorIdentity from './DeckRowColorIdentity';
+import DeckSetGroupLabel from './DeckSetGroupLabel';
 
 interface Props {
   decks: Deck[];
@@ -197,22 +199,18 @@ export default function DeckList({
     );
   };
 
-  const renderDeckSection = (group: 'owned' | 'wishlist', sectionDecks: Deck[]) => (
-    <section style={{ marginBottom: 20 }}>
-      <DeckGroupLabel group={group} count={sectionDecks.length} />
-      <div
-        style={{
-          background: 'var(--bg-panel)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          overflow: 'hidden',
-        }}
-      >
-        {sectionDecks.length > 0 ? (
-          sectionDecks.map((deck, i) => renderDeckRow(deck, i))
-        ) : (
+  const renderDeckSection = (group: 'owned' | 'wishlist', sectionDecks: Deck[]) => {
+    const subgroups = groupDecksBySetGroup(sectionDecks);
+
+    return (
+      <section style={{ marginBottom: 20 }}>
+        <DeckGroupLabel group={group} count={sectionDecks.length} />
+        {sectionDecks.length === 0 ? (
           <div
             style={{
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
               padding: '16px 14px',
               fontSize: 12,
               color: 'var(--text-faint)',
@@ -221,10 +219,26 @@ export default function DeckList({
           >
             {group === 'owned' ? 'No owned decks yet — use Claim in a deck to mark it owned.' : 'No wishlist decks'}
           </div>
+        ) : (
+          subgroups.map(({ group: setGroup, decks: subgroupDecks }, subgroupIndex) => (
+            <div key={`${group}-${setGroup.kind}-${setGroup.label}`} style={{ marginTop: subgroupIndex ? 14 : 0 }}>
+              <DeckSetGroupLabel label={setGroup.label} />
+              <div
+                style={{
+                  background: 'var(--bg-panel)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)',
+                  overflow: 'hidden',
+                }}
+              >
+                {subgroupDecks.map((deck, i) => renderDeckRow(deck, i))}
+              </div>
+            </div>
+          ))
         )}
-      </div>
-    </section>
-  );
+      </section>
+    );
+  };
 
   return (
     <div

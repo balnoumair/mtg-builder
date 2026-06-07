@@ -1,5 +1,16 @@
 import type Database from 'better-sqlite3';
 import type { Deck, DeckCard } from '../../shared/types';
+import {
+  classifyDeckSetGroup,
+  type DeckCardSetInfo,
+  type DeckSetGroup,
+  MIXED_DECK_SET_GROUP,
+} from '../../shared/deckSetGroup';
+import {
+  buildBlockSortKeys,
+  buildSetReleaseDates,
+  type SetCatalogEntry,
+} from '../../shared/setOrdering';
 
 const COLOR_ORDER = ['W', 'U', 'B', 'R', 'G'] as const;
 
@@ -28,8 +39,63 @@ function getDeckColorIdentities(db: Database.Database): Map<number, string[]> {
   return result;
 }
 
+function loadSetCatalog(db: Database.Database): SetCatalogEntry[] {
+  const rows = db.prepare(`
+    SELECT code, name, released_at, block_code, block_name
+    FROM sets
+    WHERE released_at IS NOT NULL AND released_at != ''
+  `).all() as {
+    code: string;
+    name: string;
+    released_at: string;
+    block_code: string | null;
+    block_name: string | null;
+  }[];
+
+  return rows.map((r) => ({
+    code: r.code,
+    name: r.name,
+    releasedAt: r.released_at,
+    blockCode: r.block_code,
+    blockName: r.block_name,
+  }));
+}
+
+function getDeckSetGroups(db: Database.Database): Map<number, DeckSetGroup> {
+  const catalog = loadSetCatalog(db);
+  const blockSortKeys = buildBlockSortKeys(catalog);
+  const setReleaseDates = buildSetReleaseDates(catalog);
+
+  const rows = db.prepare(`
+    SELECT dc.deck_id, c.name, c.set_code, c.set_name, c.block_code, c.block_name, c.released_at
+    FROM deck_cards dc
+    JOIN cards c ON c.id = dc.card_id
+    WHERE dc.board = 'main'
+  `).all() as (DeckCardSetInfo & { deck_id: number })[];
+
+  const byDeck = new Map<number, DeckCardSetInfo[]>();
+  for (const row of rows) {
+    if (!byDeck.has(row.deck_id)) byDeck.set(row.deck_id, []);
+    byDeck.get(row.deck_id)!.push({
+      name: row.name,
+      set_code: row.set_code,
+      set_name: row.set_name,
+      block_code: row.block_code,
+      block_name: row.block_name,
+      released_at: row.released_at,
+    });
+  }
+
+  const result = new Map<number, DeckSetGroup>();
+  for (const [deckId, cards] of byDeck) {
+    result.set(deckId, classifyDeckSetGroup(cards, blockSortKeys, setReleaseDates));
+  }
+  return result;
+}
+
 export function getDecks(db: Database.Database): Deck[] {
   const colorIdentities = getDeckColorIdentities(db);
+  const setGroups = getDeckSetGroups(db);
   const rows = db.prepare(`
     SELECT d.*, COALESCE(SUM(dc.quantity), 0) as card_count
     FROM decks d
@@ -41,6 +107,7 @@ export function getDecks(db: Database.Database): Deck[] {
     ...r,
     owned: !!r.owned,
     color_identity: colorIdentities.get(r.id) ?? [],
+    set_group: setGroups.get(r.id) ?? MIXED_DECK_SET_GROUP,
   }));
 }
 

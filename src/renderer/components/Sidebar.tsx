@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import type { Deck } from '../../shared/types';
 import type { View } from '../lib/types';
+import { groupDecksBySetGroup } from '../../shared/deckSetGroup';
 import DeckGroupLabel, { partitionDecks } from './DeckGroupLabel';
 import DeckRowColorIdentity from './DeckRowColorIdentity';
+import DeckSetGroupLabel from './DeckSetGroupLabel';
 
 interface Props {
   view: View;
@@ -160,6 +162,27 @@ export default function Sidebar({
     );
   };
 
+  const renderDeckSection = (group: 'owned' | 'wishlist', sectionDecks: Deck[]) => {
+    const subgroups = groupDecksBySetGroup(sectionDecks);
+    return (
+      <>
+        <DeckGroupLabel group={group} count={sectionDecks.length} compact />
+        {sectionDecks.length === 0 ? (
+          <p style={{ padding: '2px 10px 8px', fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic' }}>
+            {group === 'owned' ? 'No owned decks' : 'No wishlist decks'}
+          </p>
+        ) : (
+          subgroups.map(({ group: setGroup, decks: subgroupDecks }) => (
+            <div key={`${group}-${setGroup.kind}-${setGroup.label}`}>
+              <DeckSetGroupLabel label={setGroup.label} compact />
+              {subgroupDecks.map(renderDeckRow)}
+            </div>
+          ))
+        )}
+      </>
+    );
+  };
+
   return (
     <aside
       style={{
@@ -307,22 +330,8 @@ export default function Sidebar({
           </p>
         ) : (
           <>
-            <DeckGroupLabel group="owned" count={ownedDecks.length} compact />
-            {ownedDecks.length > 0 ? (
-              ownedDecks.map(renderDeckRow)
-            ) : (
-              <p style={{ padding: '2px 10px 8px', fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic' }}>
-                No owned decks
-              </p>
-            )}
-            <DeckGroupLabel group="wishlist" count={wishlistDecks.length} compact />
-            {wishlistDecks.length > 0 ? (
-              wishlistDecks.map(renderDeckRow)
-            ) : (
-              <p style={{ padding: '2px 10px 8px', fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic' }}>
-                No wishlist decks
-              </p>
-            )}
+            {renderDeckSection('owned', ownedDecks)}
+            {renderDeckSection('wishlist', wishlistDecks)}
           </>
         )}
       </div>
