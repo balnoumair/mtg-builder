@@ -57,8 +57,8 @@ export function registerIpcHandlers(): void {
     return deckQueries.getDeckCards(getDb(), deckId);
   });
 
-  ipcMain.handle('decks:addCard', (_event, deckId: number, cardId: string, board?: string) => {
-    return deckQueries.addCardToDeck(getDb(), deckId, cardId, board);
+  ipcMain.handle('decks:addCard', (_event, deckId: number, cardId: string, board?: string, count?: number) => {
+    return deckQueries.addCardToDeck(getDb(), deckId, cardId, board, count);
   });
 
   ipcMain.handle('decks:updateQuantity', (_event, deckId: number, cardId: string, board: string, quantity: number) => {
@@ -69,8 +69,20 @@ export function registerIpcHandlers(): void {
     return deckQueries.removeCardFromDeck(getDb(), deckId, cardId, board);
   });
 
+  ipcMain.handle('decks:setCardIgnoreLimit', (_event, deckId: number, cardId: string, ignore: boolean) => {
+    return deckQueries.setDeckCardIgnoreLimit(getDb(), deckId, cardId, ignore);
+  });
+
   ipcMain.handle('decks:claim', (_event, deckId: number) => {
     return deckQueries.claimDeckFromCollection(getDb(), deckId);
+  });
+
+  ipcMain.handle('decks:confirmChanges', (_event, deckId: number) => {
+    return deckQueries.confirmDeckChanges(getDb(), deckId);
+  });
+
+  ipcMain.handle('decks:discardChanges', (_event, deckId: number) => {
+    return deckQueries.discardDeckChanges(getDb(), deckId);
   });
 
   // Collection

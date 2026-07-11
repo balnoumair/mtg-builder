@@ -10,6 +10,9 @@ import {
   updateCardQuantity,
   removeCardFromDeck,
   claimDeckFromCollection,
+  confirmDeckChanges,
+  discardDeckChanges,
+  setDeckCardIgnoreLimit,
 } from '../decks';
 import { createTestDb, insertTestCard, insertTestSet } from './helpers';
 
@@ -194,6 +197,7 @@ describe('updateDeck', () => {
     expect(updated.owned).toBe(true);
   });
 
+
   it('updates updated_at timestamp', () => {
     const deck = createDeck(db, { name: 'My Deck' });
     const originalTime = deck.updated_at;
@@ -255,6 +259,86 @@ describe('addCardToDeck', () => {
     const cards = getDeckCards(db, deck.id);
     expect(cards).toHaveLength(2);
   });
+
+  it('adds multiple copies at once', () => {
+    const deck = createDeck(db, { name: 'Playset' });
+    const cardId = insertTestCard(db);
+    addCardToDeck(db, deck.id, cardId, 'main', 4);
+
+    expect(getDeckCards(db, deck.id)[0].quantity).toBe(4);
+  });
+
+  it('caps copies at 4 per card name across boards', () => {
+    const deck = createDeck(db, { name: 'Cap' });
+    const cardId = insertTestCard(db, { name: 'Lightning Bolt' });
+    addCardToDeck(db, deck.id, cardId, 'main', 3);
+    addCardToDeck(db, deck.id, cardId, 'sideboard', 3); // only 1 slot left
+
+    const cards = getDeckCards(db, deck.id);
+    expect(cards.find((c) => c.board === 'main')?.quantity).toBe(3);
+    expect(cards.find((c) => c.board === 'sideboard')?.quantity).toBe(1);
+
+    addCardToDeck(db, deck.id, cardId, 'main'); // already at cap → no-op
+    expect(getDeckCards(db, deck.id).find((c) => c.board === 'main')?.quantity).toBe(3);
+  });
+
+  it('caps across different printings of the same card name', () => {
+    const deck = createDeck(db, { name: 'Printings' });
+    const a = insertTestCard(db, { name: 'Lightning Bolt', set_code: 'lea' });
+    const b = insertTestCard(db, { name: 'Lightning Bolt', set_code: 'm10' });
+    addCardToDeck(db, deck.id, a, 'main', 4);
+    addCardToDeck(db, deck.id, b, 'main', 4); // name already at cap
+
+    expect(getDeckCards(db, deck.id).find((c) => c.card_id === b)).toBeUndefined();
+  });
+
+  it('does not cap basic lands', () => {
+    const deck = createDeck(db, { name: 'Lands' });
+    const forest = insertTestCard(db, { name: 'Forest', type_line: 'Basic Land — Forest' });
+    addCardToDeck(db, deck.id, forest, 'main', 24);
+
+    expect(getDeckCards(db, deck.id)[0].quantity).toBe(24);
+  });
+
+  it('does not cap a card whose deck row has ignore_copy_limit set', () => {
+    const deck = createDeck(db, { name: 'Rats' });
+    const rats = insertTestCard(db, { name: 'Relentless Rats' });
+    const bolt = insertTestCard(db, { name: 'Lightning Bolt' });
+    addCardToDeck(db, deck.id, rats, 'main');
+    setDeckCardIgnoreLimit(db, deck.id, rats, true);
+
+    addCardToDeck(db, deck.id, rats, 'main', 29);
+    addCardToDeck(db, deck.id, bolt, 'main', 9); // other cards still capped
+
+    const cards = getDeckCards(db, deck.id);
+    expect(cards.find((c) => c.card_id === rats)?.quantity).toBe(30);
+    expect(cards.find((c) => c.card_id === rats)?.ignore_copy_limit).toBe(true);
+    expect(cards.find((c) => c.card_id === bolt)?.quantity).toBe(4);
+  });
+
+  it('exempts the whole card name across boards and printings', () => {
+    const deck = createDeck(db, { name: 'Printings' });
+    const a = insertTestCard(db, { name: 'Relentless Rats', set_code: 'dst' });
+    const b = insertTestCard(db, { name: 'Relentless Rats', set_code: 'm25' });
+    addCardToDeck(db, deck.id, a, 'main');
+    setDeckCardIgnoreLimit(db, deck.id, a, true);
+
+    addCardToDeck(db, deck.id, b, 'sideboard', 10);
+
+    expect(getDeckCards(db, deck.id).find((c) => c.card_id === b)?.quantity).toBe(10);
+  });
+
+  it('re-enforces the cap when the card flag is turned back off', () => {
+    const deck = createDeck(db, { name: 'Toggle' });
+    const cardId = insertTestCard(db, { name: 'Lightning Bolt' });
+    addCardToDeck(db, deck.id, cardId, 'main');
+    setDeckCardIgnoreLimit(db, deck.id, cardId, true);
+    addCardToDeck(db, deck.id, cardId, 'main', 5); // 6 total
+    setDeckCardIgnoreLimit(db, deck.id, cardId, false);
+
+    addCardToDeck(db, deck.id, cardId, 'main'); // over cap already → no-op
+    expect(getDeckCards(db, deck.id)[0].quantity).toBe(6); // existing copies untouched
+  });
 });
 
 describe('getDeckCards', () => {
@@ -303,6 +387,15 @@ describe('updateCardQuantity', () => {
 
     const cards = getDeckCards(db, deck.id);
     expect(cards).toHaveLength(0);
+  });
+
+  it('clamps the quantity to the copy limit', () => {
+    const deck = createDeck(db, { name: 'Clamp' });
+    const cardId = insertTestCard(db, { name: 'Lightning Bolt' });
+    addCardToDeck(db, deck.id, cardId);
+    updateCardQuantity(db, deck.id, cardId, 'main', 9);
+
+    expect(getDeckCards(db, deck.id)[0].quantity).toBe(4);
   });
 });
 
@@ -401,5 +494,159 @@ describe('claimDeckFromCollection', () => {
 
     const row = db.prepare('SELECT quantity FROM collection WHERE card_id = ?').get(cardId) as { quantity: number };
     expect(row.quantity).toBe(3); // 5 - 2 = 3
+  });
+
+  it('records claimed quantities as the confirmed baseline', () => {
+    const deck = createDeck(db, { name: 'Baseline' });
+    const cardId = insertTestCard(db);
+    addCardToDeck(db, deck.id, cardId, 'main', 3);
+
+    claimDeckFromCollection(db, deck.id);
+
+    expect(getDeckCards(db, deck.id)[0].owned_quantity).toBe(3);
+  });
+});
+
+describe('owned deck editing', () => {
+  function ownedDeckWith(cardId: string, qty: number) {
+    const deck = createDeck(db, { name: 'Owned' });
+    addCardToDeck(db, deck.id, cardId, 'main', qty);
+    claimDeckFromCollection(db, deck.id);
+    return deck;
+  }
+
+  it('keeps removed confirmed cards as pending removals (quantity 0)', () => {
+    const cardId = insertTestCard(db);
+    const deck = ownedDeckWith(cardId, 2);
+
+    removeCardFromDeck(db, deck.id, cardId, 'main');
+
+    const cards = getDeckCards(db, deck.id);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].quantity).toBe(0);
+    expect(cards[0].owned_quantity).toBe(2);
+  });
+
+  it('deletes pending additions outright when removed', () => {
+    const cardId = insertTestCard(db);
+    const deck = ownedDeckWith(cardId, 2);
+    const newCard = insertTestCard(db);
+    addCardToDeck(db, deck.id, newCard, 'main');
+
+    removeCardFromDeck(db, deck.id, newCard, 'main');
+
+    expect(getDeckCards(db, deck.id).find((c) => c.card_id === newCard)).toBeUndefined();
+  });
+
+  it('still deletes rows in unowned decks', () => {
+    const deck = createDeck(db, { name: 'Unowned' });
+    const cardId = insertTestCard(db);
+    addCardToDeck(db, deck.id, cardId);
+
+    removeCardFromDeck(db, deck.id, cardId, 'main');
+
+    expect(getDeckCards(db, deck.id)).toHaveLength(0);
+  });
+
+  describe('confirmDeckChanges', () => {
+    it('moves removed copies back to the collection', () => {
+      const cardId = insertTestCard(db);
+      const deck = ownedDeckWith(cardId, 3);
+
+      updateCardQuantity(db, deck.id, cardId, 'main', 1); // remove 2
+      confirmDeckChanges(db, deck.id);
+
+      const col = db.prepare('SELECT quantity FROM collection WHERE card_id = ?').get(cardId) as { quantity: number };
+      expect(col.quantity).toBe(2);
+      const cards = getDeckCards(db, deck.id);
+      expect(cards[0].quantity).toBe(1);
+      expect(cards[0].owned_quantity).toBe(1);
+    });
+
+    it('deletes fully removed cards and returns them to the collection', () => {
+      const cardId = insertTestCard(db);
+      const deck = ownedDeckWith(cardId, 2);
+
+      removeCardFromDeck(db, deck.id, cardId, 'main');
+      confirmDeckChanges(db, deck.id);
+
+      expect(getDeckCards(db, deck.id)).toHaveLength(0);
+      const col = db.prepare('SELECT quantity FROM collection WHERE card_id = ?').get(cardId) as { quantity: number };
+      expect(col.quantity).toBe(2);
+    });
+
+    it('makes added cards part of the deck and deducts them from the collection', () => {
+      const cardId = insertTestCard(db);
+      const deck = ownedDeckWith(cardId, 1);
+      const newCard = insertTestCard(db);
+      db.prepare('INSERT INTO collection (card_id, quantity) VALUES (?, ?)').run(newCard, 3);
+
+      addCardToDeck(db, deck.id, newCard, 'main', 2);
+      confirmDeckChanges(db, deck.id);
+
+      const dc = getDeckCards(db, deck.id).find((c) => c.card_id === newCard);
+      expect(dc?.quantity).toBe(2);
+      expect(dc?.owned_quantity).toBe(2);
+      const col = db.prepare('SELECT quantity FROM collection WHERE card_id = ?').get(newCard) as { quantity: number };
+      expect(col.quantity).toBe(1);
+    });
+
+    it('does nothing for unowned decks', () => {
+      const deck = createDeck(db, { name: 'Unowned' });
+      const cardId = insertTestCard(db);
+      addCardToDeck(db, deck.id, cardId);
+
+      confirmDeckChanges(db, deck.id);
+
+      expect(getDeckCards(db, deck.id)).toHaveLength(1);
+      expect(db.prepare('SELECT * FROM collection').all()).toHaveLength(0);
+    });
+  });
+
+  describe('discardDeckChanges', () => {
+    it('restores removed cards and drops pending additions', () => {
+      const cardId = insertTestCard(db);
+      const deck = ownedDeckWith(cardId, 3);
+      const newCard = insertTestCard(db);
+
+      removeCardFromDeck(db, deck.id, cardId, 'main');
+      addCardToDeck(db, deck.id, newCard, 'main', 2);
+      discardDeckChanges(db, deck.id);
+
+      const cards = getDeckCards(db, deck.id);
+      expect(cards).toHaveLength(1);
+      expect(cards[0].card_id).toBe(cardId);
+      expect(cards[0].quantity).toBe(3);
+    });
+
+    it('reverts partial quantity changes', () => {
+      const cardId = insertTestCard(db);
+      const deck = ownedDeckWith(cardId, 4);
+
+      updateCardQuantity(db, deck.id, cardId, 'main', 1);
+      discardDeckChanges(db, deck.id);
+
+      expect(getDeckCards(db, deck.id)[0].quantity).toBe(4);
+    });
+
+    it('does nothing for unowned decks', () => {
+      const deck = createDeck(db, { name: 'Unowned' });
+      const cardId = insertTestCard(db);
+      addCardToDeck(db, deck.id, cardId);
+
+      discardDeckChanges(db, deck.id);
+
+      expect(getDeckCards(db, deck.id)).toHaveLength(1);
+    });
+  });
+
+  it('clears baselines and pending removals when a deck is un-owned', () => {
+    const cardId = insertTestCard(db);
+    const deck = ownedDeckWith(cardId, 2);
+    removeCardFromDeck(db, deck.id, cardId, 'main');
+
+    updateDeck(db, deck.id, { owned: false });
+
+    expect(getDeckCards(db, deck.id)).toHaveLength(0);
   });
 });

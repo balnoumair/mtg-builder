@@ -123,6 +123,19 @@ function runMigrations(db: BetterSqlite3.Database): void {
   if (!cardCols.some(c => c.name === 'block_name')) {
     db.exec("ALTER TABLE cards ADD COLUMN block_name TEXT");
   }
+
+  const deckCardCols = db.prepare("PRAGMA table_info(deck_cards)").all() as { name: string }[];
+  if (!deckCardCols.some(c => c.name === 'owned_quantity')) {
+    db.exec("ALTER TABLE deck_cards ADD COLUMN owned_quantity INTEGER");
+    // Existing owned decks are already confirmed as-is.
+    db.exec(`
+      UPDATE deck_cards SET owned_quantity = quantity
+      WHERE deck_id IN (SELECT id FROM decks WHERE owned = 1)
+    `);
+  }
+  if (!deckCardCols.some(c => c.name === 'ignore_copy_limit')) {
+    db.exec("ALTER TABLE deck_cards ADD COLUMN ignore_copy_limit INTEGER DEFAULT 0");
+  }
 }
 
 export function createIndexes(db: BetterSqlite3.Database): void {

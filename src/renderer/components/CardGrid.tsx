@@ -1,6 +1,7 @@
 import type { Card } from '../../shared/types';
 import ManaSymbols, { ColorIdentity } from './ManaSymbols';
 import { getManaMeta } from '../lib/mana';
+import { getMaxCopies, PLAYSET_SIZE } from '../../shared/deckLimits';
 
 interface Props {
   cards: Card[];
@@ -9,6 +10,9 @@ interface Props {
   onCardDoubleClick?: (card: Card) => void;
   onViewCard?: (card: Card) => void;
   onAddToDeck?: (card: Card) => void;
+  onAddPlayset?: (card: Card) => void;
+  /** Card names exempted from the copy limit in the target deck. */
+  unlimitedNames?: Set<string>;
   ownedQuantities?: Record<string, number>;
   deckQuantities?: Record<string, number>;
   selectedId?: string | null;
@@ -29,6 +33,8 @@ export default function CardGrid({
   onCardDoubleClick,
   onViewCard,
   onAddToDeck,
+  onAddPlayset,
+  unlimitedNames,
   ownedQuantities,
   deckQuantities,
   selectedId,
@@ -80,6 +86,8 @@ export default function CardGrid({
         {cards.map((card, i) => {
           const qty = ownedQuantities?.[card.id] ?? 0;
           const inDeck = deckQuantities?.[card.id] ?? 0;
+          const max = onAddPlayset && !unlimitedNames?.has(card.name) ? getMaxCopies(card) : null;
+          const atMax = max !== null && inDeck >= max;
           const sel = selectedId === card.id;
           return (
             <div
@@ -149,6 +157,26 @@ export default function CardGrid({
                 {card.type_line}
               </span>
               <ManaSymbols cost={card.mana_cost} size={11} />
+              {onAddPlayset && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!atMax) onAddPlayset(card);
+                  }}
+                  disabled={atMax}
+                  style={{
+                    ...detailBtnStyle,
+                    width: 28,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    cursor: atMax ? 'default' : 'pointer',
+                    opacity: atMax ? 0.4 : 1,
+                  }}
+                  title={atMax ? `Copy limit reached (${max})` : `Add playset (${PLAYSET_SIZE} copies)`}
+                >
+                  +{PLAYSET_SIZE}
+                </button>
+              )}
               {onViewCard ? (
                 <button
                   onClick={(e) => {
@@ -215,25 +243,31 @@ export default function CardGrid({
         gap: 14,
       }}
     >
-      {cards.map((card) => (
-        <CardTile
-          key={card.id}
-          card={card}
-          owned={ownedQuantities?.[card.id] ?? 0}
-          inDeck={deckQuantities?.[card.id] ?? 0}
-          selected={selectedId === card.id}
-          onClick={() => onCardClick(card)}
-          onDoubleClick={
-            onViewCard
-              ? () => onViewCard(card)
-              : onCardDoubleClick
-                ? () => onCardDoubleClick(card)
-                : undefined
-          }
-          onView={onViewCard ? () => onViewCard(card) : undefined}
-          onAdd={!onViewCard && onAddToDeck ? () => onAddToDeck(card) : undefined}
-        />
-      ))}
+      {cards.map((card) => {
+        const inDeck = deckQuantities?.[card.id] ?? 0;
+        const max = onAddPlayset && !unlimitedNames?.has(card.name) ? getMaxCopies(card) : null;
+        const atMax = max !== null && inDeck >= max;
+        return (
+          <CardTile
+            key={card.id}
+            card={card}
+            owned={ownedQuantities?.[card.id] ?? 0}
+            inDeck={inDeck}
+            selected={selectedId === card.id}
+            onClick={() => onCardClick(card)}
+            onDoubleClick={
+              onViewCard
+                ? () => onViewCard(card)
+                : onCardDoubleClick
+                  ? () => onCardDoubleClick(card)
+                  : undefined
+            }
+            onView={onViewCard ? () => onViewCard(card) : undefined}
+            onAdd={!onViewCard && onAddToDeck ? () => onAddToDeck(card) : undefined}
+            onAddPlayset={onAddPlayset && !atMax ? () => onAddPlayset(card) : undefined}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -247,9 +281,10 @@ interface TileProps {
   onDoubleClick?: () => void;
   onView?: () => void;
   onAdd?: () => void;
+  onAddPlayset?: () => void;
 }
 
-function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onView, onAdd }: TileProps) {
+function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onView, onAdd, onAddPlayset }: TileProps) {
   const hasImage = !!card.image_uri_normal;
   const tint = card.color_identity?.[0] ? getManaMeta(card.color_identity[0]) : null;
   const rarityShort = RARITY_SHORT[card.rarity];
@@ -378,6 +413,35 @@ function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onVie
             title="Add to deck"
           >
             +
+          </button>
+        )}
+        {onAddPlayset && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddPlayset();
+            }}
+            className="opacity-0 group-hover:opacity-100"
+            style={{
+              position: 'absolute',
+              bottom: 8,
+              left: 8,
+              height: 28,
+              padding: '0 9px',
+              borderRadius: 14,
+              background: 'rgba(0,0,0,0.65)',
+              border: '1px solid rgba(255,255,255,0.18)',
+              color: 'var(--text)',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              lineHeight: 1,
+              transition: 'opacity 120ms',
+              backdropFilter: 'blur(6px)',
+            }}
+            title={`Add playset (${PLAYSET_SIZE} copies)`}
+          >
+            +{PLAYSET_SIZE}
           </button>
         )}
       </div>

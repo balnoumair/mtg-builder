@@ -50,6 +50,10 @@ export interface DeckCard {
   deck_id: number;
   card_id: string;
   quantity: number;
+  /** Confirmed quantity for owned decks; null for unowned decks and pending additions. */
+  owned_quantity: number | null;
+  /** When true, the copy limit is not enforced for this card in this deck. */
+  ignore_copy_limit: boolean;
   board: 'main' | 'sideboard';
   card?: Card;
 }
@@ -121,10 +125,13 @@ export interface ElectronAPI {
   updateDeck(id: number, updates: Partial<Deck>): Promise<Deck>;
   deleteDeck(id: number): Promise<void>;
   getDeckCards(deckId: number): Promise<DeckCard[]>;
-  addCardToDeck(deckId: number, cardId: string, board?: string): Promise<void>;
+  addCardToDeck(deckId: number, cardId: string, board?: string, count?: number): Promise<void>;
   updateCardQuantity(deckId: number, cardId: string, board: string, quantity: number): Promise<void>;
   removeCardFromDeck(deckId: number, cardId: string, board: string): Promise<void>;
+  setDeckCardIgnoreLimit(deckId: number, cardId: string, ignore: boolean): Promise<void>;
   claimDeckFromCollection(deckId: number): Promise<void>;
+  confirmDeckChanges(deckId: number): Promise<void>;
+  discardDeckChanges(deckId: number): Promise<void>;
   getCollection(filters: CardFilters): Promise<{ cards: CollectionCard[]; total: number }>;
   getCollectionQuantities(cardIds: string[]): Promise<Record<string, number>>;
   addToCollection(cardId: string, quantity?: number): Promise<void>;

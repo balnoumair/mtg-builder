@@ -55,6 +55,8 @@ export function createTestDb(): Database.Database {
       deck_id INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
       card_id TEXT NOT NULL REFERENCES cards(id),
       quantity INTEGER DEFAULT 1,
+      owned_quantity INTEGER,
+      ignore_copy_limit INTEGER DEFAULT 0,
       board TEXT DEFAULT 'main',
       UNIQUE(deck_id, card_id, board)
     );

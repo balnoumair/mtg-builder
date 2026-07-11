@@ -46,9 +46,9 @@ export function useDeckCards(deckId: number | null) {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const addCard = useCallback(async (cardId: string, board = 'main') => {
+  const addCard = useCallback(async (cardId: string, board = 'main', count = 1) => {
     if (!deckId) return;
-    await window.electronAPI.addCardToDeck(deckId, cardId, board);
+    await window.electronAPI.addCardToDeck(deckId, cardId, board, count);
     await refresh();
   }, [deckId, refresh]);
 
@@ -64,5 +64,23 @@ export function useDeckCards(deckId: number | null) {
     await refresh();
   }, [deckId, refresh]);
 
-  return { cards, loading, addCard, updateQuantity, removeCard, refresh };
+  const setIgnoreLimit = useCallback(async (cardId: string, ignore: boolean) => {
+    if (!deckId) return;
+    await window.electronAPI.setDeckCardIgnoreLimit(deckId, cardId, ignore);
+    await refresh();
+  }, [deckId, refresh]);
+
+  const confirmChanges = useCallback(async () => {
+    if (!deckId) return;
+    await window.electronAPI.confirmDeckChanges(deckId);
+    await refresh();
+  }, [deckId, refresh]);
+
+  const discardChanges = useCallback(async () => {
+    if (!deckId) return;
+    await window.electronAPI.discardDeckChanges(deckId);
+    await refresh();
+  }, [deckId, refresh]);
+
+  return { cards, loading, addCard, updateQuantity, removeCard, setIgnoreLimit, confirmChanges, discardChanges, refresh };
 }
