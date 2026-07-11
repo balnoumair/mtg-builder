@@ -6,6 +6,7 @@ import { useInfiniteScrollSentinel } from '../hooks/useInfiniteScrollSentinel';
 import { useDeckCards } from '../hooks/useDecks';
 import { useCollectionLookup, useCollectionActions } from '../hooks/useCollection';
 import { getCardTypeCategory, TYPE_ORDER, CMC_GROUP_ORDER, getCmcGroup, getManaMeta } from '../lib/mana';
+import { getMaxCopies, PLAYSET_SIZE } from '../../shared/deckLimits';
 import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
@@ -14,9 +15,16 @@ import ManaSymbols from './ManaSymbols';
 import ViewToggle from './ViewToggle';
 import ExportDeckModal from './ExportDeckModal';
 import ClaimDeckModal from './ClaimDeckModal';
+import DeckChangesModal, { type PendingChangeEntry } from './DeckChangesModal';
 import SplitPane, { PanelCollapseButton } from './SplitPane';
 import InfiniteScrollFooter from './InfiniteScrollFooter';
-import { COST_PILL, TYPE_PILL, GroupPillHeader, formatCostGroupLabel } from './PillLabel';
+import { COST_PILL, TYPE_PILL, GroupPillHeader, formatCostGroupLabel, type PillStyle } from './PillLabel';
+
+const REMOVED_PILL: PillStyle = {
+  color: '#d98a8a',
+  border: 'rgba(217, 138, 138, 0.35)',
+  background: 'rgba(217, 138, 138, 0.1)',
+};
 
 interface Props {
   deckId: number;
@@ -29,7 +37,8 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
   const deck = decks.find((d) => d.id === deckId);
   const { filters, updateFilters, cards: searchCards, total: searchTotal, loading, loadingMore, hasMore, loadMore } =
     useDeckEditorCards(deckId);
-  const { cards: deckCards, addCard, updateQuantity, removeCard } = useDeckCards(deckId);
+  const { cards: deckCards, addCard, updateQuantity, removeCard, setIgnoreLimit, confirmChanges, discardChanges } =
+    useDeckCards(deckId);
   const { card: detailCard, printings, open: detailOpen, showCard, close: closeDetail } = useCardDetail();
   const [activeBoard, setActiveBoard] = useState<'main' | 'sideboard'>('main');
   const [deckView, setDeckView] = useState<'list' | 'visual'>('visual');
@@ -39,6 +48,7 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
   const [colVersion, setColVersion] = useState(0);
   const [showExport, setShowExport] = useState(false);
   const [showClaim, setShowClaim] = useState(false);
+  const [showChanges, setShowChanges] = useState(false);
 
   const searchScrollRef = useRef<HTMLDivElement>(null);
 
@@ -68,6 +78,15 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
     [addCard, activeBoard, onDeckCardsChanged],
   );
 
+  const handleAddPlayset = useCallback(
+    async (c: Card) => {
+      setSelectedCardId(c.id);
+      await addCard(c.id, activeBoard, PLAYSET_SIZE);
+      onDeckCardsChanged();
+    },
+    [addCard, activeBoard, onDeckCardsChanged],
+  );
+
   const handleSearchCardClick = useCallback(
     (c: Card) => {
       setSelectedCardId(c.id);
@@ -92,6 +111,16 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
     onDeckCardsChanged();
   };
 
+  const handleRestore = async (dc: DeckCard) => {
+    await updateQuantity(dc.card_id, dc.board, dc.owned_quantity ?? 0);
+    onDeckCardsChanged();
+  };
+
+  const handleRemoveAll = async (dc: DeckCard) => {
+    await removeCard(dc.card_id, dc.board);
+    onDeckCardsChanged();
+  };
+
   const handleClaimDeck = async () => {
     await window.electronAPI.claimDeckFromCollection(deckId);
     onUpdateDeck(deckId, { owned: true });
@@ -99,7 +128,102 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
     setShowClaim(false);
   };
 
-  const boardCards = useMemo(() => deckCards.filter((c) => c.board === activeBoard), [deckCards, activeBoard]);
+  const isOwned = !!deck?.owned;
+
+  // Copies per card name across both boards, for enforcing the copy limit in the UI.
+  const nameTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const dc of deckCards) {
+      if (!dc.card) continue;
+      totals[dc.card.name] = (totals[dc.card.name] ?? 0) + dc.quantity;
+    }
+    return totals;
+  }, [deckCards]);
+
+  // Card names the user exempted from the copy limit in this deck.
+  const unlimitedNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const dc of deckCards) {
+      if (dc.ignore_copy_limit && dc.card) names.add(dc.card.name);
+    }
+    return names;
+  }, [deckCards]);
+
+  const canAddMore = useCallback(
+    (card: Card | undefined) => {
+      if (!card) return false;
+      if (unlimitedNames.has(card.name)) return true;
+      const max = getMaxCopies(card);
+      return max === null || (nameTotals[card.name] ?? 0) < max;
+    },
+    [nameTotals, unlimitedNames],
+  );
+
+  const handleToggleIgnoreLimit = useCallback(
+    async (dc: DeckCard) => {
+      await setIgnoreLimit(dc.card_id, !dc.ignore_copy_limit);
+    },
+    [setIgnoreLimit],
+  );
+
+  // Pending edits on an owned deck: quantities that differ from the confirmed baseline.
+  const pending = useMemo(() => {
+    if (!isOwned) return { additions: [] as PendingChangeEntry[], removals: [] as PendingChangeEntry[] };
+    const additions: Record<string, PendingChangeEntry> = {};
+    const removals: Record<string, PendingChangeEntry> = {};
+    for (const dc of deckCards) {
+      if (!dc.card) continue;
+      const baseline = dc.owned_quantity ?? 0;
+      const delta = dc.quantity - baseline;
+      if (delta === 0) continue;
+      const bucket = delta > 0 ? additions : removals;
+      if (!bucket[dc.card_id]) {
+        bucket[dc.card_id] = {
+          cardId: dc.card_id,
+          name: dc.card.name,
+          manaCost: dc.card.mana_cost,
+          count: 0,
+          collectionQty: deckOwnedQtys[dc.card_id] ?? 0,
+        };
+      }
+      bucket[dc.card_id].count += Math.abs(delta);
+    }
+    const byName = (a: PendingChangeEntry, b: PendingChangeEntry) => a.name.localeCompare(b.name);
+    return {
+      additions: Object.values(additions).sort(byName),
+      removals: Object.values(removals).sort(byName),
+    };
+  }, [deckCards, isOwned, deckOwnedQtys]);
+
+  const addedCount = pending.additions.reduce((s, e) => s + e.count, 0);
+  const removedCount = pending.removals.reduce((s, e) => s + e.count, 0);
+  const hasPending = addedCount > 0 || removedCount > 0;
+
+  const handleConfirmChanges = async () => {
+    await confirmChanges();
+    onDeckCardsChanged();
+    refreshCol();
+    setShowChanges(false);
+  };
+
+  const handleDiscardChanges = async () => {
+    await discardChanges();
+    onDeckCardsChanged();
+  };
+
+  const boardCards = useMemo(
+    () => deckCards.filter((c) => c.board === activeBoard && c.quantity > 0),
+    [deckCards, activeBoard],
+  );
+
+  // Pending removals on the active board, shown in a separate "Removed" section.
+  const removedRows = useMemo(
+    () =>
+      isOwned
+        ? deckCards.filter((c) => c.board === activeBoard && c.quantity < (c.owned_quantity ?? 0))
+        : [],
+    [deckCards, activeBoard, isOwned],
+  );
 
   const groupedCards = useMemo(() => {
     const groups: Record<string, DeckCard[]> = {};
@@ -235,6 +359,8 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                   ownedQuantities={searchOwnedQtys}
                   onCardClick={handleSearchCardAdd}
                   onViewCard={handleSearchCardClick}
+                  onAddPlayset={handleAddPlayset}
+                  unlimitedNames={unlimitedNames}
                 />
                 <div ref={searchSentinelRef} style={{ height: 1 }} />
                 <InfiniteScrollFooter
@@ -354,6 +480,47 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
           </div>
 
           <DeckStats cards={deckCards} board={activeBoard} />
+
+          {hasPending && (
+            <div
+              style={{
+                marginTop: 10,
+                padding: '7px 10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background: 'var(--accent-soft)',
+                border: '1px solid var(--accent-line)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: 11,
+                color: 'var(--text-dim)',
+              }}
+            >
+              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                {[
+                  addedCount > 0 ? `${addedCount} added` : null,
+                  removedCount > 0 ? `${removedCount} removed` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}{' '}
+                <span style={{ color: 'var(--text-mute)' }}>unconfirmed</span>
+              </span>
+              <button onClick={handleDiscardChanges} style={chipBtn} title="Revert to the last confirmed deck">
+                Discard
+              </button>
+              <button
+                onClick={() => setShowChanges(true)}
+                style={{
+                  ...chipBtn,
+                  background: 'var(--accent-soft)',
+                  border: '1px solid var(--accent-line)',
+                  color: 'var(--accent)',
+                }}
+              >
+                Confirm…
+              </button>
+            </div>
+          )}
         </div>
 
         <div
@@ -367,7 +534,7 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
             padding: deckView === 'visual' ? 'var(--pad-tight) var(--pad) var(--pad)' : '6px 0 12px',
           }}
         >
-          {groupedCards.length === 0 ? (
+          {groupedCards.length === 0 && removedRows.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '32px 16px' }}>
               <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>No cards yet</p>
               <p style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 6 }}>
@@ -375,7 +542,8 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
               </p>
             </div>
           ) : (
-            groupedCards.map(({ key, cards, count }) => (
+            <>
+            {groupedCards.map(({ key, cards, count }) => (
               <div key={key} style={{ marginTop: 8 }}>
                 <div style={{ padding: deckView === 'visual' ? '4px 0 8px' : '4px var(--pad)' }}>
                   <GroupPillHeader
@@ -398,6 +566,8 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                         key={dc.id}
                         deckCard={dc}
                         selected={selectedCardId === dc.card_id}
+                        newCount={isOwned ? dc.quantity - (dc.owned_quantity ?? 0) : 0}
+                        canAdd={canAddMore(dc.card)}
                         onClick={() => {
                           if (!dc.card) return;
                           setSelectedCardId(dc.card_id);
@@ -405,6 +575,12 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                         }}
                         onAdd={() => handleQuantityChange(dc.card_id, dc.board, 1)}
                         onRemove={() => handleQuantityChange(dc.card_id, dc.board, -1)}
+                        onRemoveAll={() => handleRemoveAll(dc)}
+                        onToggleLimit={
+                          dc.card && getMaxCopies(dc.card) !== null
+                            ? () => handleToggleIgnoreLimit(dc)
+                            : undefined
+                        }
                       />
                     ))}
                   </div>
@@ -413,6 +589,8 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                     const sel = selectedCardId === dc.card_id;
                     const owned = deckOwnedQtys[dc.card_id] ?? 0;
                     const need = dc.quantity - owned;
+                    const newCount = isOwned ? dc.quantity - (dc.owned_quantity ?? 0) : 0;
+                    const canAdd = canAddMore(dc.card);
                     return (
                       <div
                         key={dc.id}
@@ -461,6 +639,32 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                         >
                           {dc.card?.name}
                         </span>
+                        {dc.ignore_copy_limit && (
+                          <span
+                            title="Copy limit ignored for this card"
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 10,
+                              color: 'var(--accent)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            ∞
+                          </span>
+                        )}
+                        {newCount > 0 && (
+                          <span
+                            title={`${newCount} added since last confirm — not yet owned`}
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 9,
+                              color: '#c9a86c',
+                              flexShrink: 0,
+                            }}
+                          >
+                            +{newCount} new
+                          </span>
+                        )}
                         <span
                           style={{
                             width: 48,
@@ -508,7 +712,7 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                         <div
                           className="opacity-0 group-hover:opacity-100"
                           style={{
-                            width: 40,
+                            width: 82,
                             display: 'flex',
                             gap: 2,
                             flexShrink: 0,
@@ -516,6 +720,31 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                             transition: 'opacity 120ms',
                           }}
                         >
+                          {dc.card && getMaxCopies(dc.card) !== null && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleIgnoreLimit(dc);
+                              }}
+                              style={
+                                dc.ignore_copy_limit
+                                  ? {
+                                      ...miniBtn,
+                                      background: 'var(--accent-soft)',
+                                      border: '1px solid var(--accent-line)',
+                                      color: 'var(--accent)',
+                                    }
+                                  : miniBtn
+                              }
+                              title={
+                                dc.ignore_copy_limit
+                                  ? 'Copy limit ignored for this card — click to enforce it again'
+                                  : 'Ignore the copy limit for this card in this deck'
+                              }
+                            >
+                              ∞
+                            </button>
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -529,12 +758,23 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleQuantityChange(dc.card_id, dc.board, 1);
+                              if (canAdd) handleQuantityChange(dc.card_id, dc.board, 1);
                             }}
-                            style={miniBtn}
-                            title="Add one"
+                            disabled={!canAdd}
+                            style={{ ...miniBtn, opacity: canAdd ? 1 : 0.35, cursor: canAdd ? 'pointer' : 'default' }}
+                            title={canAdd ? 'Add one' : 'Copy limit reached'}
                           >
                             +
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveAll(dc);
+                            }}
+                            style={{ ...miniBtn, color: 'var(--danger)' }}
+                            title={`Remove all ${dc.quantity} copies`}
+                          >
+                            ✕
                           </button>
                         </div>
                       </div>
@@ -542,7 +782,80 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
                   })
                 )}
               </div>
-            ))
+            ))}
+            {removedRows.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ padding: deckView === 'visual' ? '4px 0 8px' : '4px var(--pad)' }}>
+                  <GroupPillHeader
+                    label="Removed"
+                    style={REMOVED_PILL}
+                    count={removedRows.reduce((s, dc) => s + ((dc.owned_quantity ?? 0) - dc.quantity), 0)}
+                  />
+                </div>
+                {removedRows.map((dc) => {
+                  const removedQty = (dc.owned_quantity ?? 0) - dc.quantity;
+                  return (
+                    <div
+                      key={dc.id}
+                      className="group"
+                      onClick={() => {
+                        if (!dc.card) return;
+                        setSelectedCardId(dc.card_id);
+                        showCard(dc.card);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: deckView === 'visual' ? 0 : '0 var(--pad)',
+                        height: 'var(--row-h)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 22,
+                          textAlign: 'right',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 11,
+                          color: 'var(--danger)',
+                          flexShrink: 0,
+                        }}
+                      >
+                        −{removedQty}
+                      </span>
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: 12.5,
+                          color: 'var(--text-dim)',
+                          textDecoration: 'line-through',
+                          overflow: 'hidden',
+                          whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {dc.card?.name}
+                      </span>
+                      <ManaSymbols cost={dc.card?.mana_cost || ''} size={11} />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRestore(dc);
+                        }}
+                        className="opacity-0 group-hover:opacity-100"
+                        style={{ ...miniBtn, width: 'auto', padding: '0 6px', transition: 'opacity 120ms' }}
+                        title="Put back in the deck"
+                      >
+                        restore
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            </>
           )}
         </div>
             </div>
@@ -565,7 +878,7 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
       {showExport && (
         <ExportDeckModal
           deckName={deck?.name || 'Deck'}
-          deckCards={deckCards}
+          deckCards={deckCards.filter((c) => c.quantity > 0)}
           onClose={() => setShowExport(false)}
         />
       )}
@@ -579,6 +892,16 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
           onClose={() => setShowClaim(false)}
         />
       )}
+
+      {showChanges && (
+        <DeckChangesModal
+          deckName={deck?.name || 'Deck'}
+          additions={pending.additions}
+          removals={pending.removals}
+          onConfirm={handleConfirmChanges}
+          onClose={() => setShowChanges(false)}
+        />
+      )}
     </div>
   );
 }
@@ -586,12 +909,16 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
 interface TileProps {
   deckCard: DeckCard;
   selected: boolean;
+  newCount: number;
+  canAdd: boolean;
   onClick: () => void;
   onAdd: () => void;
   onRemove: () => void;
+  onRemoveAll: () => void;
+  onToggleLimit?: () => void;
 }
 
-function DeckCardTile({ deckCard, selected, onClick, onAdd, onRemove }: TileProps) {
+function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, onRemove, onRemoveAll, onToggleLimit }: TileProps) {
   const [hover, setHover] = useState(false);
   const card = deckCard.card;
   if (!card) return null;
@@ -683,7 +1010,29 @@ function DeckCardTile({ deckCard, selected, onClick, onAdd, onRemove }: TileProp
         }}
       >
         ×{deckCard.quantity}
+        {deckCard.ignore_copy_limit ? ' ∞' : ''}
       </span>
+
+      {newCount > 0 && (
+        <span
+          title={`${newCount} added since last confirm — not yet owned`}
+          style={{
+            position: 'absolute',
+            top: 5,
+            right: 6,
+            padding: '1px 5px',
+            fontSize: 9,
+            fontFamily: 'var(--font-mono)',
+            background: 'rgba(0,0,0,0.65)',
+            color: '#c9a86c',
+            border: '1px solid rgba(201, 168, 108, 0.35)',
+            borderRadius: 3,
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          +{newCount} new
+        </span>
+      )}
 
       {hover && (
         <div
@@ -711,12 +1060,44 @@ function DeckCardTile({ deckCard, selected, onClick, onAdd, onRemove }: TileProp
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onAdd();
+              if (canAdd) onAdd();
             }}
-            style={hoverBtn}
-            title="Add one"
+            disabled={!canAdd}
+            style={{ ...hoverBtn, opacity: canAdd ? 1 : 0.35, cursor: canAdd ? 'pointer' : 'default' }}
+            title={canAdd ? 'Add one' : 'Copy limit reached'}
           >
             +
+          </button>
+          {onToggleLimit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleLimit();
+              }}
+              style={
+                deckCard.ignore_copy_limit
+                  ? { ...hoverBtn, border: '1px solid var(--accent-line)', color: 'var(--accent)' }
+                  : hoverBtn
+              }
+              title={
+                deckCard.ignore_copy_limit
+                  ? 'Copy limit ignored for this card — click to enforce it again'
+                  : 'Ignore the copy limit for this card in this deck'
+              }
+            >
+              ∞
+            </button>
+          )}
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemoveAll();
+            }}
+            style={{ ...hoverBtn, color: 'var(--danger)' }}
+            title={`Remove all ${deckCard.quantity} copies`}
+          >
+            ✕
           </button>
         </div>
       )}

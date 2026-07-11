@@ -4,11 +4,20 @@ import http from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import readline from 'node:readline';
+import { app } from 'electron';
 import type Database from 'better-sqlite3';
 import { createIndexes } from './database';
 import { VALID_LAYOUTS } from './queries/cards';
 
 const STANDARD_SET_TYPES = new Set(['core', 'expansion']);
+
+// Scryfall rejects requests without a real User-Agent and Accept header (HTTP 400).
+// https://scryfall.com/docs/api — "Required Headers"
+const SCRYFALL_HEADERS = {
+  'User-Agent': `mtg-builder/${app.getVersion()}`,
+  Accept: 'application/json',
+};
+
 
 interface ScryCard {
   id: string;
@@ -56,6 +65,12 @@ interface ScryCard {
   released_at?: string;
   artist?: string;
   booster?: boolean;
+  promo?: boolean;
+  variation?: boolean;
+  full_art?: boolean;
+  border_color?: string;
+  frame_effects?: string[];
+  promo_types?: string[];
 }
 
 interface BulkDataEntry {
@@ -96,7 +111,7 @@ async function fetchSetMetadata(): Promise<SetMetadataMap> {
   const map: SetMetadataMap = new Map();
   let url: string | undefined = 'https://api.scryfall.com/sets';
   while (url) {
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: SCRYFALL_HEADERS });
     if (!res.ok) throw new Error(`Scryfall sets API error: ${res.status}`);
     const body = (await res.json()) as SetsResponse;
     for (const s of body.data) {
@@ -130,7 +145,7 @@ function syncSetsTable(db: Database.Database, setMetadata: SetMetadataMap): void
 type ProgressCallback = (current: number, total: number, phase: 'downloading' | 'reading' | 'indexing' | 'done') => void;
 
 async function fetchBulkDataUrl(): Promise<string> {
-  const res = await fetch('https://api.scryfall.com/bulk-data');
+  const res = await fetch('https://api.scryfall.com/bulk-data', { headers: SCRYFALL_HEADERS });
   if (!res.ok) throw new Error(`Scryfall API error: ${res.status}`);
   const body = (await res.json()) as BulkDataResponse;
   const entry = body.data.find((d) => d.type === 'default_cards');
@@ -145,7 +160,7 @@ function downloadFile(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const proto = url.startsWith('https') ? https : http;
-    proto.get(url, (res) => {
+    proto.get(url, { headers: { ...SCRYFALL_HEADERS, Accept: '*/*' } }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         downloadFile(res.headers.location, dest, onProgress).then(resolve, reject);
         return;
@@ -219,7 +234,9 @@ function importCardsFromFile(
       if (value.lang !== 'en') return;
       if (!VALID_LAYOUTS.has(value.layout)) return;
       if (!value.set_type || !STANDARD_SET_TYPES.has(value.set_type)) return;
-      if (value.booster === false) return;
+      // Prints with any promo_types (promos, starter extras, variant foils, …)
+      // are excluded; plain prints have none.
+      if (value.promo_types && value.promo_types.length > 0) return;
 
       const faces = value.card_faces;
       const frontFace = faces?.[0];
@@ -320,10 +337,12 @@ export async function syncCards(
     });
 
     // 3. Back up deck_cards and cover_card_id before wiping cards
-    const deckCards = db.prepare('SELECT deck_id, card_id, quantity, board FROM deck_cards').all() as Array<{
+    const deckCards = db.prepare('SELECT deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, board FROM deck_cards').all() as Array<{
       deck_id: number;
       card_id: string;
       quantity: number;
+      owned_quantity: number | null;
+      ignore_copy_limit: number;
       board: string;
     }>;
     const coverCards = db.prepare('SELECT id, cover_card_id FROM decks WHERE cover_card_id IS NOT NULL').all() as Array<{
@@ -357,8 +376,8 @@ export async function syncCards(
 
     // 8. Restore deck_cards (only for cards that exist in the new data)
     const restoreDeckCard = db.prepare(`
-      INSERT OR IGNORE INTO deck_cards (deck_id, card_id, quantity, board)
-      SELECT @deck_id, @card_id, @quantity, @board
+      INSERT OR IGNORE INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, board)
+      SELECT @deck_id, @card_id, @quantity, @owned_quantity, @ignore_copy_limit, @board
       WHERE EXISTS (SELECT 1 FROM cards WHERE id = @card_id)
     `);
     const restoreMany = db.transaction((rows: typeof deckCards) => {

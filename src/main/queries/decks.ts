@@ -11,6 +11,7 @@ import {
   buildSetReleaseDates,
   type SetCatalogEntry,
 } from '../../shared/setOrdering';
+import { getMaxCopies } from '../../shared/deckLimits';
 
 const COLOR_ORDER = ['W', 'U', 'B', 'R', 'G'] as const;
 
@@ -136,6 +137,16 @@ export function updateDeck(db: Database.Database, id: number, updates: Partial<D
   fields.push("updated_at = datetime('now')");
 
   db.prepare(`UPDATE decks SET ${fields.join(', ')} WHERE id = @id`).run(params);
+
+  if (updates.owned === true) {
+    db.prepare(
+      'UPDATE deck_cards SET owned_quantity = quantity WHERE deck_id = ? AND owned_quantity IS NULL'
+    ).run(id);
+  } else if (updates.owned === false) {
+    db.prepare('DELETE FROM deck_cards WHERE deck_id = ? AND quantity <= 0').run(id);
+    db.prepare('UPDATE deck_cards SET owned_quantity = NULL WHERE deck_id = ?').run(id);
+  }
+
   return rowToDeck(db.prepare('SELECT * FROM decks WHERE id = ?').get(id) as Record<string, unknown>);
 }
 
@@ -162,6 +173,8 @@ export function getDeckCards(db: Database.Database, deckId: number): DeckCard[] 
       deck_id: row.deck_id as number,
       card_id: row.card_id as string,
       quantity: row.quantity as number,
+      owned_quantity: (row.owned_quantity as number | null) ?? null,
+      ignore_copy_limit: !!(row.ignore_copy_limit as number),
       board: row.board as 'main' | 'sideboard',
       card: {
         id: row.card_id as string,
@@ -198,14 +211,89 @@ export function getDeckCards(db: Database.Database, deckId: number): DeckCard[] 
   }) as DeckCard[];
 }
 
-export function addCardToDeck(
-  db: Database.Database, deckId: number, cardId: string, board = 'main'
+/**
+ * Copies of a card name already in the deck (main + sideboard combined),
+ * optionally excluding one row so its own quantity can be replaced.
+ */
+function countCopiesOfName(
+  db: Database.Database,
+  deckId: number,
+  cardName: string,
+  exclude?: { cardId: string; board: string },
+): number {
+  const row = db.prepare(`
+    SELECT COALESCE(SUM(dc.quantity), 0) as total
+    FROM deck_cards dc
+    JOIN cards c ON c.id = dc.card_id
+    WHERE dc.deck_id = @deckId AND c.name = @cardName
+      AND NOT (dc.card_id = @excludeCardId AND dc.board = @excludeBoard)
+  `).get({
+    deckId,
+    cardName,
+    excludeCardId: exclude?.cardId ?? '',
+    excludeBoard: exclude?.board ?? '',
+  }) as { total: number };
+  return row.total;
+}
+
+function getCardLimitInfo(db: Database.Database, cardId: string) {
+  return db.prepare(
+    'SELECT name, type_line FROM cards WHERE id = ?'
+  ).get(cardId) as { name: string; type_line: string } | undefined;
+}
+
+/**
+ * Whether removals from an owned deck should be kept as quantity-0 rows
+ * (pending confirmation) instead of deleted outright.
+ */
+function isOwnedDeck(db: Database.Database, deckId: number): boolean {
+  const row = db.prepare('SELECT owned FROM decks WHERE id = ?').get(deckId) as
+    | { owned: number }
+    | undefined;
+  return !!row?.owned;
+}
+
+/**
+ * A card name is exempt from the copy limit in a deck when the user flagged
+ * any of its rows there (e.g. a Relentless Rats deck), regardless of board
+ * or printing.
+ */
+function nameIgnoresCopyLimit(db: Database.Database, deckId: number, cardName: string): boolean {
+  const row = db.prepare(`
+    SELECT 1 FROM deck_cards dc
+    JOIN cards c ON c.id = dc.card_id
+    WHERE dc.deck_id = @deckId AND c.name = @cardName AND dc.ignore_copy_limit = 1
+    LIMIT 1
+  `).get({ deckId, cardName });
+  return !!row;
+}
+
+export function setDeckCardIgnoreLimit(
+  db: Database.Database, deckId: number, cardId: string, ignore: boolean
 ): void {
+  db.prepare(
+    'UPDATE deck_cards SET ignore_copy_limit = @ignore WHERE deck_id = @deckId AND card_id = @cardId'
+  ).run({ deckId, cardId, ignore: ignore ? 1 : 0 });
+}
+
+export function addCardToDeck(
+  db: Database.Database, deckId: number, cardId: string, board = 'main', count = 1
+): void {
+  const card = getCardLimitInfo(db, cardId);
+  if (!card || count <= 0) return;
+
+  const max = nameIgnoresCopyLimit(db, deckId, card.name) ? null : getMaxCopies(card);
+  if (max !== null) {
+    const current = countCopiesOfName(db, deckId, card.name);
+    count = Math.min(count, max - current);
+    if (count <= 0) return;
+  }
+
   db.prepare(`
     INSERT INTO deck_cards (deck_id, card_id, quantity, board)
-    VALUES (@deckId, @cardId, 1, @board)
-    ON CONFLICT(deck_id, card_id, board) DO UPDATE SET quantity = quantity + 1
-  `).run({ deckId, cardId, board });
+    VALUES (@deckId, @cardId, @count, @board)
+    ON CONFLICT(deck_id, card_id, board) DO UPDATE SET quantity = quantity + @count
+  `).run({ deckId, cardId, board, count });
 
   db.prepare("UPDATE decks SET updated_at = datetime('now') WHERE id = ?").run(deckId);
 }
@@ -213,24 +301,42 @@ export function addCardToDeck(
 export function updateCardQuantity(
   db: Database.Database, deckId: number, cardId: string, board: string, quantity: number
 ): void {
-  if (quantity <= 0) {
-    db.prepare(
-      'DELETE FROM deck_cards WHERE deck_id = @deckId AND card_id = @cardId AND board = @board'
-    ).run({ deckId, cardId, board });
-  } else {
-    db.prepare(
-      'UPDATE deck_cards SET quantity = @quantity WHERE deck_id = @deckId AND card_id = @cardId AND board = @board'
-    ).run({ deckId, cardId, board, quantity });
+  if (quantity > 0) {
+    const card = getCardLimitInfo(db, cardId);
+    const max = card && !nameIgnoresCopyLimit(db, deckId, card.name) ? getMaxCopies(card) : null;
+    if (card && max !== null) {
+      const others = countCopiesOfName(db, deckId, card.name, { cardId, board });
+      quantity = Math.min(quantity, Math.max(0, max - others));
+    }
   }
+
+  if (quantity <= 0) {
+    removeCardFromDeck(db, deckId, cardId, board);
+    return;
+  }
+  db.prepare(
+    'UPDATE deck_cards SET quantity = @quantity WHERE deck_id = @deckId AND card_id = @cardId AND board = @board'
+  ).run({ deckId, cardId, board, quantity });
   db.prepare("UPDATE decks SET updated_at = datetime('now') WHERE id = ?").run(deckId);
 }
 
 export function removeCardFromDeck(
   db: Database.Database, deckId: number, cardId: string, board: string
 ): void {
-  db.prepare(
-    'DELETE FROM deck_cards WHERE deck_id = @deckId AND card_id = @cardId AND board = @board'
-  ).run({ deckId, cardId, board });
+  // In an owned deck, confirmed cards linger at quantity 0 (a pending
+  // removal) so the change can be confirmed or discarded later.
+  if (isOwnedDeck(db, deckId)) {
+    db.prepare(`
+      UPDATE deck_cards SET quantity = 0
+      WHERE deck_id = @deckId AND card_id = @cardId AND board = @board
+        AND COALESCE(owned_quantity, 0) > 0
+    `).run({ deckId, cardId, board });
+  }
+  db.prepare(`
+    DELETE FROM deck_cards
+    WHERE deck_id = @deckId AND card_id = @cardId AND board = @board
+      AND COALESCE(owned_quantity, 0) = 0 AND quantity != 0
+  `).run({ deckId, cardId, board });
   db.prepare("UPDATE decks SET updated_at = datetime('now') WHERE id = ?").run(deckId);
 }
 
@@ -239,10 +345,34 @@ export function removeCardFromDeck(
  * For each card in the deck, reduces the collection quantity by the deck quantity.
  * If collection quantity drops to 0 or below, removes from collection.
  */
+function deductFromCollection(db: Database.Database, cardId: string, count: number): void {
+  const colRow = db.prepare(
+    'SELECT quantity FROM collection WHERE card_id = ?'
+  ).get(cardId) as { quantity: number } | undefined;
+
+  if (!colRow) return; // Card not in collection, skip
+
+  const remaining = colRow.quantity - count;
+  if (remaining <= 0) {
+    db.prepare('DELETE FROM collection WHERE card_id = ?').run(cardId);
+  } else {
+    db.prepare('UPDATE collection SET quantity = ? WHERE card_id = ?').run(remaining, cardId);
+  }
+}
+
+function addToCollection(db: Database.Database, cardId: string, count: number): void {
+  db.prepare(`
+    INSERT INTO collection (card_id, quantity)
+    VALUES (@cardId, @count)
+    ON CONFLICT(card_id) DO UPDATE SET quantity = quantity + @count
+  `).run({ cardId, count });
+}
+
 export function claimDeckFromCollection(db: Database.Database, deckId: number): void {
   const txn = db.transaction(() => {
-    // Mark deck as owned
+    // Mark deck as owned; current quantities become the confirmed baseline
     db.prepare("UPDATE decks SET owned = 1, updated_at = datetime('now') WHERE id = ?").run(deckId);
+    db.prepare('UPDATE deck_cards SET owned_quantity = quantity WHERE deck_id = ?').run(deckId);
 
     // Get all cards in this deck
     const deckCards = db.prepare(
@@ -250,20 +380,58 @@ export function claimDeckFromCollection(db: Database.Database, deckId: number): 
     ).all(deckId) as { card_id: string; total_qty: number }[];
 
     for (const dc of deckCards) {
-      // Get current collection quantity
-      const colRow = db.prepare(
-        'SELECT quantity FROM collection WHERE card_id = ?'
-      ).get(dc.card_id) as { quantity: number } | undefined;
-
-      if (!colRow) continue; // Card not in collection, skip
-
-      const remaining = colRow.quantity - dc.total_qty;
-      if (remaining <= 0) {
-        db.prepare('DELETE FROM collection WHERE card_id = ?').run(dc.card_id);
-      } else {
-        db.prepare('UPDATE collection SET quantity = ? WHERE card_id = ?').run(remaining, dc.card_id);
-      }
+      deductFromCollection(db, dc.card_id, dc.total_qty);
     }
+  });
+
+  txn();
+}
+
+/**
+ * Confirms pending edits to an owned deck: copies removed since the last
+ * confirmation return to the collection (you still own them, they're just no
+ * longer in the deck), copies added are deducted from the collection when
+ * present (mirroring the claim flow), and current quantities become the new
+ * confirmed baseline.
+ */
+export function confirmDeckChanges(db: Database.Database, deckId: number): void {
+  if (!isOwnedDeck(db, deckId)) return;
+
+  const txn = db.transaction(() => {
+    const diffs = db.prepare(`
+      SELECT card_id,
+             SUM(MAX(COALESCE(owned_quantity, 0) - quantity, 0)) as freed,
+             SUM(MAX(quantity - COALESCE(owned_quantity, 0), 0)) as added
+      FROM deck_cards
+      WHERE deck_id = ?
+      GROUP BY card_id
+    `).all(deckId) as { card_id: string; freed: number; added: number }[];
+
+    for (const diff of diffs) {
+      if (diff.freed > 0) addToCollection(db, diff.card_id, diff.freed);
+      if (diff.added > 0) deductFromCollection(db, diff.card_id, diff.added);
+    }
+
+    db.prepare('DELETE FROM deck_cards WHERE deck_id = ? AND quantity <= 0').run(deckId);
+    db.prepare('UPDATE deck_cards SET owned_quantity = quantity WHERE deck_id = ?').run(deckId);
+    db.prepare("UPDATE decks SET updated_at = datetime('now') WHERE id = ?").run(deckId);
+  });
+
+  txn();
+}
+
+/** Reverts pending edits to an owned deck back to the last confirmed state. */
+export function discardDeckChanges(db: Database.Database, deckId: number): void {
+  if (!isOwnedDeck(db, deckId)) return;
+
+  const txn = db.transaction(() => {
+    db.prepare(
+      'DELETE FROM deck_cards WHERE deck_id = ? AND COALESCE(owned_quantity, 0) = 0'
+    ).run(deckId);
+    db.prepare(
+      'UPDATE deck_cards SET quantity = owned_quantity WHERE deck_id = ? AND quantity != owned_quantity'
+    ).run(deckId);
+    db.prepare("UPDATE decks SET updated_at = datetime('now') WHERE id = ?").run(deckId);
   });
 
   txn();
