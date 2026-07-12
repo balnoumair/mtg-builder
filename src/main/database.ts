@@ -132,6 +132,13 @@ function runMigrations(db: BetterSqlite3.Database): void {
       UPDATE deck_cards SET owned_quantity = quantity
       WHERE deck_id IN (SELECT id FROM decks WHERE owned = 1)
     `);
+  } else {
+    // Repair any owned-deck rows that are missing a confirmed baseline.
+    db.exec(`
+      UPDATE deck_cards SET owned_quantity = quantity
+      WHERE owned_quantity IS NULL
+        AND deck_id IN (SELECT id FROM decks WHERE owned = 1)
+    `);
   }
   if (!deckCardCols.some(c => c.name === 'ignore_copy_limit')) {
     db.exec("ALTER TABLE deck_cards ADD COLUMN ignore_copy_limit INTEGER DEFAULT 0");

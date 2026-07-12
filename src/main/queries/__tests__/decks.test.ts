@@ -505,6 +505,19 @@ describe('claimDeckFromCollection', () => {
 
     expect(getDeckCards(db, deck.id)[0].owned_quantity).toBe(3);
   });
+
+  it('keeps the confirmed baseline after updateDeck marks the deck owned', () => {
+    const deck = createDeck(db, { name: 'Claim then update' });
+    const cardId = insertTestCard(db);
+    addCardToDeck(db, deck.id, cardId, 'main', 3);
+
+    claimDeckFromCollection(db, deck.id);
+    updateDeck(db, deck.id, { owned: true });
+
+    const cards = getDeckCards(db, deck.id);
+    expect(cards[0].quantity).toBe(3);
+    expect(cards[0].owned_quantity).toBe(3);
+  });
 });
 
 describe('owned deck editing', () => {
@@ -525,6 +538,25 @@ describe('owned deck editing', () => {
     expect(cards).toHaveLength(1);
     expect(cards[0].quantity).toBe(0);
     expect(cards[0].owned_quantity).toBe(2);
+  });
+
+  it('repairs a missing baseline before tracking a removal', () => {
+    const cardId = insertTestCard(db);
+    const deck = createDeck(db, { name: 'Legacy owned' });
+    addCardToDeck(db, deck.id, cardId, 'main', 2);
+    db.prepare('UPDATE decks SET owned = 1 WHERE id = ?').run(deck.id);
+    db.exec(`
+      UPDATE deck_cards SET owned_quantity = quantity
+      WHERE owned_quantity IS NULL
+        AND deck_id IN (SELECT id FROM decks WHERE owned = 1)
+    `);
+
+    removeCardFromDeck(db, deck.id, cardId, 'main');
+    confirmDeckChanges(db, deck.id);
+
+    const col = db.prepare('SELECT quantity FROM collection WHERE card_id = ?').get(cardId) as { quantity: number };
+    expect(col.quantity).toBe(2);
+    expect(getDeckCards(db, deck.id)).toHaveLength(0);
   });
 
   it('deletes pending additions outright when removed', () => {

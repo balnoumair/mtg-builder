@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 import type { ElectronAPI } from '../../shared/types';
+import { invalidateSetsCache } from '../hooks/useSets';
 
 const createElectronApiMock = (): ElectronAPI => ({
   getDbStatus: vi.fn(),
@@ -29,6 +30,7 @@ const createElectronApiMock = (): ElectronAPI => ({
 });
 
 beforeEach(() => {
+  invalidateSetsCache();
   if (typeof window !== 'undefined') {
     window.electronAPI = createElectronApiMock();
   }

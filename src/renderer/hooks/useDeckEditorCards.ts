@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react';
 import { loadDeckSetsFilter, saveDeckSetsFilter } from '../lib/deckFilterStorage';
 import { useInfiniteCardSearch } from './useInfiniteCardSearch';
 
-export function useDeckEditorCards(deckId: number) {
+export function useDeckEditorCards(deckId: number, options?: { enabled?: boolean }) {
   const deckIdRef = useRef(deckId);
   deckIdRef.current = deckId;
 
@@ -14,5 +14,6 @@ export function useDeckEditorCards(deckId: number) {
     resetKey: deckId,
     getInitialFilters: () => ({ sets: loadDeckSetsFilter(deckId) }),
     onSetsChange: persistSets,
+    enabled: options?.enabled,
   });
 }

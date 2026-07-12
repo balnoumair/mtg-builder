@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import type { Card, Deck, DeckCard } from '../../shared/types';
 import { useCardDetail } from '../hooks/useCards';
 import { useDeckEditorCards } from '../hooks/useDeckEditorCards';
@@ -29,16 +29,37 @@ const REMOVED_PILL: PillStyle = {
 interface Props {
   deckId: number;
   decks: Deck[];
-  onUpdateDeck: (id: number, updates: Partial<Deck>) => void;
+  active?: boolean;
+  onUpdateDeck: (id: number, updates: Partial<Deck>) => void | Promise<void>;
+  onRenameDeck: (id: number, name: string) => void | Promise<void>;
+  onDeleteDeck: (id: number) => void | Promise<void>;
   onDeckCardsChanged: () => void;
+  onCollectionChanged: () => void;
 }
 
-export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsChanged }: Props) {
+export default function DeckEditor({
+  deckId,
+  decks,
+  active = true,
+  onUpdateDeck,
+  onRenameDeck,
+  onDeleteDeck,
+  onDeckCardsChanged,
+  onCollectionChanged,
+}: Props) {
   const deck = decks.find((d) => d.id === deckId);
+  const {
+    cards: deckCards,
+    addCard,
+    updateQuantity,
+    removeCard,
+    setIgnoreLimit,
+    confirmChanges,
+    discardChanges,
+    refresh: refreshDeckCards,
+  } = useDeckCards(deckId);
   const { filters, updateFilters, cards: searchCards, total: searchTotal, loading, loadingMore, hasMore, loadMore } =
-    useDeckEditorCards(deckId);
-  const { cards: deckCards, addCard, updateQuantity, removeCard, setIgnoreLimit, confirmChanges, discardChanges } =
-    useDeckCards(deckId);
+    useDeckEditorCards(deckId, { enabled: active });
   const { card: detailCard, printings, open: detailOpen, showCard, close: closeDetail } = useCardDetail();
   const [activeBoard, setActiveBoard] = useState<'main' | 'sideboard'>('main');
   const [deckView, setDeckView] = useState<'list' | 'visual'>('visual');
@@ -49,6 +70,12 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
   const [showExport, setShowExport] = useState(false);
   const [showClaim, setShowClaim] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+
+  useEffect(() => {
+    setRenaming(false);
+  }, [deckId]);
 
   const searchScrollRef = useRef<HTMLDivElement>(null);
 
@@ -123,9 +150,29 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
 
   const handleClaimDeck = async () => {
     await window.electronAPI.claimDeckFromCollection(deckId);
-    onUpdateDeck(deckId, { owned: true });
+    await refreshDeckCards();
+    await onUpdateDeck(deckId, { owned: true });
     refreshCol();
+    onCollectionChanged();
     setShowClaim(false);
+  };
+
+  const startRename = () => {
+    setRenameValue(deck?.name ?? '');
+    setRenaming(true);
+  };
+
+  const commitRename = async () => {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== deck?.name) {
+      await onRenameDeck(deckId, trimmed);
+    }
+    setRenaming(false);
+  };
+
+  const handleDeleteDeck = async () => {
+    if (!deck || !confirm(`Delete "${deck.name}"?`)) return;
+    await onDeleteDeck(deckId);
   };
 
   const isOwned = !!deck?.owned;
@@ -203,6 +250,7 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
     await confirmChanges();
     onDeckCardsChanged();
     refreshCol();
+    onCollectionChanged();
     setShowChanges(false);
   };
 
@@ -401,45 +449,69 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
               minWidth: 0,
             }}
           >
-            {[
-              { k: 'main' as const, l: 'Main', n: mainCount },
-              { k: 'sideboard' as const, l: 'Sideboard', n: sideCount },
-            ].map((tab) => {
-              const active = activeBoard === tab.k;
-              return (
-                <button
-                  key={tab.k}
-                  onClick={() => setActiveBoard(tab.k)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    padding: 0,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'baseline',
-                    gap: 5,
-                    flexShrink: 0,
-                    color: active ? 'var(--text)' : 'var(--text-mute)',
-                    fontFamily: 'var(--font-ui)',
-                    fontSize: 14,
-                    fontWeight: 500,
-                    paddingBottom: 4,
-                    borderBottom: `1.5px solid ${active ? 'var(--accent-line)' : 'transparent'}`,
-                  }}
-                >
-                  {tab.l}
-                  <span
+            {renaming ? (
+              <input
+                autoFocus
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void commitRename();
+                  if (e.key === 'Escape') setRenaming(false);
+                }}
+                onBlur={() => void commitRename()}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border-input)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '4px 8px',
+                  color: 'var(--text)',
+                  fontSize: 13,
+                  outline: 'none',
+                }}
+              />
+            ) : (
+              [
+                { k: 'main' as const, l: 'Main', n: mainCount },
+                { k: 'sideboard' as const, l: 'Sideboard', n: sideCount },
+              ].map((tab) => {
+                const active = activeBoard === tab.k;
+                return (
+                  <button
+                    key={tab.k}
+                    onClick={() => setActiveBoard(tab.k)}
                     style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 11,
-                      color: active ? 'var(--text-dim)' : 'var(--text-faint)',
+                      background: 'transparent',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'baseline',
+                      gap: 5,
+                      flexShrink: 0,
+                      color: active ? 'var(--text)' : 'var(--text-mute)',
+                      fontFamily: 'var(--font-ui)',
+                      fontSize: 14,
+                      fontWeight: 500,
+                      paddingBottom: 4,
+                      borderBottom: `1.5px solid ${active ? 'var(--accent-line)' : 'transparent'}`,
                     }}
                   >
-                    {tab.n}
-                  </span>
-                </button>
-              );
-            })}
+                    {tab.l}
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 11,
+                        color: active ? 'var(--text-dim)' : 'var(--text-faint)',
+                      }}
+                    >
+                      {tab.n}
+                    </span>
+                  </button>
+                );
+              })
+            )}
             <div style={{ flex: 1, minWidth: 0 }} />
             <PanelCollapseButton direction="right" title="Hide deck panel" onClick={collapse} />
           </div>
@@ -471,6 +543,12 @@ export default function DeckEditor({ deckId, decks, onUpdateDeck, onDeckCardsCha
             />
             <button onClick={() => setShowExport(true)} style={chipBtn}>
               Export
+            </button>
+            <button onClick={startRename} style={chipBtn}>
+              Rename
+            </button>
+            <button onClick={() => void handleDeleteDeck()} style={{ ...chipBtn, color: 'var(--danger)' }}>
+              Delete
             </button>
             {!deck?.owned && (
               <button onClick={() => setShowClaim(true)} style={chipBtn}>

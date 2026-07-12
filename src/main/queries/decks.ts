@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { Deck, DeckCard } from '../../shared/types';
+import { addToCollection } from './collection';
 import {
   classifyDeckSetGroup,
   type DeckCardSetInfo,
@@ -360,14 +361,6 @@ function deductFromCollection(db: Database.Database, cardId: string, count: numb
   }
 }
 
-function addToCollection(db: Database.Database, cardId: string, count: number): void {
-  db.prepare(`
-    INSERT INTO collection (card_id, quantity)
-    VALUES (@cardId, @count)
-    ON CONFLICT(card_id) DO UPDATE SET quantity = quantity + @count
-  `).run({ cardId, count });
-}
-
 export function claimDeckFromCollection(db: Database.Database, deckId: number): void {
   const txn = db.transaction(() => {
     // Mark deck as owned; current quantities become the confirmed baseline
@@ -400,8 +393,16 @@ export function confirmDeckChanges(db: Database.Database, deckId: number): void 
   const txn = db.transaction(() => {
     const diffs = db.prepare(`
       SELECT card_id,
-             SUM(MAX(COALESCE(owned_quantity, 0) - quantity, 0)) as freed,
-             SUM(MAX(quantity - COALESCE(owned_quantity, 0), 0)) as added
+             SUM(CASE
+                   WHEN COALESCE(owned_quantity, 0) > quantity
+                   THEN COALESCE(owned_quantity, 0) - quantity
+                   ELSE 0
+                 END) as freed,
+             SUM(CASE
+                   WHEN quantity > COALESCE(owned_quantity, 0)
+                   THEN quantity - COALESCE(owned_quantity, 0)
+                   ELSE 0
+                 END) as added
       FROM deck_cards
       WHERE deck_id = ?
       GROUP BY card_id

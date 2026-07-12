@@ -12,6 +12,8 @@ interface Props {
   decks: Deck[];
   onOpenDeck: (id: number) => void;
   onCreateDeck: (name: string, format?: string) => void;
+  onDeleteDeck: (id: number) => void;
+  onRenameDeck: (id: number, name: string) => void;
   activeDeckId: number | null;
   onSync: () => void;
   cardCount?: number;
@@ -101,6 +103,8 @@ export default function Sidebar({
   decks,
   onOpenDeck,
   onCreateDeck,
+  onDeleteDeck,
+  onRenameDeck,
   activeDeckId,
   onSync,
   cardCount,
@@ -108,12 +112,22 @@ export default function Sidebar({
   const [showNewDeck, setShowNewDeck] = useState(false);
   const [newDeckName, setNewDeckName] = useState('');
   const [query, setQuery] = useState('');
+  const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState('');
 
   const handleCreate = () => {
     if (!newDeckName.trim()) return;
     onCreateDeck(newDeckName.trim());
     setNewDeckName('');
     setShowNewDeck(false);
+  };
+
+  const commitRename = (id: number) => {
+    const current = decks.find((d) => d.id === id);
+    if (renameValue.trim() && renameValue.trim() !== current?.name) {
+      onRenameDeck(id, renameValue.trim());
+    }
+    setRenamingId(null);
   };
 
   const filteredDecks = query
@@ -123,41 +137,111 @@ export default function Sidebar({
 
   const renderDeckRow = (deck: Deck) => {
     const active = activeDeckId === deck.id && view === 'deck-editor';
+    const renaming = renamingId === deck.id;
     return (
       <div
         key={deck.id}
-        onClick={() => onOpenDeck(deck.id)}
+        className="group"
+        onClick={() => !renaming && onOpenDeck(deck.id)}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
           padding: '4px 8px',
           borderRadius: 'var(--radius-sm)',
-          cursor: 'pointer',
+          cursor: renaming ? 'default' : 'pointer',
           background: active ? 'var(--bg-row-sel)' : 'transparent',
           color: active ? 'var(--text)' : 'var(--text-dim)',
           marginBottom: 1,
         }}
         onMouseEnter={(e) => {
-          if (!active) e.currentTarget.style.background = 'var(--bg-row-hov)';
+          if (!active && !renaming) e.currentTarget.style.background = 'var(--bg-row-hov)';
         }}
         onMouseLeave={(e) => {
           if (!active) e.currentTarget.style.background = 'transparent';
         }}
       >
         <DeckRowColorIdentity colors={deck.color_identity} compact />
-        <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 12,
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {deck.name}
-        </span>
+        {renaming ? (
+          <input
+            autoFocus
+            value={renameValue}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename(deck.id);
+              if (e.key === 'Escape') setRenamingId(null);
+            }}
+            onBlur={() => commitRename(deck.id)}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-input)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '2px 6px',
+              color: 'var(--text)',
+              fontSize: 12,
+              outline: 'none',
+            }}
+          />
+        ) : (
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 12,
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {deck.name}
+          </span>
+        )}
+        {!renaming && (
+          <div
+            style={{ display: 'inline-flex', gap: 4, opacity: 0, transition: 'opacity 120ms' }}
+            className="group-hover:opacity-100"
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setRenamingId(deck.id);
+                setRenameValue(deck.name);
+              }}
+              style={iconBtn}
+              title="Rename"
+            >
+              <svg width="10" height="10" viewBox="0 0 11 11" fill="none">
+                <path
+                  d="M7.5 1.5L9.5 3.5L3.5 9.5H1.5V7.5L7.5 1.5Z"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (confirm(`Delete "${deck.name}"?`)) onDeleteDeck(deck.id);
+              }}
+              style={iconBtn}
+              title="Delete"
+            >
+              <svg width="10" height="10" viewBox="0 0 11 11" fill="none">
+                <path
+                  d="M2 3h7M4 3V2h3v1M3 3l.5 7h4l.5-7"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -366,3 +450,17 @@ export default function Sidebar({
     </aside>
   );
 }
+
+const iconBtn: React.CSSProperties = {
+  width: 20,
+  height: 20,
+  borderRadius: 'var(--radius-sm)',
+  background: 'transparent',
+  border: '1px solid var(--border)',
+  color: 'var(--text-mute)',
+  cursor: 'pointer',
+  display: 'inline-grid',
+  placeItems: 'center',
+  padding: 0,
+  flexShrink: 0,
+};
