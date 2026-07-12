@@ -327,12 +327,6 @@ export function removeCardFromDeck(
   // In an owned deck, confirmed cards linger at quantity 0 (a pending
   // removal) so the change can be confirmed or discarded later.
   if (isOwnedDeck(db, deckId)) {
-    // Legacy rows may lack a baseline; treat current quantity as confirmed.
-    db.prepare(`
-      UPDATE deck_cards SET owned_quantity = quantity
-      WHERE deck_id = @deckId AND card_id = @cardId AND board = @board
-        AND owned_quantity IS NULL
-    `).run({ deckId, cardId, board });
     db.prepare(`
       UPDATE deck_cards SET quantity = 0
       WHERE deck_id = @deckId AND card_id = @cardId AND board = @board

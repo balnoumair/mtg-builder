@@ -545,6 +545,11 @@ describe('owned deck editing', () => {
     const deck = createDeck(db, { name: 'Legacy owned' });
     addCardToDeck(db, deck.id, cardId, 'main', 2);
     db.prepare('UPDATE decks SET owned = 1 WHERE id = ?').run(deck.id);
+    db.exec(`
+      UPDATE deck_cards SET owned_quantity = quantity
+      WHERE owned_quantity IS NULL
+        AND deck_id IN (SELECT id FROM decks WHERE owned = 1)
+    `);
 
     removeCardFromDeck(db, deck.id, cardId, 'main');
     confirmDeckChanges(db, deck.id);
