@@ -9,10 +9,11 @@ import ViewToggle from './ViewToggle';
 
 interface Props {
   onNavigateToBrowse: () => void;
+  collectionVersion?: number;
 }
 
-export default function CollectionView({ onNavigateToBrowse }: Props) {
-  const { filters, updateFilters, setPage, result, stats, loading, refresh } = useCollection();
+export default function CollectionView({ onNavigateToBrowse, collectionVersion = 0 }: Props) {
+  const { filters, updateFilters, setPage, result, stats, loading, refresh } = useCollection(collectionVersion);
   const { card, printings, open, showCard, close } = useCardDetail();
   const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refresh);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');

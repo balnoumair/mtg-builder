@@ -3,6 +3,7 @@ import type { CardFilters as Filters, CardSet } from '../../shared/types';
 import { buildSetDropdownEntries } from '../../shared/setOrdering';
 import { Mana } from './ManaSymbols';
 import { getManaMeta } from '../lib/mana';
+import { useSets } from '../hooks/useSets';
 
 const COLOR_KEYS = ['W', 'U', 'B', 'R', 'G'] as const;
 const CMC_VALUES: (number | '7+')[] = [0, 1, 2, 3, 4, 5, 6, '7+'];
@@ -161,14 +162,10 @@ function BlockHeader({ children }: { children: React.ReactNode }) {
 }
 
 export default function CardFilters({ filters, onUpdate }: Props) {
-  const [sets, setSets] = useState<CardSet[]>([]);
+  const sets = useSets();
   const [setMenuOpen, setSetMenuOpen] = useState(false);
   const [setSearch, setSetSearch] = useState('');
   const setMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    window.electronAPI.getSets().then(setSets);
-  }, []);
 
   useEffect(() => {
     if (!setMenuOpen) return;

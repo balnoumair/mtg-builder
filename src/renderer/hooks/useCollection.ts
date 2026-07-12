@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { CardFilters, CollectionCard, CollectionStats } from '../../shared/types';
 
-export function useCollection() {
+export function useCollection(collectionVersion = 0) {
   const [filters, setFilters] = useState<CardFilters>({
     page: 1,
     pageSize: 60,
@@ -37,11 +37,11 @@ export function useCollection() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => search(filters), 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [filters, search]);
+  }, [filters, search, collectionVersion]);
 
   useEffect(() => {
     fetchStats();
-  }, [fetchStats]);
+  }, [fetchStats, collectionVersion]);
 
   const updateFilters = useCallback((updates: Partial<CardFilters>) => {
     setFilters(prev => ({ ...prev, ...updates, page: updates.page ?? 1 }));

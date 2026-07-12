@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react';
 import type { DbStatus } from '../shared/types';
 import type { View } from './lib/types';
 import ImportScreen from './components/ImportScreen';
@@ -15,6 +15,8 @@ export default function App() {
   const [view, setView] = useState<View>('collection');
   const [activeDeckId, setActiveDeckId] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [collectionVersion, setCollectionVersion] = useState(0);
+  const bumpCollection = useCallback(() => setCollectionVersion((v) => v + 1), []);
   const { decks, loading: decksLoading, createDeck, deleteDeck, updateDeck, refresh: refreshDecks } = useDecks();
 
   useEffect(() => {
@@ -29,6 +31,14 @@ export default function App() {
   const handleOpenDeck = (id: number) => {
     setActiveDeckId(id);
     setView('deck-editor');
+  };
+
+  const handleDeleteDeck = async (id: number) => {
+    await deleteDeck(id);
+    if (activeDeckId === id) {
+      setActiveDeckId(null);
+      setView('decks');
+    }
   };
 
   const handleCreateDeck = async (name: string, format?: string) => {
@@ -93,13 +103,12 @@ export default function App() {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         <Sidebar
           view={view}
-          onNavigate={(v) => {
-            setView(v);
-            if (v !== 'deck-editor') setActiveDeckId(null);
-          }}
+          onNavigate={setView}
           decks={decks}
           onOpenDeck={handleOpenDeck}
           onCreateDeck={handleCreateDeck}
+          onDeleteDeck={handleDeleteDeck}
+          onRenameDeck={(id, name) => updateDeck(id, { name })}
           activeDeckId={activeDeckId}
           onSync={handleSync}
           cardCount={dbStatus.cardCount}
@@ -112,7 +121,10 @@ export default function App() {
             <CardBrowser />
           </ViewPane>
           <ViewPane active={view === 'my-cards'}>
-            <CollectionView onNavigateToBrowse={() => setView('collection')} />
+            <CollectionView
+              collectionVersion={collectionVersion}
+              onNavigateToBrowse={() => setView('collection')}
+            />
           </ViewPane>
           <ViewPane active={view === 'decks'}>
             <DeckList
@@ -120,17 +132,23 @@ export default function App() {
               loading={decksLoading}
               onOpenDeck={handleOpenDeck}
               onCreateDeck={handleCreateDeck}
-              onDeleteDeck={deleteDeck}
+              onDeleteDeck={handleDeleteDeck}
               onRenameDeck={(id, name) => updateDeck(id, { name })}
             />
           </ViewPane>
-          {view === 'deck-editor' && activeDeckId && (
-            <DeckEditor
-              deckId={activeDeckId}
-              decks={decks}
-              onUpdateDeck={updateDeck}
-              onDeckCardsChanged={refreshDecks}
-            />
+          {activeDeckId !== null && (
+            <ViewPane active={view === 'deck-editor'}>
+              <DeckEditor
+                deckId={activeDeckId}
+                active={view === 'deck-editor'}
+                decks={decks}
+                onUpdateDeck={updateDeck}
+                onRenameDeck={(id, name) => updateDeck(id, { name })}
+                onDeleteDeck={handleDeleteDeck}
+                onDeckCardsChanged={refreshDecks}
+                onCollectionChanged={bumpCollection}
+              />
+            </ViewPane>
           )}
         </main>
       </div>

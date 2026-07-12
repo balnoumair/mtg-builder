@@ -14,10 +14,11 @@ interface Options {
   getInitialFilters?: () => Partial<CardFilters>;
   onSetsChange?: (sets: CardFilters['sets']) => void;
   resetKey?: number | string;
+  enabled?: boolean;
 }
 
 export function useInfiniteCardSearch(options: Options = {}) {
-  const { getInitialFilters, onSetsChange, resetKey } = options;
+  const { getInitialFilters, onSetsChange, resetKey, enabled = true } = options;
 
   const [filters, setFilters] = useState<CardFilters>(() => ({
     ...DEFAULT_CARD_FILTERS,
@@ -78,6 +79,7 @@ export function useInfiniteCardSearch(options: Options = {}) {
   }, [filters.sets, onSetsChange]);
 
   useEffect(() => {
+    if (!enabled) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const delay = searchImmediately.current ? 0 : 300;
     searchImmediately.current = false;
@@ -85,14 +87,13 @@ export function useInfiniteCardSearch(options: Options = {}) {
     debounceRef.current = setTimeout(() => {
       pageRef.current = 1;
       requestIdRef.current += 1;
-      setCards([]);
       fetchPage(filters, 1, false);
     }, delay);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [filters, fetchPage]);
+  }, [filters, fetchPage, enabled]);
 
   const updateFilters = useCallback((updates: Partial<CardFilters>) => {
     setFilters((prev) => ({ ...prev, ...updates, page: 1 }));

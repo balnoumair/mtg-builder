@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Deck, DeckCard } from '../../shared/types';
 
 export function useDecks() {
@@ -34,17 +34,28 @@ export function useDecks() {
 
 export function useDeckCards(deckId: number | null) {
   const [cards, setCards] = useState<DeckCard[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => deckId !== null);
+  const initialLoadRef = useRef(true);
 
   const refresh = useCallback(async () => {
-    if (!deckId) { setCards([]); return; }
-    setLoading(true);
+    if (!deckId) {
+      setCards([]);
+      setLoading(false);
+      initialLoadRef.current = true;
+      return;
+    }
+    if (initialLoadRef.current) setLoading(true);
     const list = await window.electronAPI.getDeckCards(deckId);
     setCards(list);
     setLoading(false);
+    initialLoadRef.current = false;
   }, [deckId]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    initialLoadRef.current = true;
+    setLoading(deckId !== null);
+    refresh();
+  }, [refresh, deckId]);
 
   const addCard = useCallback(async (cardId: string, board = 'main', count = 1) => {
     if (!deckId) return;
