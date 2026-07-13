@@ -11,6 +11,12 @@ import { VALID_LAYOUTS } from './queries/cards';
 
 const STANDARD_SET_TYPES = new Set(['core', 'expansion']);
 
+// Prints that only exist in side products sold next to a set (Foundations
+// Beginner Box, Starter Collection set extension) rather than in the set's
+// boosters. `booster: true` overrides these tags: main-set prints can carry
+// them when the same print is also bundled in the side product.
+const PRODUCT_ONLY_PROMO_TYPES = new Set(['beginnerbox', 'setextension']);
+
 // Scryfall rejects requests without a real User-Agent and Accept header (HTTP 400).
 // https://scryfall.com/docs/api — "Required Headers"
 const SCRYFALL_HEADERS = {
@@ -65,6 +71,7 @@ interface ScryCard {
   released_at?: string;
   artist?: string;
   booster?: boolean;
+  digital?: boolean;
   promo?: boolean;
   variation?: boolean;
   full_art?: boolean;
@@ -105,7 +112,7 @@ interface SetMetadata {
   released_at: string | null;
 }
 
-type SetMetadataMap = Map<string, SetMetadata>;
+export type SetMetadataMap = Map<string, SetMetadata>;
 
 async function fetchSetMetadata(): Promise<SetMetadataMap> {
   const map: SetMetadataMap = new Map();
@@ -184,7 +191,27 @@ function downloadFile(
   });
 }
 
-function importCardsFromFile(
+// A set can contain many prints of the same card (showcase frames, special
+// foils, alternate arts). Keep only the lowest-numbered print per card per
+// set: plain prints are always numbered before variants. Basic lands are
+// exempt so every art stays available for decks.
+export function dedupeCardPrints(db: Database.Database): void {
+  db.exec(`
+    DELETE FROM cards WHERE id IN (
+      SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (
+          PARTITION BY set_code, oracle_id
+          ORDER BY CAST(collector_number AS INTEGER), collector_number
+        ) AS rn
+        FROM cards
+        WHERE type_line NOT LIKE 'Basic%'
+      )
+      WHERE rn > 1
+    )
+  `);
+}
+
+export function importCardsFromFile(
   db: Database.Database,
   filePath: string,
   setMetadata: SetMetadataMap,
@@ -234,9 +261,14 @@ function importCardsFromFile(
       if (value.lang !== 'en') return;
       if (!VALID_LAYOUTS.has(value.layout)) return;
       if (!value.set_type || !STANDARD_SET_TYPES.has(value.set_type)) return;
-      // Prints with any promo_types (promos, starter extras, variant foils, …)
-      // are excluded; plain prints have none.
-      if (value.promo_types && value.promo_types.length > 0) return;
+      // Digital-only prints (Arena Alchemy rebalances) are not paper cards.
+      if (value.digital) return;
+      if (
+        value.booster !== true &&
+        value.promo_types?.some((t) => PRODUCT_ONLY_PROMO_TYPES.has(t))
+      ) return;
+      // Variant prints (showcase frames, special foils, …) are imported here
+      // and collapsed afterwards by dedupeCardPrints.
 
       const faces = value.card_faces;
       const frontFace = faces?.[0];
@@ -374,7 +406,10 @@ export async function syncCards(
     onProgress(0, 0, 'indexing');
     createIndexes(db);
 
-    // 8. Restore deck_cards (only for cards that exist in the new data)
+    // 8. Collapse variant prints down to one print per card per set
+    dedupeCardPrints(db);
+
+    // 9. Restore deck_cards (only for cards that exist in the new data)
     const restoreDeckCard = db.prepare(`
       INSERT OR IGNORE INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, board)
       SELECT @deck_id, @card_id, @quantity, @owned_quantity, @ignore_copy_limit, @board
@@ -387,7 +422,7 @@ export async function syncCards(
     });
     restoreMany(deckCards);
 
-    // 9. Restore cover_card_id where card still exists
+    // 10. Restore cover_card_id where card still exists
     const restoreCover = db.prepare(`
       UPDATE decks SET cover_card_id = @cover_card_id
       WHERE id = @id AND EXISTS (SELECT 1 FROM cards WHERE id = @cover_card_id)

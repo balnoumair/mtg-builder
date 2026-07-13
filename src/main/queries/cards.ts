@@ -4,7 +4,7 @@ import type { Card, CardFilters, CardSearchResult, CardSet } from '../../shared/
 const VALID_LAYOUTS = new Set([
   'normal', 'split', 'flip', 'transform', 'modal_dfc', 'meld',
   'leveler', 'class', 'case', 'saga', 'adventure', 'mutate',
-  'prototype', 'battle', 'planar', 'scheme',
+  'prototype', 'battle', 'planar', 'scheme', 'prepare',
 ]);
 
 function rowToCard(row: Record<string, unknown>): Card {
