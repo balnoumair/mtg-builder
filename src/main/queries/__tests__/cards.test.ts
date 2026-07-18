@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type Database from 'better-sqlite3';
-import { searchCards, getCard, getCardPrintings, getSets } from '../cards';
+import { searchCards, getCard, getSets } from '../cards';
 import { createTestDb, insertTestCard, insertTestSet } from './helpers';
 
 let db: Database.Database;
@@ -132,15 +132,6 @@ describe('searchCards', () => {
     expect(result.cards[0].name).toBe('Dragon');
   });
 
-  it('deduplicates by oracle_id when uniqueBy is set', () => {
-    insertTestCard(db, { id: 'c1', oracle_id: 'o1', name: 'Bolt', released_at: '2020-01-01' });
-    insertTestCard(db, { id: 'c2', oracle_id: 'o1', name: 'Bolt', released_at: '2021-01-01' });
-    insertTestCard(db, { id: 'c3', oracle_id: 'o2', name: 'Counter', released_at: '2020-01-01' });
-    const result = searchCards(db, { uniqueBy: 'oracle_id' });
-    expect(result.total).toBe(2);
-    expect(result.cards).toHaveLength(2);
-  });
-
   it('paginates results', () => {
     insertTestCard(db, { name: 'Alpha' });
     insertTestCard(db, { name: 'Beta' });
@@ -180,22 +171,6 @@ describe('getCard', () => {
   it('returns null for a nonexistent id', () => {
     const card = getCard(db, 'nonexistent');
     expect(card).toBeNull();
-  });
-});
-
-describe('getCardPrintings', () => {
-  it('returns all printings for a given oracle_id sorted by released_at desc', () => {
-    insertTestCard(db, { id: 'p1', oracle_id: 'o1', released_at: '2020-01-01' });
-    insertTestCard(db, { id: 'p2', oracle_id: 'o1', released_at: '2022-01-01' });
-    insertTestCard(db, { id: 'p3', oracle_id: 'o2', released_at: '2021-01-01' });
-    const printings = getCardPrintings(db, 'o1');
-    expect(printings).toHaveLength(2);
-    expect(printings[0].id).toBe('p2'); // Most recent first
-    expect(printings[1].id).toBe('p1');
-  });
-
-  it('returns empty array for unknown oracle_id', () => {
-    expect(getCardPrintings(db, 'unknown')).toEqual([]);
   });
 });
 

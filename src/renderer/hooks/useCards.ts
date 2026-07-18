@@ -8,21 +8,17 @@ export function useCards() {
 
 export function useCardDetail() {
   const [card, setCard] = useState<Card | null>(null);
-  const [printings, setPrintings] = useState<Card[]>([]);
   const [open, setOpen] = useState(false);
 
-  const showCard = useCallback(async (c: Card) => {
+  const showCard = useCallback((c: Card) => {
     setCard(c);
     setOpen(true);
-    const prints = await window.electronAPI.getCardPrintings(c.oracle_id);
-    setPrintings(prints);
   }, []);
 
   const close = useCallback(() => {
     setOpen(false);
     setCard(null);
-    setPrintings([]);
   }, []);
 
-  return { card, printings, open, showCard, close };
+  return { card, open, showCard, close };
 }

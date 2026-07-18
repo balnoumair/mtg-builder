@@ -7,6 +7,7 @@ import readline from 'node:readline';
 import { app } from 'electron';
 import type Database from 'better-sqlite3';
 import { createIndexes } from './database';
+import { dedupeCardPrints } from './dedupe';
 import { VALID_LAYOUTS } from './queries/cards';
 
 const STANDARD_SET_TYPES = new Set(['core', 'expansion']);
@@ -187,26 +188,6 @@ function downloadFile(
   });
 }
 
-// A set can contain many prints of the same card (showcase frames, special
-// foils, alternate arts). Keep only the lowest-numbered print per card per
-// set: plain prints are always numbered before variants. Basic lands are
-// exempt so every art stays available for decks.
-export function dedupeCardPrints(db: Database.Database): void {
-  db.exec(`
-    DELETE FROM cards WHERE id IN (
-      SELECT id FROM (
-        SELECT id, ROW_NUMBER() OVER (
-          PARTITION BY set_code, oracle_id
-          ORDER BY CAST(collector_number AS INTEGER), collector_number
-        ) AS rn
-        FROM cards
-        WHERE type_line NOT LIKE 'Basic%'
-      )
-      WHERE rn > 1
-    )
-  `);
-}
-
 export function importCardsFromFile(
   db: Database.Database,
   filePath: string,
@@ -362,23 +343,50 @@ export async function syncCards(
       onProgress(downloaded, total, 'downloading');
     });
 
-    // 3. Back up deck_cards and cover_card_id before wiping cards
-    const deckCards = db.prepare('SELECT deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, board FROM deck_cards').all() as Array<{
+    // 3. Back up deck contents, the collection, and deck covers before wiping
+    // cards. Print ids can change between syncs (the kept print moves when a
+    // card is reprinted), so each backup row also records oracle_id and
+    // set_code: restore prefers the exact print, then the same card in the
+    // same set (keeps basics on their set), then the card's kept print.
+    const deckCards = db.prepare(`
+      SELECT dc.deck_id, dc.card_id, c.oracle_id, c.set_code,
+             dc.quantity, dc.owned_quantity, dc.ignore_copy_limit, dc.board
+      FROM deck_cards dc JOIN cards c ON c.id = dc.card_id
+    `).all() as Array<{
       deck_id: number;
       card_id: string;
+      oracle_id: string;
+      set_code: string;
       quantity: number;
       owned_quantity: number | null;
       ignore_copy_limit: number;
       board: string;
     }>;
-    const coverCards = db.prepare('SELECT id, cover_card_id FROM decks WHERE cover_card_id IS NOT NULL').all() as Array<{
+    const collectionCards = db.prepare(`
+      SELECT col.card_id, c.oracle_id, c.set_code, col.quantity, col.added_at
+      FROM collection col JOIN cards c ON c.id = col.card_id
+    `).all() as Array<{
+      card_id: string;
+      oracle_id: string;
+      set_code: string;
+      quantity: number;
+      added_at: string | null;
+    }>;
+    const coverCards = db.prepare(`
+      SELECT d.id, d.cover_card_id AS card_id, c.oracle_id, c.set_code
+      FROM decks d JOIN cards c ON c.id = d.cover_card_id
+      WHERE d.cover_card_id IS NOT NULL
+    `).all() as Array<{
       id: number;
-      cover_card_id: string;
+      card_id: string;
+      oracle_id: string;
+      set_code: string;
     }>;
 
     // 4. Disable FK, delete all cards (avoids cascade), re-enable FK
     db.pragma('foreign_keys = OFF');
     db.exec('DELETE FROM deck_cards');
+    db.exec('DELETE FROM collection');
     db.exec('DELETE FROM cards');
     db.exec('DROP INDEX IF EXISTS idx_cards_name');
     db.exec('DROP INDEX IF EXISTS idx_cards_oracle_id');
@@ -400,26 +408,56 @@ export async function syncCards(
     onProgress(0, 0, 'indexing');
     createIndexes(db);
 
-    // 8. Collapse variant prints down to one print per card per set
+    // 8. Collapse prints down to one per card
     dedupeCardPrints(db);
 
-    // 9. Restore deck_cards (only for cards that exist in the new data)
+    // 9. Restore deck contents and the collection onto the surviving print of
+    // each card, merging rows whose prints collapsed into the same card.
+    // Cards no longer in the new data are dropped.
+    const survivorSql = `
+      COALESCE(
+        (SELECT id FROM cards WHERE id = @card_id),
+        (SELECT id FROM cards WHERE oracle_id = @oracle_id AND set_code = @set_code
+           ORDER BY CAST(collector_number AS INTEGER) ASC, collector_number ASC LIMIT 1),
+        (SELECT id FROM cards WHERE oracle_id = @oracle_id
+           ORDER BY released_at DESC, CAST(collector_number AS INTEGER) ASC LIMIT 1)
+      )
+    `;
     const restoreDeckCard = db.prepare(`
-      INSERT OR IGNORE INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, board)
-      SELECT @deck_id, @card_id, @quantity, @owned_quantity, @ignore_copy_limit, @board
-      WHERE EXISTS (SELECT 1 FROM cards WHERE id = @card_id)
+      INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, board)
+      SELECT @deck_id, target.id, @quantity, @owned_quantity, @ignore_copy_limit, @board
+      FROM (SELECT ${survivorSql} AS id) target
+      WHERE target.id IS NOT NULL
+      ON CONFLICT(deck_id, card_id, board) DO UPDATE SET
+        quantity = quantity + excluded.quantity,
+        owned_quantity = CASE
+          WHEN owned_quantity IS NULL AND excluded.owned_quantity IS NULL THEN NULL
+          ELSE COALESCE(owned_quantity, 0) + COALESCE(excluded.owned_quantity, 0)
+        END,
+        ignore_copy_limit = MAX(ignore_copy_limit, excluded.ignore_copy_limit)
     `);
-    const restoreMany = db.transaction((rows: typeof deckCards) => {
-      for (const row of rows) {
+    const restoreCollectionCard = db.prepare(`
+      INSERT INTO collection (card_id, quantity, added_at)
+      SELECT target.id, @quantity, @added_at
+      FROM (SELECT ${survivorSql} AS id) target
+      WHERE target.id IS NOT NULL
+      ON CONFLICT(card_id) DO UPDATE SET
+        quantity = quantity + excluded.quantity,
+        added_at = MIN(added_at, excluded.added_at)
+    `);
+    const restoreMany = db.transaction(() => {
+      for (const row of deckCards) {
         restoreDeckCard.run(row);
       }
+      for (const row of collectionCards) {
+        restoreCollectionCard.run(row);
+      }
     });
-    restoreMany(deckCards);
+    restoreMany();
 
-    // 10. Restore cover_card_id where card still exists
+    // 10. Restore deck covers (cleared when the card left the data entirely)
     const restoreCover = db.prepare(`
-      UPDATE decks SET cover_card_id = @cover_card_id
-      WHERE id = @id AND EXISTS (SELECT 1 FROM cards WHERE id = @cover_card_id)
+      UPDATE decks SET cover_card_id = ${survivorSql} WHERE id = @id
     `);
     for (const row of coverCards) {
       restoreCover.run(row);

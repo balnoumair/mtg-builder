@@ -18,7 +18,7 @@ export default function WantsView({ active, collectionVersion }: Props) {
   const [loading, setLoading] = useState(true);
   const [excludeBasicLands, setExcludeBasicLands] = useState(true);
   const [copied, setCopied] = useState(false);
-  const { card, printings, open, showCard, close } = useCardDetail();
+  const { card, open, showCard, close } = useCardDetail();
 
   useEffect(() => {
     if (!active) return;
@@ -203,7 +203,6 @@ export default function WantsView({ active, collectionVersion }: Props) {
       {open && card && (
         <CardDetail
           card={card}
-          printings={printings}
           onClose={close}
           collectionQuantity={detailOwned}
         />

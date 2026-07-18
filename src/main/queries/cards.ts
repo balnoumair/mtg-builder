@@ -82,7 +82,6 @@ export function searchCards(db: Database.Database, filters: CardFilters): CardSe
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const useUnique = filters.uniqueBy === 'oracle_id';
   const pageSize = filters.pageSize || 60;
   const page = filters.page || 1;
   const offset = (page - 1) * pageSize;
@@ -91,30 +90,12 @@ export function searchCards(db: Database.Database, filters: CardFilters): CardSe
   const validSorts = ['name', 'cmc', 'rarity', 'released_at'];
   const sort = validSorts.includes(sortColumn) ? sortColumn : 'name';
 
-  let countSql: string;
-  let dataSql: string;
-
-  if (useUnique) {
-    countSql = `SELECT COUNT(DISTINCT oracle_id) as total FROM cards ${whereClause}`;
-    dataSql = `
-      SELECT * FROM (
-        SELECT *, ROW_NUMBER() OVER (
-          PARTITION BY oracle_id
-          ORDER BY released_at DESC, CAST(collector_number AS INTEGER) ASC
-        ) AS rn
-        FROM cards ${whereClause}
-      ) WHERE rn = 1
-      ORDER BY ${sort} ASC
-      LIMIT @limit OFFSET @offset
-    `;
-  } else {
-    countSql = `SELECT COUNT(*) as total FROM cards ${whereClause}`;
-    dataSql = `
-      SELECT * FROM cards ${whereClause}
-      ORDER BY ${sort} ASC
-      LIMIT @limit OFFSET @offset
-    `;
-  }
+  const countSql = `SELECT COUNT(*) as total FROM cards ${whereClause}`;
+  const dataSql = `
+    SELECT * FROM cards ${whereClause}
+    ORDER BY ${sort} ASC
+    LIMIT @limit OFFSET @offset
+  `;
 
   params.limit = pageSize;
   params.offset = offset;
@@ -131,13 +112,6 @@ export function searchCards(db: Database.Database, filters: CardFilters): CardSe
 export function getCard(db: Database.Database, id: string): Card | null {
   const row = db.prepare('SELECT * FROM cards WHERE id = ?').get(id) as Record<string, unknown> | undefined;
   return row ? rowToCard(row) : null;
-}
-
-export function getCardPrintings(db: Database.Database, oracleId: string): Card[] {
-  const rows = db.prepare(
-    'SELECT * FROM cards WHERE oracle_id = ? ORDER BY released_at DESC'
-  ).all(oracleId) as Record<string, unknown>[];
-  return rows.map(rowToCard);
 }
 
 export function getSets(db: Database.Database): CardSet[] {

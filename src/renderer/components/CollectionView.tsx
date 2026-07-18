@@ -14,7 +14,7 @@ interface Props {
 
 export default function CollectionView({ onNavigateToBrowse, collectionVersion = 0 }: Props) {
   const { filters, updateFilters, setPage, result, stats, loading, refresh } = useCollection(collectionVersion);
-  const { card, printings, open, showCard, close } = useCardDetail();
+  const { card, open, showCard, close } = useCardDetail();
   const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refresh);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -203,7 +203,6 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
       {open && card && (
         <CardDetail
           card={card}
-          printings={printings}
           onClose={close}
           collectionQuantity={detailQty}
           onAddToCollection={handleAddToCollection}

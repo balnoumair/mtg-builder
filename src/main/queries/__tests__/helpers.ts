@@ -39,6 +39,7 @@ export function createTestDb(): Database.Database {
 
     CREATE TABLE IF NOT EXISTS decks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid TEXT UNIQUE,
       name TEXT NOT NULL,
       format TEXT DEFAULT '',
       description TEXT DEFAULT '',
