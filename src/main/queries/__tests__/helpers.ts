@@ -31,8 +31,6 @@ export function createTestDb(): Database.Database {
       face_back_name TEXT,
       face_back_image_uri_normal TEXT,
       legalities TEXT DEFAULT '{}',
-      price_usd TEXT,
-      price_eur TEXT,
       released_at TEXT,
       artist TEXT,
       block_code TEXT,
@@ -126,7 +124,6 @@ export function insertTestCard(
     collector_number: string;
     legalities: Record<string, string>;
     released_at: string;
-    price_usd: string | null;
     artist: string;
     block_code: string | null;
     block_name: string | null;
@@ -140,12 +137,12 @@ export function insertTestCard(
     INSERT INTO cards (
       id, oracle_id, name, mana_cost, cmc, type_line, oracle_text,
       colors, color_identity, keywords, rarity, set_code, set_name,
-      collector_number, legalities, released_at, price_usd, artist,
+      collector_number, legalities, released_at, artist,
       block_code, block_name
     ) VALUES (
       @id, @oracle_id, @name, @mana_cost, @cmc, @type_line, @oracle_text,
       @colors, @color_identity, @keywords, @rarity, @set_code, @set_name,
-      @collector_number, @legalities, @released_at, @price_usd, @artist,
+      @collector_number, @legalities, @released_at, @artist,
       @block_code, @block_name
     )
   `).run({
@@ -165,7 +162,6 @@ export function insertTestCard(
     collector_number: overrides.collector_number ?? String(cardSeq),
     legalities: JSON.stringify(overrides.legalities ?? {}),
     released_at: overrides.released_at ?? '2024-01-01',
-    price_usd: overrides.price_usd ?? null,
     artist: overrides.artist ?? 'Test Artist',
     block_code: overrides.block_code ?? null,
     block_name: overrides.block_name ?? null,

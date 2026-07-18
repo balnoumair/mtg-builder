@@ -8,7 +8,7 @@ export function useCollection(collectionVersion = 0) {
     sortBy: 'name',
   });
   const [result, setResult] = useState<{ cards: CollectionCard[]; total: number }>({ cards: [], total: 0 });
-  const [stats, setStats] = useState<CollectionStats>({ uniqueCards: 0, totalCopies: 0, estimatedValue: null });
+  const [stats, setStats] = useState<CollectionStats>({ uniqueCards: 0, totalCopies: 0 });
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 

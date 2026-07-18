@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { Card, CardFilters, CollectionCard, CollectionStats } from '../../shared/types';
 
-function rowToCard(row: Record<string, unknown>): Card {
+export function rowToCard(row: Record<string, unknown>): Card {
   return {
     ...row,
     colors: JSON.parse((row.colors as string) || '[]'),
@@ -172,18 +172,10 @@ export function removeFromCollection(
 }
 
 export function getCollectionStats(db: Database.Database): CollectionStats {
-  const row = db.prepare(`
+  return db.prepare(`
     SELECT
       COUNT(*) as uniqueCards,
-      COALESCE(SUM(col.quantity), 0) as totalCopies,
-      COALESCE(SUM(CAST(c.price_usd AS REAL) * col.quantity), 0) as estimatedValue
-    FROM collection col
-    JOIN cards c ON c.id = col.card_id
-  `).get() as { uniqueCards: number; totalCopies: number; estimatedValue: number };
-
-  return {
-    uniqueCards: row.uniqueCards,
-    totalCopies: row.totalCopies,
-    estimatedValue: row.estimatedValue > 0 ? row.estimatedValue : null,
-  };
+      COALESCE(SUM(quantity), 0) as totalCopies
+    FROM collection
+  `).get() as CollectionStats;
 }

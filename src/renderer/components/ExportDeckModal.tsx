@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import type { DeckCard } from '../../shared/types';
 import { BASIC_LAND_NAMES } from '../../shared/basicLands';
 import { getCardTypeCategory, TYPE_ORDER } from '../lib/mana';
+import { copyText } from '../lib/clipboard';
 import ManaSymbols from './ManaSymbols';
 
 interface Props {
@@ -82,20 +83,9 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
   }, [deckName, groupedMain, filteredSide]);
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(exportText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      const ta = document.createElement('textarea');
-      ta.value = exportText;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    await copyText(exportText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (

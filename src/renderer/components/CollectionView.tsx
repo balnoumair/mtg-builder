@@ -82,11 +82,6 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
             <span>
               <span style={{ color: 'var(--text-dim)' }}>{stats.totalCopies.toLocaleString()}</span> copies
             </span>
-            {stats.estimatedValue !== null && (
-              <span>
-                <span style={{ color: 'var(--text-dim)' }}>${stats.estimatedValue.toFixed(2)}</span> est.
-              </span>
-            )}
           </div>
           <div style={{ flex: 1 }} />
           <ViewToggle value={viewMode} onChange={setViewMode} />

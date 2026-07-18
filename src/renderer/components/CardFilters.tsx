@@ -161,11 +161,36 @@ function BlockHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
+const SET_MENU_W = 280;
+const SET_MENU_MARGIN = 8;
+
 export default function CardFilters({ filters, onUpdate }: Props) {
   const sets = useSets();
   const [setMenuOpen, setSetMenuOpen] = useState(false);
   const [setSearch, setSetSearch] = useState('');
+  const [setMenuPos, setSetMenuPos] = useState({ top: 0, left: 0, maxListHeight: 280 });
   const setMenuRef = useRef<HTMLDivElement>(null);
+  const setMenuBtnRef = useRef<HTMLButtonElement>(null);
+
+  // The menu renders position:fixed so it can overlap neighboring panes
+  // instead of being squeezed by a narrow search panel.
+  const toggleSetMenu = () => {
+    if (setMenuOpen) {
+      setSetMenuOpen(false);
+      return;
+    }
+    const rect = setMenuBtnRef.current?.getBoundingClientRect();
+    if (rect) {
+      const top = rect.bottom + 6;
+      const left = Math.max(
+        SET_MENU_MARGIN,
+        Math.min(rect.left, window.innerWidth - SET_MENU_W - SET_MENU_MARGIN),
+      );
+      const maxListHeight = Math.min(280, window.innerHeight - top - 48);
+      setSetMenuPos({ top, left, maxListHeight });
+    }
+    setSetMenuOpen(true);
+  };
 
   useEffect(() => {
     if (!setMenuOpen) return;
@@ -174,8 +199,13 @@ export default function CardFilters({ filters, onUpdate }: Props) {
         setSetMenuOpen(false);
       }
     };
+    const close = () => setSetMenuOpen(false);
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      window.removeEventListener('resize', close);
+    };
   }, [setMenuOpen]);
 
   const activeColors = filters.colors ?? [];
@@ -323,8 +353,9 @@ export default function CardFilters({ filters, onUpdate }: Props) {
         {/* Edition dropdown */}
         <div ref={setMenuRef} style={{ position: 'relative' }}>
           <button
+            ref={setMenuBtnRef}
             type="button"
-            onClick={() => setSetMenuOpen((o) => !o)}
+            onClick={toggleSetMenu}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -370,11 +401,11 @@ export default function CardFilters({ filters, onUpdate }: Props) {
             <div
               className="animate-popover-in"
               style={{
-                position: 'absolute',
-                top: 'calc(100% + 6px)',
-                left: 0,
-                zIndex: 50,
-                width: 280,
+                position: 'fixed',
+                top: setMenuPos.top,
+                left: setMenuPos.left,
+                zIndex: 90,
+                width: SET_MENU_W,
                 background: 'var(--bg-panel)',
                 border: '1px solid var(--border-strong)',
                 borderRadius: 'var(--radius)',
@@ -399,7 +430,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                   }}
                 />
               </div>
-              <div style={{ maxHeight: 280, overflowY: 'auto', padding: 4 }}>
+              <div style={{ maxHeight: setMenuPos.maxListHeight, overflowY: 'auto', padding: 4 }}>
                 {groupedEntries ? (
                   groupedEntries.length === 0 ? (
                     <div

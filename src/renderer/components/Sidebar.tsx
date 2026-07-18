@@ -8,6 +8,7 @@ import DeckSetGroupLabel from './DeckSetGroupLabel';
 
 interface Props {
   view: View;
+  width: number;
   onNavigate: (view: View) => void;
   decks: Deck[];
   onOpenDeck: (id: number) => void;
@@ -19,13 +20,16 @@ interface Props {
   cardCount?: number;
 }
 
-const NAV_ITEMS: { key: View; label: string; icon: 'grid' | 'box' | 'stack' }[] = [
+type NavIconKind = 'grid' | 'box' | 'stack' | 'tag';
+
+const NAV_ITEMS: { key: View; label: string; icon: NavIconKind }[] = [
   { key: 'collection', label: 'Card Browser', icon: 'grid' },
   { key: 'my-cards', label: 'My Cards', icon: 'box' },
+  { key: 'wants', label: 'Wants', icon: 'tag' },
   { key: 'decks', label: 'Decks', icon: 'stack' },
 ];
 
-function NavIcon({ icon }: { icon: 'grid' | 'box' | 'stack' }) {
+function NavIcon({ icon }: { icon: NavIconKind }) {
   const shapes = {
     grid: (
       <>
@@ -48,6 +52,12 @@ function NavIcon({ icon }: { icon: 'grid' | 'box' | 'stack' }) {
         <path d="M1.5 9L6.5 11.3L11.5 9" stroke="currentColor" />
       </>
     ),
+    tag: (
+      <>
+        <path d="M1.5 1.5H6.1L11.5 6.9L6.9 11.5L1.5 6.1V1.5z" stroke="currentColor" strokeLinejoin="round" />
+        <circle cx="4.2" cy="4.2" r="1" stroke="currentColor" />
+      </>
+    ),
   };
   return (
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none" strokeWidth="1.1">
@@ -63,7 +73,7 @@ function NavRow({
   onClick,
 }: {
   label: string;
-  icon: 'grid' | 'box' | 'stack';
+  icon: NavIconKind;
   active: boolean;
   onClick: () => void;
 }) {
@@ -99,6 +109,7 @@ function NavRow({
 
 export default function Sidebar({
   view,
+  width,
   onNavigate,
   decks,
   onOpenDeck,
@@ -270,9 +281,8 @@ export default function Sidebar({
   return (
     <aside
       style={{
-        width: 'var(--sidebar-w)',
+        width,
         background: 'var(--bg-sidebar)',
-        borderRight: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column',
         fontFamily: 'var(--font-ui)',
