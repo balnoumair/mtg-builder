@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
 import type { ImportProgress } from '../../shared/types';
+import {
+  applyDeckSetsFiltersFromBackup,
+  collectDeckSetsFiltersForBackup,
+} from '../lib/deckFilterStorage';
 
 interface Props {
   onComplete: () => void;
@@ -21,7 +25,9 @@ export default function ImportScreen({ onComplete, onCancel, onBackupImported }:
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
 
   const handleBackup = async () => {
-    const result = await window.electronAPI.exportBackup();
+    const decks = await window.electronAPI.getDecks();
+    const filterSetsByUuid = collectDeckSetsFiltersForBackup(decks);
+    const result = await window.electronAPI.exportBackup(filterSetsByUuid);
     if (result.error) setBackupStatus(`Backup failed: ${result.error}`);
     else if (result.saved) setBackupStatus(`Backup saved to ${result.path}`);
   };
@@ -33,18 +39,25 @@ export default function ImportScreen({ onComplete, onCancel, onBackupImported }:
       return;
     }
     if (result.canceled) return;
+    if (result.filterSets?.length) {
+      const decks = await window.electronAPI.getDecks();
+      applyDeckSetsFiltersFromBackup(result.filterSets, decks);
+    }
     onBackupImported?.();
-    const already: string[] = [];
-    if (result.decksSkipped > 0) {
-      already.push(`${result.decksSkipped} deck${result.decksSkipped === 1 ? '' : 's'}`);
+    const parts: string[] = [];
+    if (result.decksImported > 0) {
+      parts.push(`${result.decksImported} new deck${result.decksImported === 1 ? '' : 's'}`);
     }
-    if (result.collectionCardsSkipped > 0) {
-      already.push(
-        `${result.collectionCardsSkipped} collection card${result.collectionCardsSkipped === 1 ? '' : 's'}`,
-      );
+    if (result.decksUpdated > 0) {
+      parts.push(`${result.decksUpdated} deck${result.decksUpdated === 1 ? '' : 's'} updated`);
     }
-    const skipped = already.length > 0 ? ` (${already.join(', ')} already present)` : '';
-    const summary = `${result.decksImported} deck${result.decksImported === 1 ? '' : 's'} and ${result.collectionCards} collection card${result.collectionCards === 1 ? '' : 's'}${skipped}`;
+    if (result.decksImported === 0 && result.decksUpdated === 0) {
+      parts.push('0 decks');
+    }
+    parts.push(
+      `${result.collectionCards} collection card${result.collectionCards === 1 ? '' : 's'}`,
+    );
+    const summary = parts.join(', ');
     setBackupStatus(
       result.missing.length === 0
         ? `Imported ${summary}`

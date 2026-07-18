@@ -344,10 +344,9 @@ export async function syncCards(
     });
 
     // 3. Back up deck contents, the collection, and deck covers before wiping
-    // cards. Print ids can change between syncs (the kept print moves when a
-    // card is reprinted), so each backup row also records oracle_id and
-    // set_code: restore prefers the exact print, then the same card in the
-    // same set (keeps basics on their set), then the card's kept print.
+    // cards. Print ids can change between syncs, so each backup row also
+    // records oracle_id and set_code: restore prefers the exact print, then
+    // the same card in the same set, then any print of that card.
     const deckCards = db.prepare(`
       SELECT dc.deck_id, dc.card_id, c.oracle_id, c.set_code,
              dc.quantity, dc.owned_quantity, dc.ignore_copy_limit, dc.board
@@ -408,12 +407,8 @@ export async function syncCards(
     onProgress(0, 0, 'indexing');
     createIndexes(db);
 
-    // 8. Collapse prints down to one per card
-    dedupeCardPrints(db);
-
-    // 9. Restore deck contents and the collection onto the surviving print of
-    // each card, merging rows whose prints collapsed into the same card.
-    // Cards no longer in the new data are dropped.
+    // 8. Restore decks/collection while every set still has its prints, so
+    // set_code matching can land on the right set (not a newer reprint).
     const survivorSql = `
       COALESCE(
         (SELECT id FROM cards WHERE id = @card_id),
@@ -455,13 +450,16 @@ export async function syncCards(
     });
     restoreMany();
 
-    // 10. Restore deck covers (cleared when the card left the data entirely)
+    // 9. Restore deck covers (cleared when the card left the data entirely)
     const restoreCover = db.prepare(`
       UPDATE decks SET cover_card_id = ${survivorSql} WHERE id = @id
     `);
     for (const row of coverCards) {
       restoreCover.run(row);
     }
+
+    // 10. Collapse variant arts within each set only (not across sets)
+    dedupeCardPrints(db);
 
     // 11. Reclaim free pages left by the DELETE + reinsert; without this the
     // file grows by the full dataset size on every sync.

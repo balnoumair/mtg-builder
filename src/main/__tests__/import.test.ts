@@ -170,17 +170,17 @@ describe('importCardsFromFile filters', () => {
 });
 
 describe('dedupeCardPrints', () => {
-  it('keeps only the most recent print of a card across sets', async () => {
+  it('keeps reprints across different sets (only collapses arts within a set)', async () => {
     await importCards(db, [
       bulkCard({ name: 'Reprint', oracle_id: 'o-1', set: 'aaa', released_at: '2020-01-01' }),
       bulkCard({ name: 'Reprint', oracle_id: 'o-1', set: 'bbb', set_type: 'expansion', released_at: '2023-06-01' }),
     ]);
     dedupeCardPrints(db);
-    const rows = db.prepare('SELECT set_code FROM cards').all() as Array<{ set_code: string }>;
-    expect(rows).toEqual([{ set_code: 'bbb' }]);
+    const rows = db.prepare('SELECT set_code FROM cards ORDER BY set_code').all() as Array<{ set_code: string }>;
+    expect(rows).toEqual([{ set_code: 'aaa' }, { set_code: 'bbb' }]);
   });
 
-  it('prefers the lowest-numbered print within the same release, numerically', async () => {
+  it('prefers the lowest-numbered print within the same set, numerically', async () => {
     await importCards(db, [
       bulkCard({ name: 'Dupe', oracle_id: 'o-1', collector_number: '300' }),
       bulkCard({ name: 'Dupe', oracle_id: 'o-1', collector_number: '42' }),
@@ -226,38 +226,46 @@ describe('dedupeCardPrints', () => {
     expect(cardNames(db)).toEqual(['Other', 'Solo']);
   });
 
-  it('re-points deck entries at the surviving print and merges duplicates', async () => {
+  it('re-points deck entries at the surviving print within the same set and merges duplicates', async () => {
     await importCards(db, [
-      bulkCard({ id: 'old-print', oracle_id: 'o-1', name: 'Dupe', released_at: '2020-01-01' }),
-      bulkCard({ id: 'new-print', oracle_id: 'o-1', name: 'Dupe', released_at: '2023-01-01' }),
+      bulkCard({ id: 'variant', oracle_id: 'o-1', name: 'Dupe', set: 'aaa', collector_number: '300', released_at: '2020-01-01' }),
+      bulkCard({ id: 'plain', oracle_id: 'o-1', name: 'Dupe', set: 'aaa', collector_number: '42', released_at: '2020-01-01' }),
+      bulkCard({ id: 'other-set', oracle_id: 'o-1', name: 'Dupe', set: 'bbb', set_type: 'expansion', collector_number: '10', released_at: '2023-01-01' }),
     ]);
-    db.prepare("INSERT INTO decks (id, name, cover_card_id) VALUES (1, 'Deck', 'old-print')").run();
+    db.prepare("INSERT INTO decks (id, name, cover_card_id) VALUES (1, 'Deck', 'variant')").run();
     db.prepare(
-      "INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, board) VALUES (1, 'old-print', 2, 1, 'main')"
+      "INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, board) VALUES (1, 'variant', 2, 1, 'main')"
     ).run();
     db.prepare(
-      "INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, board) VALUES (1, 'new-print', 1, NULL, 'main')"
+      "INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, board) VALUES (1, 'plain', 1, NULL, 'main')"
     ).run();
 
     dedupeCardPrints(db);
 
-    const rows = db.prepare('SELECT card_id, quantity, owned_quantity FROM deck_cards').all();
-    expect(rows).toEqual([{ card_id: 'new-print', quantity: 3, owned_quantity: 1 }]);
+    const rows = db.prepare('SELECT card_id, quantity, owned_quantity FROM deck_cards ORDER BY card_id').all();
+    expect(rows).toEqual([{ card_id: 'plain', quantity: 3, owned_quantity: 1 }]);
     const deck = db.prepare('SELECT cover_card_id FROM decks WHERE id = 1').get() as { cover_card_id: string };
-    expect(deck.cover_card_id).toBe('new-print');
+    expect(deck.cover_card_id).toBe('plain');
+    const sets = db.prepare('SELECT set_code FROM cards ORDER BY set_code').all();
+    expect(sets).toEqual([{ set_code: 'aaa' }, { set_code: 'bbb' }]);
   });
 
-  it('re-points collection rows at the surviving print and merges quantities', async () => {
+  it('re-points collection rows at the surviving print within the same set and merges quantities', async () => {
     await importCards(db, [
-      bulkCard({ id: 'old-print', oracle_id: 'o-1', name: 'Dupe', released_at: '2020-01-01' }),
-      bulkCard({ id: 'new-print', oracle_id: 'o-1', name: 'Dupe', released_at: '2023-01-01' }),
+      bulkCard({ id: 'variant', oracle_id: 'o-1', name: 'Dupe', set: 'aaa', collector_number: '300' }),
+      bulkCard({ id: 'plain', oracle_id: 'o-1', name: 'Dupe', set: 'aaa', collector_number: '42' }),
+      bulkCard({ id: 'other-set', oracle_id: 'o-1', name: 'Dupe', set: 'bbb', set_type: 'expansion', collector_number: '10' }),
     ]);
-    db.prepare("INSERT INTO collection (card_id, quantity) VALUES ('old-print', 3)").run();
-    db.prepare("INSERT INTO collection (card_id, quantity) VALUES ('new-print', 1)").run();
+    db.prepare("INSERT INTO collection (card_id, quantity) VALUES ('variant', 3)").run();
+    db.prepare("INSERT INTO collection (card_id, quantity) VALUES ('plain', 1)").run();
+    db.prepare("INSERT INTO collection (card_id, quantity) VALUES ('other-set', 2)").run();
 
     dedupeCardPrints(db);
 
-    const rows = db.prepare('SELECT card_id, quantity FROM collection').all();
-    expect(rows).toEqual([{ card_id: 'new-print', quantity: 4 }]);
+    const rows = db.prepare('SELECT card_id, quantity FROM collection ORDER BY card_id').all();
+    expect(rows).toEqual([
+      { card_id: 'other-set', quantity: 2 },
+      { card_id: 'plain', quantity: 4 },
+    ]);
   });
 });
