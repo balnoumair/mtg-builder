@@ -143,6 +143,10 @@ export default function App() {
       <ImportScreen
         onComplete={handleSyncComplete}
         onCancel={dbStatus.ready ? () => setSyncing(false) : undefined}
+        onBackupImported={() => {
+          refreshDecks();
+          bumpCollection();
+        }}
       />
     );
   }

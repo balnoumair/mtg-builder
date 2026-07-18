@@ -61,7 +61,7 @@ export default function DeckEditor({
   } = useDeckCards(deckId);
   const { filters, updateFilters, cards: searchCards, total: searchTotal, loading, loadingMore, hasMore, loadMore } =
     useDeckEditorCards(deckId, { enabled: active });
-  const { card: detailCard, printings, open: detailOpen, showCard, close: closeDetail } = useCardDetail();
+  const { card: detailCard, open: detailOpen, showCard, close: closeDetail } = useCardDetail();
   const [activeBoard, setActiveBoard] = useState<'main' | 'sideboard'>('main');
   const [deckView, setDeckView] = useState<'list' | 'visual'>('visual');
   const [deckGroupBy, setDeckGroupBy] = useState<'type' | 'cost'>('cost');
@@ -1071,7 +1071,6 @@ export default function DeckEditor({
       {detailOpen && detailCard && (
         <CardDetail
           card={detailCard}
-          printings={printings}
           onClose={closeDetail}
           onAddToDeck={handleAddCard}
           collectionQuantity={searchOwnedQtys[detailCard.id] ?? deckOwnedQtys[detailCard.id] ?? 0}

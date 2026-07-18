@@ -5,7 +5,6 @@ import { getManaMeta } from '../lib/mana';
 
 interface Props {
   card: Card;
-  printings: Card[];
   onClose: () => void;
   onAddToDeck?: (card: Card) => void;
   collectionQuantity?: number;
@@ -23,7 +22,6 @@ const RARITY_LABEL: Record<string, string> = {
 
 export default function CardDetail({
   card,
-  printings,
   onClose,
   onAddToDeck,
   collectionQuantity,
@@ -347,42 +345,6 @@ export default function CardDetail({
               </div>
             )}
           </div>
-
-          {printings.length > 1 && (
-            <div>
-              <div
-                style={{
-                  fontSize: 9.5,
-                  fontFamily: 'var(--font-mono)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  color: 'var(--text-mute)',
-                  marginBottom: 6,
-                }}
-              >
-                Printings ({printings.length})
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxHeight: 90, overflowY: 'auto' }}>
-                {printings.slice(0, 24).map((p) => (
-                  <span
-                    key={p.id}
-                    title={p.set_name}
-                    style={{
-                      padding: '2px 7px',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 10,
-                      color: 'var(--text-dim)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 3,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {p.set_code}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div style={{ flex: 1 }} />
 

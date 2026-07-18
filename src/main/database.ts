@@ -1,5 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3';
 import { app } from 'electron';
+import { dedupeCardPrints } from './dedupe';
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -35,6 +36,12 @@ export function getDb(): BetterSqlite3.Database {
 
   initSchema(db);
   runMigrations(db);
+
+  // Databases synced before prints were collapsed to one per card still hold
+  // every printing; dedupe them on startup (no-op once collapsed).
+  if (dedupeCardPrints(db) > 0) {
+    db.exec('VACUUM');
+  }
 
   return db;
 }

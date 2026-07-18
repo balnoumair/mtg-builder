@@ -7,7 +7,6 @@ export const DEFAULT_CARD_FILTERS: CardFilters = {
   page: 1,
   pageSize: CARD_PAGE_SIZE,
   sortBy: 'name',
-  uniqueBy: 'oracle_id',
 };
 
 interface Options {

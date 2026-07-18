@@ -4,6 +4,7 @@ import type { ImportProgress } from '../../shared/types';
 interface Props {
   onComplete: () => void;
   onCancel?: () => void;
+  onBackupImported?: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -13,10 +14,35 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
-export default function ImportScreen({ onComplete, onCancel }: Props) {
+export default function ImportScreen({ onComplete, onCancel, onBackupImported }: Props) {
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
+
+  const handleBackup = async () => {
+    const result = await window.electronAPI.exportBackup();
+    if (result.error) setBackupStatus(`Backup failed: ${result.error}`);
+    else if (result.saved) setBackupStatus(`Backup saved to ${result.path}`);
+  };
+
+  const handleImportBackup = async () => {
+    const result = await window.electronAPI.importBackup();
+    if (result.error) {
+      setBackupStatus(`Import failed: ${result.error}`);
+      return;
+    }
+    if (result.canceled) return;
+    onBackupImported?.();
+    const summary = `${result.decksImported} deck${result.decksImported === 1 ? '' : 's'} and ${result.collectionCards} collection card${result.collectionCards === 1 ? '' : 's'}`;
+    setBackupStatus(
+      result.missing.length === 0
+        ? `Imported ${summary}`
+        : `Imported ${summary} — not in database: ${result.missing
+            .map((m) => `${m.quantity}× ${m.card}`)
+            .join(', ')}`
+    );
+  };
 
   useEffect(() => {
     const unsub = window.electronAPI.onSyncProgress((p) => {
@@ -207,7 +233,51 @@ export default function ImportScreen({ onComplete, onCancel }: Props) {
             </p>
           </div>
         )}
+
+        {!syncing && onCancel && (
+          <div style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+            <p style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 0, marginBottom: 10 }}>
+              Back up your decks and collection to a file, or restore from one.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button onClick={() => void handleBackup()} style={backupBtn}>
+                Backup
+              </button>
+              <button onClick={() => void handleImportBackup()} style={backupBtn}>
+                Import backup
+              </button>
+            </div>
+            {backupStatus && (
+              <p
+                onClick={() => setBackupStatus(null)}
+                title="Dismiss"
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  color: 'var(--text-dim)',
+                  marginTop: 12,
+                  marginBottom: 0,
+                  cursor: 'pointer',
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {backupStatus}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+const backupBtn: React.CSSProperties = {
+  padding: '6px 12px',
+  background: 'transparent',
+  border: '1px solid var(--border-strong)',
+  borderRadius: 'var(--radius-sm)',
+  color: 'var(--text-dim)',
+  fontSize: 12,
+  cursor: 'pointer',
+  fontFamily: 'var(--font-ui)',
+};

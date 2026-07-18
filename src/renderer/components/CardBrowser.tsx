@@ -15,7 +15,7 @@ interface Props {
 
 export default function CardBrowser({ onCollectionChanged }: Props) {
   const { filters, updateFilters, cards, total, loading, loadingMore, hasMore, loadMore } = useCards();
-  const { card, printings, open, showCard, close } = useCardDetail();
+  const { card, open, showCard, close } = useCardDetail();
   const [colVersion, setColVersion] = useState(0);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -138,7 +138,6 @@ export default function CardBrowser({ onCollectionChanged }: Props) {
       {open && card && (
         <CardDetail
           card={card}
-          printings={printings}
           onClose={close}
           collectionQuantity={ownedQuantities[card.id] ?? 0}
           onAddToCollection={handleAddToCollection}

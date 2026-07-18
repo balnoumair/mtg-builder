@@ -69,7 +69,6 @@ export interface CardFilters {
   page?: number;
   pageSize?: number;
   sortBy?: 'name' | 'cmc' | 'rarity' | 'released_at';
-  uniqueBy?: 'oracle_id';
 }
 
 export interface CardSearchResult {
@@ -131,15 +130,31 @@ export interface DbStatus {
   cardCount: number;
 }
 
+export interface ExportBackupResult {
+  saved: boolean;
+  path?: string;
+  error?: string;
+}
+
+export interface ImportBackupResult {
+  decksImported: number;
+  collectionCards: number;
+  /** Cards from the backup that no longer exist in the local database; deck is null for collection entries. */
+  missing: Array<{ deck: string | null; card: string; quantity: number }>;
+  canceled?: boolean;
+  error?: string;
+}
+
 export interface ElectronAPI {
   getDbStatus(): Promise<DbStatus>;
   syncCards(): Promise<void>;
   onSyncProgress(callback: (progress: ImportProgress) => void): () => void;
   searchCards(filters: CardFilters): Promise<CardSearchResult>;
   getCard(id: string): Promise<Card | null>;
-  getCardPrintings(oracleId: string): Promise<Card[]>;
   getSets(): Promise<CardSet[]>;
   getDecks(): Promise<Deck[]>;
+  exportBackup(): Promise<ExportBackupResult>;
+  importBackup(): Promise<ImportBackupResult>;
   createDeck(deck: { name: string; format?: string }): Promise<Deck>;
   updateDeck(id: number, updates: Partial<Deck>): Promise<Deck>;
   deleteDeck(id: number): Promise<void>;
