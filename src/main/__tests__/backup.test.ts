@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { exportBackup, importBackup, BACKUP_KIND, BACKUP_VERSION } from '../backup';
 import { createTestDb, insertTestCard } from '../queries/__tests__/helpers';
@@ -9,10 +10,14 @@ beforeEach(() => {
   db = createTestDb();
 });
 
-function createDeck(name: string, overrides: Partial<{ format: string; description: string; owned: number; cover_card_id: string }> = {}): number {
+function createDeck(
+  name: string,
+  overrides: Partial<{ uuid: string; format: string; description: string; owned: number; cover_card_id: string }> = {},
+): number {
   return db.prepare(
-    'INSERT INTO decks (name, format, description, owned, cover_card_id) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO decks (uuid, name, format, description, owned, cover_card_id) VALUES (?, ?, ?, ?, ?, ?)'
   ).run(
+    overrides.uuid ?? randomUUID(),
     name,
     overrides.format ?? '',
     overrides.description ?? '',
@@ -54,10 +59,11 @@ function emptyBackup(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe('exportBackup', () => {
-  it('exports decks with confirmed/unconfirmed counts, notes, and the collection', () => {
+  it('exports decks with uuid, confirmed/unconfirmed counts, notes, and the collection', () => {
     insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Alpha', set_code: 'aaa' });
     insertTestCard(db, { id: 'p-2', oracle_id: 'o-2', name: 'Beta', set_code: 'bbb' });
-    const deckId = createDeck('My Deck', { format: 'modern', description: 'notes here', owned: 1, cover_card_id: 'p-1' });
+    const uuid = randomUUID();
+    const deckId = createDeck('My Deck', { uuid, format: 'modern', description: 'notes here', owned: 1, cover_card_id: 'p-1' });
     addDeckCard(deckId, 'p-1', { quantity: 4, owned_quantity: 2, board: 'main' });
     addToCollection('p-2', 3);
 
@@ -67,7 +73,7 @@ describe('exportBackup', () => {
     expect(backup.version).toBe(BACKUP_VERSION);
     expect(backup.decks).toHaveLength(1);
     const deck = backup.decks[0];
-    expect(deck).toMatchObject({ name: 'My Deck', format: 'modern', description: 'notes here', owned: 1 });
+    expect(deck).toMatchObject({ uuid, name: 'My Deck', format: 'modern', description: 'notes here', owned: 1 });
     expect(deck.cover).toEqual({ oracle_id: 'o-1', set_code: 'aaa' });
     expect(deck.cards).toEqual([
       { name: 'Alpha', oracle_id: 'o-1', set_code: 'aaa', board: 'main', quantity: 4, owned_quantity: 2, ignore_copy_limit: 0 },
@@ -78,22 +84,96 @@ describe('exportBackup', () => {
 });
 
 describe('importBackup', () => {
-  it('round-trips decks and collection', () => {
+  it('round-trips a deck onto a fresh database and preserves its uuid', () => {
     insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Alpha', set_code: 'aaa' });
     insertTestCard(db, { id: 'p-2', oracle_id: 'o-2', name: 'Beta', set_code: 'bbb' });
-    const deckId = createDeck('My Deck', { format: 'modern', description: 'notes', owned: 1, cover_card_id: 'p-1' });
+    const uuid = randomUUID();
+    const deckId = createDeck('My Deck', { uuid, format: 'modern', description: 'notes', owned: 1, cover_card_id: 'p-1' });
     addDeckCard(deckId, 'p-1', { quantity: 4, owned_quantity: 2 });
     addToCollection('p-2', 3);
 
-    const summary = importBackup(db, exportBackup(db));
+    const backup = exportBackup(db);
+    db.prepare('DELETE FROM deck_cards').run();
+    db.prepare('DELETE FROM decks').run();
+    db.prepare('DELETE FROM collection').run();
 
-    expect(summary).toEqual({ decksImported: 1, collectionCards: 1, missing: [] });
-    const decks = db.prepare('SELECT id, name, format, description, owned, cover_card_id FROM decks ORDER BY id').all() as Array<Record<string, unknown>>;
-    expect(decks).toHaveLength(2);
-    expect(decks[1]).toMatchObject({ name: 'My Deck', format: 'modern', description: 'notes', owned: 1, cover_card_id: 'p-1' });
-    const cards = db.prepare('SELECT card_id, quantity, owned_quantity, board FROM deck_cards WHERE deck_id = ?').all(decks[1].id);
+    const summary = importBackup(db, backup);
+
+    expect(summary).toEqual({
+      decksImported: 1,
+      decksSkipped: 0,
+      collectionCards: 1,
+      collectionCardsSkipped: 0,
+      missing: [],
+    });
+    const decks = db.prepare('SELECT uuid, name, format, description, owned, cover_card_id FROM decks').all() as Array<Record<string, unknown>>;
+    expect(decks).toEqual([{ uuid, name: 'My Deck', format: 'modern', description: 'notes', owned: 1, cover_card_id: 'p-1' }]);
+    const cards = db.prepare('SELECT card_id, quantity, owned_quantity, board FROM deck_cards').all();
     expect(cards).toEqual([{ card_id: 'p-1', quantity: 4, owned_quantity: 2, board: 'main' }]);
     expect(db.prepare('SELECT card_id, quantity FROM collection').all()).toEqual([{ card_id: 'p-2', quantity: 3 }]);
+  });
+
+  it('skips decks whose uuid is already stored', () => {
+    insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Alpha', set_code: 'aaa' });
+    const uuid = randomUUID();
+    const deckId = createDeck('My Deck', { uuid, format: 'modern', description: 'notes', owned: 1, cover_card_id: 'p-1' });
+    addDeckCard(deckId, 'p-1', { quantity: 4, owned_quantity: 2 });
+
+    const summary = importBackup(db, exportBackup(db));
+
+    expect(summary).toEqual({
+      decksImported: 0,
+      decksSkipped: 1,
+      collectionCards: 0,
+      collectionCardsSkipped: 0,
+      missing: [],
+    });
+    expect(db.prepare('SELECT COUNT(*) n FROM decks').get()).toEqual({ n: 1 });
+    expect(db.prepare('SELECT COUNT(*) n FROM deck_cards').get()).toEqual({ n: 1 });
+  });
+
+  it('skips collection cards already present at equal or higher quantity', () => {
+    insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Alpha', set_code: 'aaa' });
+    insertTestCard(db, { id: 'p-2', oracle_id: 'o-2', name: 'Beta', set_code: 'aaa' });
+    addToCollection('p-1', 5);
+
+    const summary = importBackup(db, emptyBackup({
+      collection: [
+        { name: 'Alpha', oracle_id: 'o-1', set_code: 'aaa', quantity: 2, added_at: null },
+        { name: 'Beta', oracle_id: 'o-2', set_code: 'aaa', quantity: 4, added_at: null },
+      ],
+    }));
+
+    expect(summary).toEqual({
+      decksImported: 0,
+      decksSkipped: 0,
+      collectionCards: 1,
+      collectionCardsSkipped: 1,
+      missing: [],
+    });
+  });
+
+  it('imports legacy decks that have no uuid as new decks', () => {
+    insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Alpha', set_code: 'aaa' });
+    createDeck('Local', { uuid: randomUUID() });
+
+    const summary = importBackup(db, emptyBackup({
+      decks: [{
+        name: 'Legacy',
+        format: '',
+        description: '',
+        owned: 0,
+        cover: null,
+        cards: [
+          { name: 'Alpha', oracle_id: 'o-1', set_code: 'aaa', board: 'main', quantity: 1, owned_quantity: null, ignore_copy_limit: 0 },
+        ],
+      }],
+    }));
+
+    expect(summary).toMatchObject({ decksImported: 1, decksSkipped: 0 });
+    expect(db.prepare('SELECT COUNT(*) n FROM decks').get()).toEqual({ n: 2 });
+    const imported = db.prepare("SELECT uuid FROM decks WHERE name = 'Legacy'").get() as { uuid: string };
+    expect(imported.uuid).toBeTruthy();
   });
 
   it('merges collection counts by keeping the larger quantity, so re-import is idempotent', () => {
@@ -124,6 +204,7 @@ describe('importBackup', () => {
 
     const summary = importBackup(db, emptyBackup({
       decks: [{
+        uuid: randomUUID(),
         name: 'Restored',
         format: '',
         description: '',
@@ -147,6 +228,7 @@ describe('importBackup', () => {
   it('reports cards missing from the database instead of failing', () => {
     const summary = importBackup(db, emptyBackup({
       decks: [{
+        uuid: randomUUID(),
         name: 'Sparse',
         format: '',
         description: '',
@@ -177,6 +259,7 @@ describe('importBackup', () => {
 
     const summary = importBackup(db, emptyBackup({
       decks: [{
+        uuid: randomUUID(),
         name: 'Merged',
         format: '',
         description: '',
@@ -201,6 +284,9 @@ describe('importBackup', () => {
     expect(() => importBackup(db, emptyBackup({
       decks: [{ name: 'Bad', cards: [{ name: 'X' }] }],
     }))).toThrow('invalid card entries');
+    expect(() => importBackup(db, emptyBackup({
+      decks: [{ uuid: '', name: 'Bad', format: '', description: '', owned: 0, cover: null, cards: [] }],
+    }))).toThrow('invalid uuid');
     expect(db.prepare('SELECT COUNT(*) n FROM decks').get()).toEqual({ n: 0 });
   });
 });

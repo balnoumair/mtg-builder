@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { randomUUID } from 'node:crypto';
 import type { Deck, DeckCard } from '../../shared/types';
 import { addToCollection } from './collection';
 import {
@@ -119,8 +120,8 @@ function rowToDeck(row: Record<string, unknown>): Deck {
 
 export function createDeck(db: Database.Database, deck: { name: string; format?: string }): Deck {
   const result = db.prepare(
-    "INSERT INTO decks (name, format) VALUES (@name, @format)"
-  ).run({ name: deck.name, format: deck.format || '' });
+    'INSERT INTO decks (name, format, uuid) VALUES (@name, @format, @uuid)'
+  ).run({ name: deck.name, format: deck.format || '', uuid: randomUUID() });
 
   return rowToDeck(db.prepare('SELECT * FROM decks WHERE id = ?').get(result.lastInsertRowid) as Record<string, unknown>);
 }

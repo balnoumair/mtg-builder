@@ -34,7 +34,17 @@ export default function ImportScreen({ onComplete, onCancel, onBackupImported }:
     }
     if (result.canceled) return;
     onBackupImported?.();
-    const summary = `${result.decksImported} deck${result.decksImported === 1 ? '' : 's'} and ${result.collectionCards} collection card${result.collectionCards === 1 ? '' : 's'}`;
+    const already: string[] = [];
+    if (result.decksSkipped > 0) {
+      already.push(`${result.decksSkipped} deck${result.decksSkipped === 1 ? '' : 's'}`);
+    }
+    if (result.collectionCardsSkipped > 0) {
+      already.push(
+        `${result.collectionCardsSkipped} collection card${result.collectionCardsSkipped === 1 ? '' : 's'}`,
+      );
+    }
+    const skipped = already.length > 0 ? ` (${already.join(', ')} already present)` : '';
+    const summary = `${result.decksImported} deck${result.decksImported === 1 ? '' : 's'} and ${result.collectionCards} collection card${result.collectionCards === 1 ? '' : 's'}${skipped}`;
     setBackupStatus(
       result.missing.length === 0
         ? `Imported ${summary}`

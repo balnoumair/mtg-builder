@@ -1,5 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3';
 import { app } from 'electron';
+import { randomUUID } from 'node:crypto';
 import { dedupeCardPrints } from './dedupe';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -79,6 +80,7 @@ function initSchema(db: BetterSqlite3.Database): void {
 
     CREATE TABLE IF NOT EXISTS decks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid TEXT UNIQUE,
       name TEXT NOT NULL,
       format TEXT DEFAULT '',
       description TEXT DEFAULT '',
@@ -120,6 +122,21 @@ function runMigrations(db: BetterSqlite3.Database): void {
   if (!deckCols.some(c => c.name === 'owned')) {
     db.exec("ALTER TABLE decks ADD COLUMN owned INTEGER DEFAULT 0");
   }
+  if (!deckCols.some(c => c.name === 'uuid')) {
+    db.exec('ALTER TABLE decks ADD COLUMN uuid TEXT');
+  }
+  // Existing decks (and any row still missing one) get a stable id once.
+  const missing = db.prepare('SELECT id FROM decks WHERE uuid IS NULL').all() as { id: number }[];
+  if (missing.length > 0) {
+    const setUuid = db.prepare('UPDATE decks SET uuid = ? WHERE id = ?');
+    const fill = db.transaction(() => {
+      for (const row of missing) {
+        setUuid.run(randomUUID(), row.id);
+      }
+    });
+    fill();
+  }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_decks_uuid ON decks(uuid)');
 
   const cardCols = db.prepare("PRAGMA table_info(cards)").all() as { name: string }[];
   if (!cardCols.some(c => c.name === 'block_code')) {

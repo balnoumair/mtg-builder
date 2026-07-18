@@ -23,9 +23,12 @@ beforeEach(() => {
 });
 
 describe('createDeck', () => {
-  it('creates a deck and returns it with an id', () => {
+  it('creates a deck and returns it with an id and uuid', () => {
     const deck = createDeck(db, { name: 'My Deck' });
     expect(deck.id).toBeGreaterThan(0);
+    expect(deck.uuid).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
     expect(deck.name).toBe('My Deck');
     expect(deck.owned).toBe(false);
   });

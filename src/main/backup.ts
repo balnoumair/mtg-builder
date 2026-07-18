@@ -1,8 +1,11 @@
 import type Database from 'better-sqlite3';
+import { randomUUID } from 'node:crypto';
 
 // Backups identify cards by oracle_id + name + set_code, never by print id:
 // print ids change when prints are re-collapsed or Scryfall data shifts, so a
 // backup file stays importable across syncs, devices, and app versions.
+// Decks carry a stable uuid so re-importing the same backup skips decks that
+// are already present (collection merge stays idempotent separately).
 
 export const BACKUP_KIND = 'mtg-builder-backup';
 export const BACKUP_VERSION = 1;
@@ -18,6 +21,8 @@ interface BackupDeckCard {
 }
 
 interface BackupDeck {
+  /** Stable deck identity; absent on backups written before uuids existed. */
+  uuid?: string;
   name: string;
   format: string;
   description: string;
@@ -44,16 +49,21 @@ export interface AppBackup {
 
 export interface BackupImportSummary {
   decksImported: number;
+  decksSkipped: number;
+  /** Collection cards newly added or whose quantity increased. */
   collectionCards: number;
+  /** Collection cards already present with equal or higher quantity. */
+  collectionCardsSkipped: number;
   /** Cards that no longer exist in the local database; deck is null for collection entries. */
   missing: Array<{ deck: string | null; card: string; quantity: number }>;
 }
 
 export function exportBackup(db: Database.Database): AppBackup {
   const deckRows = db.prepare(
-    'SELECT id, name, format, description, owned, cover_card_id FROM decks ORDER BY name'
+    'SELECT id, uuid, name, format, description, owned, cover_card_id FROM decks ORDER BY name'
   ).all() as Array<{
     id: number;
+    uuid: string;
     name: string;
     format: string;
     description: string;
@@ -80,6 +90,7 @@ export function exportBackup(db: Database.Database): AppBackup {
     version: BACKUP_VERSION,
     exported_at: new Date().toISOString(),
     decks: deckRows.map((deck) => ({
+      uuid: deck.uuid,
       name: deck.name,
       format: deck.format,
       description: deck.description,
@@ -128,6 +139,9 @@ function validateBackup(parsed: unknown): AppBackup {
     if (!deck || typeof deck !== 'object' || typeof deck.name !== 'string' || !deck.name) {
       throw new Error('Backup contains a deck without a name');
     }
+    if (deck.uuid !== undefined && (typeof deck.uuid !== 'string' || !deck.uuid)) {
+      throw new Error(`Deck "${deck.name}" has an invalid uuid`);
+    }
     if (!Array.isArray(deck.cards) || !deck.cards.every(isBackupDeckCard)) {
       throw new Error(`Deck "${deck.name}" has invalid card entries`);
     }
@@ -138,13 +152,13 @@ function validateBackup(parsed: unknown): AppBackup {
   return backup;
 }
 
-// Imports every deck in the backup as a new deck (never overwrites existing
-// decks) and merges the collection: for each card the stored quantity becomes
+// Imports decks that are not already present (matched by uuid). Decks without
+// a uuid (legacy backups) always insert as new. Collection merges by keeping
 // the larger of the local and backup counts, so re-importing the same file is
-// idempotent and local copies are never reduced. Cards resolve to the print of
-// the same card in the recorded set when possible, falling back to the card's
-// kept print, then to a name match. Cards not in the database at all are
-// skipped and reported.
+// idempotent for collection and never reduces local copies. Cards resolve to
+// the print of the same card in the recorded set when possible, falling back
+// to the card's kept print, then to a name match. Cards not in the database
+// at all are skipped and reported.
 export function importBackup(db: Database.Database, parsed: unknown): BackupImportSummary {
   const backup = validateBackup(parsed);
 
@@ -158,8 +172,9 @@ export function importBackup(db: Database.Database, parsed: unknown): BackupImpo
          ORDER BY released_at DESC, CAST(collector_number AS INTEGER) ASC LIMIT 1)
     ) AS id
   `);
+  const findDeckByUuid = db.prepare('SELECT id FROM decks WHERE uuid = ?');
   const insertDeck = db.prepare(
-    'INSERT INTO decks (name, format, description, owned) VALUES (@name, @format, @description, @owned)'
+    'INSERT INTO decks (uuid, name, format, description, owned) VALUES (@uuid, @name, @format, @description, @owned)'
   );
   const insertDeckCard = db.prepare(`
     INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, board)
@@ -173,6 +188,7 @@ export function importBackup(db: Database.Database, parsed: unknown): BackupImpo
       ignore_copy_limit = MAX(ignore_copy_limit, excluded.ignore_copy_limit)
   `);
   const setCover = db.prepare('UPDATE decks SET cover_card_id = ? WHERE id = ?');
+  const getCollectionQty = db.prepare('SELECT quantity FROM collection WHERE card_id = ?');
   const mergeCollectionCard = db.prepare(`
     INSERT INTO collection (card_id, quantity, added_at)
     VALUES (@card_id, @quantity, COALESCE(@added_at, datetime('now')))
@@ -182,15 +198,26 @@ export function importBackup(db: Database.Database, parsed: unknown): BackupImpo
 
   const missing: BackupImportSummary['missing'] = [];
   let collectionCards = 0;
+  let collectionCardsSkipped = 0;
+  let decksImported = 0;
+  let decksSkipped = 0;
 
   const run = db.transaction(() => {
     for (const deck of backup.decks) {
+      const uuid = typeof deck.uuid === 'string' && deck.uuid ? deck.uuid : randomUUID();
+      if (typeof deck.uuid === 'string' && deck.uuid && findDeckByUuid.get(uuid)) {
+        decksSkipped += 1;
+        continue;
+      }
+
       const deckId = insertDeck.run({
+        uuid,
         name: deck.name,
         format: typeof deck.format === 'string' ? deck.format : '',
         description: typeof deck.description === 'string' ? deck.description : '',
         owned: deck.owned ? 1 : 0,
       }).lastInsertRowid as number;
+      decksImported += 1;
 
       for (const card of deck.cards) {
         const resolved = resolveCard.get(card) as { id: string | null };
@@ -228,6 +255,11 @@ export function importBackup(db: Database.Database, parsed: unknown): BackupImpo
         missing.push({ deck: null, card: card.name, quantity: card.quantity });
         continue;
       }
+      const existing = getCollectionQty.get(resolved.id) as { quantity: number } | undefined;
+      if (existing && existing.quantity >= card.quantity) {
+        collectionCardsSkipped += 1;
+        continue;
+      }
       mergeCollectionCard.run({
         card_id: resolved.id,
         quantity: card.quantity,
@@ -238,5 +270,5 @@ export function importBackup(db: Database.Database, parsed: unknown): BackupImpo
   });
   run();
 
-  return { decksImported: backup.decks.length, collectionCards, missing };
+  return { decksImported, decksSkipped, collectionCards, collectionCardsSkipped, missing };
 }

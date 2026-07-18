@@ -31,6 +31,8 @@ export interface Card {
 
 export interface Deck {
   id: number;
+  /** Stable identity for backup import; assigned on create / migration. */
+  uuid: string;
   name: string;
   format: string;
   description: string;
@@ -138,7 +140,12 @@ export interface ExportBackupResult {
 
 export interface ImportBackupResult {
   decksImported: number;
+  /** Decks skipped because a local deck already has the same uuid. */
+  decksSkipped: number;
+  /** Collection cards newly added or whose quantity increased. */
   collectionCards: number;
+  /** Collection cards already present with equal or higher quantity. */
+  collectionCardsSkipped: number;
   /** Cards from the backup that no longer exist in the local database; deck is null for collection entries. */
   missing: Array<{ deck: string | null; card: string; quantity: number }>;
   canceled?: boolean;

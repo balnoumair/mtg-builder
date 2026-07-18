@@ -62,13 +62,22 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('backup:import', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
-    if (!win) return { decksImported: 0, collectionCards: 0, missing: [] };
+    if (!win) {
+      return { decksImported: 0, decksSkipped: 0, collectionCards: 0, collectionCardsSkipped: 0, missing: [] };
+    }
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
       filters: [{ name: 'mtg-builder backup', extensions: ['json'] }],
       properties: ['openFile'],
     });
     if (canceled || !filePaths[0]) {
-      return { decksImported: 0, collectionCards: 0, missing: [], canceled: true };
+      return {
+        decksImported: 0,
+        decksSkipped: 0,
+        collectionCards: 0,
+        collectionCardsSkipped: 0,
+        missing: [],
+        canceled: true,
+      };
     }
     try {
       const parsed = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
@@ -76,7 +85,9 @@ export function registerIpcHandlers(): void {
     } catch (err) {
       return {
         decksImported: 0,
+        decksSkipped: 0,
         collectionCards: 0,
+        collectionCardsSkipped: 0,
         missing: [],
         error: err instanceof Error ? err.message : String(err),
       };
