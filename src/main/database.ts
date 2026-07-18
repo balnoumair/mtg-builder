@@ -66,8 +66,6 @@ function initSchema(db: BetterSqlite3.Database): void {
       face_back_name TEXT,
       face_back_image_uri_normal TEXT,
       legalities TEXT DEFAULT '{}',
-      price_usd TEXT,
-      price_eur TEXT,
       released_at TEXT,
       artist TEXT
     );
@@ -122,6 +120,14 @@ function runMigrations(db: BetterSqlite3.Database): void {
   }
   if (!cardCols.some(c => c.name === 'block_name')) {
     db.exec("ALTER TABLE cards ADD COLUMN block_name TEXT");
+  }
+  // Prices are intentionally not tracked; drop them from databases created
+  // before their removal.
+  if (cardCols.some(c => c.name === 'price_usd')) {
+    db.exec("ALTER TABLE cards DROP COLUMN price_usd");
+  }
+  if (cardCols.some(c => c.name === 'price_eur')) {
+    db.exec("ALTER TABLE cards DROP COLUMN price_eur");
   }
 
   const deckCardCols = db.prepare("PRAGMA table_info(deck_cards)").all() as { name: string }[];

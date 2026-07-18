@@ -164,7 +164,6 @@ describe('getCollectionStats', () => {
     const stats = getCollectionStats(db);
     expect(stats.uniqueCards).toBe(0);
     expect(stats.totalCopies).toBe(0);
-    expect(stats.estimatedValue).toBeNull();
   });
 
   it('counts unique cards and total copies correctly', () => {
@@ -175,19 +174,5 @@ describe('getCollectionStats', () => {
     const stats = getCollectionStats(db);
     expect(stats.uniqueCards).toBe(2);
     expect(stats.totalCopies).toBe(6);
-  });
-
-  it('calculates estimated value from price_usd', () => {
-    const c1 = insertTestCard(db, { price_usd: '2.50' });
-    addToCollection(db, c1, 3); // 3 * 2.50 = 7.50
-    const stats = getCollectionStats(db);
-    expect(stats.estimatedValue).toBeCloseTo(7.5);
-  });
-
-  it('returns null for estimatedValue when all prices are null', () => {
-    const c1 = insertTestCard(db, { price_usd: null });
-    addToCollection(db, c1, 1);
-    const stats = getCollectionStats(db);
-    expect(stats.estimatedValue).toBeNull();
   });
 });

@@ -25,8 +25,6 @@ export interface Card {
   face_back_name: string | null;
   face_back_image_uri_normal: string | null;
   legalities: Record<string, string>;
-  price_usd: string | null;
-  price_eur: string | null;
   released_at: string;
   artist: string;
 }
@@ -98,7 +96,28 @@ export interface CollectionCard {
 export interface CollectionStats {
   uniqueCards: number;
   totalCopies: number;
-  estimatedValue: number | null;
+}
+
+export interface WantSource {
+  deck_id: number;
+  deck_name: string;
+  /** True when the need is an unconfirmed addition to an owned deck (vs a wishlist deck). */
+  pending: boolean;
+  need: number;
+}
+
+/** A card still to buy: needs and owned copies are matched by name across printings. */
+export interface WantItem {
+  name: string;
+  /** Copies wanted across all wishlist decks and pending additions. */
+  needed: number;
+  /** Copies of any printing already in the collection. */
+  owned: number;
+  /** max(needed - owned, 0); items are omitted when 0. */
+  to_buy: number;
+  /** Representative printing, for image/mana display. */
+  card: Card;
+  sources: WantSource[];
 }
 
 export interface ImportProgress {
@@ -138,6 +157,7 @@ export interface ElectronAPI {
   updateCollectionQuantity(cardId: string, quantity: number): Promise<void>;
   removeFromCollection(cardId: string): Promise<void>;
   getCollectionStats(): Promise<CollectionStats>;
+  getWants(): Promise<WantItem[]>;
 }
 
 declare global {

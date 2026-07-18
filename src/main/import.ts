@@ -64,10 +64,6 @@ interface ScryCard {
     };
   }>;
   legalities?: Record<string, string>;
-  prices?: {
-    usd?: string;
-    eur?: string;
-  };
   released_at?: string;
   artist?: string;
   booster?: boolean;
@@ -228,7 +224,7 @@ export function importCardsFromFile(
         rarity, set_code, set_name, collector_number, layout,
         image_uri_small, image_uri_normal, image_uri_large, image_uri_art_crop,
         face_back_name, face_back_image_uri_normal,
-        legalities, price_usd, price_eur, released_at, artist,
+        legalities, released_at, artist,
         block_code, block_name
       ) VALUES (
         @id, @oracle_id, @name, @mana_cost, @cmc, @type_line, @oracle_text,
@@ -236,7 +232,7 @@ export function importCardsFromFile(
         @rarity, @set_code, @set_name, @collector_number, @layout,
         @image_uri_small, @image_uri_normal, @image_uri_large, @image_uri_art_crop,
         @face_back_name, @face_back_image_uri_normal,
-        @legalities, @price_usd, @price_eur, @released_at, @artist,
+        @legalities, @released_at, @artist,
         @block_code, @block_name
       )
     `);
@@ -306,8 +302,6 @@ export function importCardsFromFile(
         face_back_name: backFace?.name || null,
         face_back_image_uri_normal: backFace?.image_uris?.normal || null,
         legalities: JSON.stringify(value.legalities || {}),
-        price_usd: value.prices?.usd || null,
-        price_eur: value.prices?.eur || null,
         released_at: value.released_at || '',
         artist: value.artist || '',
         block_code: blockInfo?.block_code ?? null,

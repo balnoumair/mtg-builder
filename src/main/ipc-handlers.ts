@@ -4,6 +4,7 @@ import { syncCards } from './import';
 import * as cardQueries from './queries/cards';
 import * as deckQueries from './queries/decks';
 import * as collectionQueries from './queries/collection';
+import * as wantsQueries from './queries/wants';
 import type { CardFilters, Deck } from '../shared/types';
 
 export function registerIpcHandlers(): void {
@@ -108,5 +109,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('collection:stats', () => {
     return collectionQueries.getCollectionStats(getDb());
+  });
+
+  ipcMain.handle('wants:list', () => {
+    return wantsQueries.getWants(getDb());
   });
 }

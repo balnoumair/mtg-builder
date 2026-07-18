@@ -9,7 +9,11 @@ import CardDetail from './CardDetail';
 import ViewToggle from './ViewToggle';
 import InfiniteScrollFooter from './InfiniteScrollFooter';
 
-export default function CardBrowser() {
+interface Props {
+  onCollectionChanged?: () => void;
+}
+
+export default function CardBrowser({ onCollectionChanged }: Props) {
   const { filters, updateFilters, cards, total, loading, loadingMore, hasMore, loadMore } = useCards();
   const { card, printings, open, showCard, close } = useCardDetail();
   const [colVersion, setColVersion] = useState(0);
@@ -19,7 +23,10 @@ export default function CardBrowser() {
   const cardIds = useMemo(() => cards.map((c) => c.id), [cards]);
   const ownedQuantities = useCollectionLookup(cardIds, colVersion);
 
-  const refreshCol = useCallback(() => setColVersion((v) => v + 1), []);
+  const refreshCol = useCallback(() => {
+    setColVersion((v) => v + 1);
+    onCollectionChanged?.();
+  }, [onCollectionChanged]);
   const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refreshCol);
 
   const handleAddToCollection = useCallback((c: Card) => addToCollection(c.id), [addToCollection]);

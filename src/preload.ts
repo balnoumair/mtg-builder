@@ -31,6 +31,7 @@ const api: ElectronAPI = {
   updateCollectionQuantity: (cardId: string, quantity: number) => ipcRenderer.invoke('collection:update', cardId, quantity),
   removeFromCollection: (cardId: string) => ipcRenderer.invoke('collection:remove', cardId),
   getCollectionStats: () => ipcRenderer.invoke('collection:stats'),
+  getWants: () => ipcRenderer.invoke('wants:list'),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

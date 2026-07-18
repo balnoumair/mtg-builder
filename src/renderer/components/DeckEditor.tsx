@@ -73,10 +73,54 @@ export default function DeckEditor({
   const [showChanges, setShowChanges] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [notesStatus, setNotesStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const notesSeededForRef = useRef<number | null>(null);
+  const notesSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const notesValueRef = useRef('');
 
   useEffect(() => {
     setRenaming(false);
+    setNotesOpen(false);
+    setNotesStatus('idle');
   }, [deckId]);
+
+  // Notes live in deck.description; seed once per deck, including when the
+  // deck list finishes loading after mount.
+  useEffect(() => {
+    if (deck && notesSeededForRef.current !== deckId) {
+      setNotes(deck.description ?? '');
+      notesValueRef.current = deck.description ?? '';
+      notesSeededForRef.current = deckId;
+    }
+  }, [deck, deckId]);
+
+  const handleNotesChange = useCallback(
+    (value: string) => {
+      setNotes(value);
+      notesValueRef.current = value;
+      setNotesStatus('saving');
+      if (notesSaveTimerRef.current) clearTimeout(notesSaveTimerRef.current);
+      notesSaveTimerRef.current = setTimeout(async () => {
+        notesSaveTimerRef.current = undefined;
+        await onUpdateDeck(deckId, { description: value });
+        setNotesStatus('saved');
+      }, 600);
+    },
+    [deckId, onUpdateDeck],
+  );
+
+  // Flush a pending notes save when switching decks or unmounting.
+  useEffect(() => {
+    return () => {
+      if (notesSaveTimerRef.current) {
+        clearTimeout(notesSaveTimerRef.current);
+        notesSaveTimerRef.current = undefined;
+        void onUpdateDeck(deckId, { description: notesValueRef.current });
+      }
+    };
+  }, [deckId, onUpdateDeck]);
 
   const searchScrollRef = useRef<HTMLDivElement>(null);
 
@@ -86,7 +130,10 @@ export default function DeckEditor({
   const deckCardIds = useMemo(() => deckCards.map((c) => c.card_id), [deckCards]);
   const deckOwnedQtys = useCollectionLookup(deckCardIds, colVersion);
 
-  const refreshCol = useCallback(() => setColVersion((v) => v + 1), []);
+  const refreshCol = useCallback(() => {
+    setColVersion((v) => v + 1);
+    onCollectionChanged();
+  }, [onCollectionChanged]);
   const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refreshCol);
 
   const searchDeckQtys = useMemo(() => {
@@ -474,14 +521,22 @@ export default function DeckEditor({
               />
             ) : (
               [
-                { k: 'main' as const, l: 'Main', n: mainCount },
-                { k: 'sideboard' as const, l: 'Sideboard', n: sideCount },
+                { k: 'main' as const, l: 'Main', n: mainCount as number | null },
+                { k: 'sideboard' as const, l: 'Sideboard', n: sideCount as number | null },
+                ...(deck?.owned ? [{ k: 'notes' as const, l: 'Notes', n: null }] : []),
               ].map((tab) => {
-                const active = activeBoard === tab.k;
+                const active = notesOpen ? tab.k === 'notes' : activeBoard === tab.k;
                 return (
                   <button
                     key={tab.k}
-                    onClick={() => setActiveBoard(tab.k)}
+                    onClick={() => {
+                      if (tab.k === 'notes') {
+                        setNotesOpen(true);
+                      } else {
+                        setActiveBoard(tab.k);
+                        setNotesOpen(false);
+                      }
+                    }}
                     style={{
                       background: 'transparent',
                       border: 'none',
@@ -500,15 +555,30 @@ export default function DeckEditor({
                     }}
                   >
                     {tab.l}
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 11,
-                        color: active ? 'var(--text-dim)' : 'var(--text-faint)',
-                      }}
-                    >
-                      {tab.n}
-                    </span>
+                    {tab.n !== null ? (
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 11,
+                          color: active ? 'var(--text-dim)' : 'var(--text-faint)',
+                        }}
+                      >
+                        {tab.n}
+                      </span>
+                    ) : (
+                      notes.trim() !== '' && (
+                        <span
+                          title="This deck has notes"
+                          style={{
+                            width: 4,
+                            height: 4,
+                            borderRadius: '50%',
+                            alignSelf: 'center',
+                            background: active ? 'var(--text-dim)' : 'var(--text-faint)',
+                          }}
+                        />
+                      )
+                    )}
                   </button>
                 );
               })
@@ -526,22 +596,26 @@ export default function DeckEditor({
               marginBottom: 10,
             }}
           >
-            <ViewToggle
-              value={deckView}
-              onChange={setDeckView}
-              options={[
-                { value: 'list', label: 'list' },
-                { value: 'visual', label: 'visual' },
-              ]}
-            />
-            <ViewToggle
-              value={deckGroupBy}
-              onChange={setDeckGroupBy}
-              options={[
-                { value: 'type', label: 'type' },
-                { value: 'cost', label: 'cost' },
-              ]}
-            />
+            {!notesOpen && (
+              <>
+                <ViewToggle
+                  value={deckView}
+                  onChange={setDeckView}
+                  options={[
+                    { value: 'list', label: 'list' },
+                    { value: 'visual', label: 'visual' },
+                  ]}
+                />
+                <ViewToggle
+                  value={deckGroupBy}
+                  onChange={setDeckGroupBy}
+                  options={[
+                    { value: 'type', label: 'type' },
+                    { value: 'cost', label: 'cost' },
+                  ]}
+                />
+              </>
+            )}
             <button onClick={() => setShowExport(true)} style={chipBtn}>
               Export
             </button>
@@ -558,7 +632,7 @@ export default function DeckEditor({
             )}
           </div>
 
-          <DeckStats cards={deckCards} board={activeBoard} />
+          {!notesOpen && <DeckStats cards={deckCards} board={activeBoard} />}
 
           {hasPending && (
             <div
@@ -602,6 +676,58 @@ export default function DeckEditor({
           )}
         </div>
 
+        {notesOpen && (
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              padding: 'var(--pad-tight) var(--pad) var(--pad)',
+            }}
+          >
+            <textarea
+              value={notes}
+              onChange={(e) => handleNotesChange(e.target.value)}
+              placeholder="Sideboard plans, swaps to try, matchup notes…"
+              spellCheck={false}
+              style={{
+                flex: 1,
+                width: '100%',
+                resize: 'none',
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                padding: 0,
+                color: 'var(--text)',
+                fontFamily: 'var(--font-ui)',
+                fontSize: 13,
+                lineHeight: 1.65,
+              }}
+            />
+            <div
+              style={{
+                height: 16,
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: 'var(--text-faint)',
+                }}
+              >
+                {notesStatus === 'saving' ? 'Saving…' : notesStatus === 'saved' ? 'Saved' : ''}
+              </span>
+            </div>
+          </div>
+        )}
         <div
           className="scroll-hidden"
           style={{
@@ -610,6 +736,7 @@ export default function DeckEditor({
             minWidth: 0,
             width: '100%',
             overflowY: 'auto',
+            display: notesOpen ? 'none' : 'block',
             padding: deckView === 'visual' ? 'var(--pad-tight) var(--pad) var(--pad)' : '6px 0 12px',
           }}
         >

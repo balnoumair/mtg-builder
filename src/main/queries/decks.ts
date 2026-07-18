@@ -162,7 +162,7 @@ export function getDeckCards(db: Database.Database, deckId: number): DeckCard[] 
            c.rarity, c.set_code, c.set_name, c.collector_number, c.layout,
            c.image_uri_small, c.image_uri_normal, c.image_uri_large, c.image_uri_art_crop,
            c.face_back_name, c.face_back_image_uri_normal,
-           c.legalities, c.price_usd, c.price_eur, c.released_at, c.artist,
+           c.legalities, c.released_at, c.artist,
            c.oracle_id
     FROM deck_cards dc
     JOIN cards c ON c.id = dc.card_id
@@ -202,8 +202,6 @@ export function getDeckCards(db: Database.Database, deckId: number): DeckCard[] 
         face_back_name: row.face_back_name as string | null,
         face_back_image_uri_normal: row.face_back_image_uri_normal as string | null,
         legalities: JSON.parse((row.legalities as string) || '{}'),
-        price_usd: row.price_usd as string | null,
-        price_eur: row.price_eur as string | null,
         released_at: row.released_at as string,
         artist: row.artist as string,
       },

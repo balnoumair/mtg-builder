@@ -1,4 +1,12 @@
-import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react';
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+  type ReactNode,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import type { DbStatus } from '../shared/types';
 import type { View } from './lib/types';
 import ImportScreen from './components/ImportScreen';
@@ -8,7 +16,26 @@ import CardBrowser from './components/CardBrowser';
 import DeckList from './components/DeckList';
 import DeckEditor from './components/DeckEditor';
 import CollectionView from './components/CollectionView';
+import WantsView from './components/WantsView';
 import { useDecks } from './hooks/useDecks';
+
+const SIDEBAR_DEFAULT_W = 224;
+const SIDEBAR_MIN_W = 170;
+const SIDEBAR_MAX_W = 420;
+const SIDEBAR_W_KEY = 'sidebar-width';
+
+function clampSidebarWidth(width: number): number {
+  return Math.max(SIDEBAR_MIN_W, Math.min(SIDEBAR_MAX_W, width));
+}
+
+function loadSidebarWidth(): number {
+  try {
+    const n = Number(localStorage.getItem(SIDEBAR_W_KEY));
+    return Number.isFinite(n) && n > 0 ? clampSidebarWidth(n) : SIDEBAR_DEFAULT_W;
+  } catch {
+    return SIDEBAR_DEFAULT_W;
+  }
+}
 
 export default function App() {
   const [dbStatus, setDbStatus] = useState<DbStatus | null>(null);
@@ -17,6 +44,37 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const [collectionVersion, setCollectionVersion] = useState(0);
   const bumpCollection = useCallback(() => setCollectionVersion((v) => v + 1), []);
+  const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
+  const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_W_KEY, String(sidebarWidth));
+    } catch {
+      // ignore quota / private mode
+    }
+  }, [sidebarWidth]);
+
+  const onSidebarDividerPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    sidebarDragRef.current = { startX: e.clientX, startWidth: sidebarWidth };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  const onSidebarDividerPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!sidebarDragRef.current) return;
+    const delta = e.clientX - sidebarDragRef.current.startX;
+    setSidebarWidth(clampSidebarWidth(sidebarDragRef.current.startWidth + delta));
+  };
+
+  const endSidebarDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!sidebarDragRef.current) return;
+    sidebarDragRef.current = null;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  };
   const { decks, loading: decksLoading, createDeck, deleteDeck, updateDeck, refresh: refreshDecks } = useDecks();
 
   useEffect(() => {
@@ -58,6 +116,7 @@ export default function App() {
     }
     if (view === 'collection') return { title: 'Card Browser', subtitle: '' };
     if (view === 'my-cards') return { title: 'My Cards', subtitle: '' };
+    if (view === 'wants') return { title: 'Wants', subtitle: '' };
     return { title: 'Decks', subtitle: '' };
   }, [view, activeDeckId, decks]);
 
@@ -103,6 +162,7 @@ export default function App() {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         <Sidebar
           view={view}
+          width={sidebarWidth}
           onNavigate={setView}
           decks={decks}
           onOpenDeck={handleOpenDeck}
@@ -113,18 +173,40 @@ export default function App() {
           onSync={handleSync}
           cardCount={dbStatus.cardCount}
         />
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-valuenow={sidebarWidth}
+          className="split-divider"
+          onPointerDown={onSidebarDividerPointerDown}
+          onPointerMove={onSidebarDividerPointerMove}
+          onPointerUp={endSidebarDrag}
+          onPointerCancel={endSidebarDrag}
+          onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_W)}
+          title="Drag to resize · Double-click to reset"
+          style={{
+            width: 4,
+            flexShrink: 0,
+            cursor: 'col-resize',
+            background: 'var(--border)',
+            touchAction: 'none',
+          }}
+        />
         <main style={{ flex: 1, overflow: 'hidden', display: 'flex', minWidth: 0 }}>
           {/* The three primary views stay mounted and toggle visibility so
               switching between them never remounts and re-fetches (which would
               flash a loading/empty state). The per-deck editor stays conditional. */}
           <ViewPane active={view === 'collection'}>
-            <CardBrowser />
+            <CardBrowser onCollectionChanged={bumpCollection} />
           </ViewPane>
           <ViewPane active={view === 'my-cards'}>
             <CollectionView
               collectionVersion={collectionVersion}
               onNavigateToBrowse={() => setView('collection')}
             />
+          </ViewPane>
+          <ViewPane active={view === 'wants'}>
+            <WantsView active={view === 'wants'} collectionVersion={collectionVersion} />
           </ViewPane>
           <ViewPane active={view === 'decks'}>
             <DeckList
