@@ -1,4 +1,5 @@
 import type { Card } from '../../shared/types';
+import CardImage from './CardImage';
 import ManaSymbols, { ColorIdentity } from './ManaSymbols';
 import { getManaMeta } from '../lib/mana';
 import { getMaxCopies, PLAYSET_SIZE } from '../../shared/deckLimits';
@@ -76,6 +77,7 @@ export default function CardGrid({
   if (view === 'list') {
     return (
       <div
+        className={`card-results${loading ? ' refreshing' : ''}`}
         style={{
           background: 'var(--bg-panel)',
           border: '1px solid var(--border)',
@@ -237,6 +239,7 @@ export default function CardGrid({
 
   return (
     <div
+      className={`card-results${loading ? ' refreshing' : ''}`}
       style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
@@ -311,12 +314,7 @@ function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onVie
           if (!selected) e.currentTarget.style.borderColor = 'var(--border)';
         }}
       >
-        <img
-          src={card.image_uri_normal!}
-          alt={card.name}
-          loading="lazy"
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-        />
+        <CardImage src={card.image_uri_normal!} alt={card.name} />
         {inDeck > 0 && (
           <span
             style={{

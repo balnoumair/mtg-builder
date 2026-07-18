@@ -34,6 +34,7 @@ export function useInfiniteCardSearch(options: Options = {}) {
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const searchImmediately = useRef(true);
   const skipNextResetKey = useRef(resetKey !== undefined);
+  const lastFetchedFiltersRef = useRef<CardFilters | null>(null);
 
   const fetchPage = useCallback(async (f: CardFilters, page: number, append: boolean) => {
     const requestId = ++requestIdRef.current;
@@ -69,8 +70,9 @@ export function useInfiniteCardSearch(options: Options = {}) {
     }
     searchImmediately.current = true;
     pageRef.current = 1;
-    setCards([]);
-    setTotal(0);
+    // Keep the previous results on screen (dimmed via `loading`) instead of
+    // flashing the skeleton grid; the refetch below replaces them in place.
+    setLoading(true);
     setFilters({ ...DEFAULT_CARD_FILTERS, ...getInitialFilters?.() });
   }, [resetKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -80,11 +82,18 @@ export function useInfiniteCardSearch(options: Options = {}) {
 
   useEffect(() => {
     if (!enabled) return;
+    // Re-enabled (e.g. tab became visible) with these exact filters already
+    // fetched: the card pool can't have changed, so skip the refetch instead
+    // of visibly dimming the grid for nothing.
+    if (lastFetchedFiltersRef.current === filters) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const delay = searchImmediately.current ? 0 : 300;
     searchImmediately.current = false;
 
     debounceRef.current = setTimeout(() => {
+      // Marked here, not when scheduling: a debounce cancelled by a tab
+      // switch must still count as unfetched on return.
+      lastFetchedFiltersRef.current = filters;
       pageRef.current = 1;
       requestIdRef.current += 1;
       fetchPage(filters, 1, false);

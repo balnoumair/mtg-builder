@@ -9,6 +9,7 @@ import { getCardTypeCategory, TYPE_ORDER, CMC_GROUP_ORDER, getCmcGroup, getManaM
 import { getMaxCopies, PLAYSET_SIZE } from '../../shared/deckLimits';
 import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
+import CardImage from './CardImage';
 import CardDetail from './CardDetail';
 import DeckStats from './DeckStats';
 import ManaSymbols from './ManaSymbols';
@@ -1018,12 +1019,7 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
       }}
     >
       {card.image_uri_normal ? (
-        <img
-          src={card.image_uri_normal}
-          alt={card.name}
-          loading="lazy"
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-        />
+        <CardImage src={card.image_uri_normal} alt={card.name} />
       ) : (
         <div
           style={{

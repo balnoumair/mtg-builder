@@ -431,6 +431,10 @@ export async function syncCards(
       restoreCover.run(row);
     }
 
+    // 11. Reclaim free pages left by the DELETE + reinsert; without this the
+    // file grows by the full dataset size on every sync.
+    db.exec('VACUUM');
+
     onProgress(0, 0, 'done');
   } finally {
     // Clean up temp file

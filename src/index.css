@@ -165,3 +165,20 @@ button {
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-tile);
 }
+
+.card-img {
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.card-img.loaded {
+  opacity: 1;
+}
+
+.card-results {
+  transition: opacity 150ms ease;
+}
+
+.card-results.refreshing {
+  opacity: 0.55;
+}
