@@ -1,11 +1,11 @@
 import type Database from 'better-sqlite3';
 
-// The app tracks cards, not printings: a card reprinted across sets (or as a
-// showcase frame, special foil, alternate art) is still one card. Keep a
-// single print per oracle_id — the most recent release, preferring the plain
-// (lowest-numbered) print within it. Basic lands instead keep one plain print
-// per set, so each set's lands stay browsable. Decks, the collection, and
-// deck covers are pointed at the surviving print before the rest is deleted.
+// Collapse variant arts within a set only: keep one plain (lowest-numbered)
+// print per (set_code, oracle_id). Reprints in other sets stay — decks group
+// by set/block and must keep the print from the set they belong to.
+//
+// Decks, the collection, and deck covers that pointed at a dropped variant are
+// re-pointed at the surviving plain print in the same set before delete.
 //
 // Runs after every Scryfall import and once per startup (idempotent: once
 // collapsed the remap table is empty and nothing happens). Returns the number
@@ -17,22 +17,6 @@ export function dedupeCardPrints(db: Database.Database): number {
       SELECT c.id AS old_id, k.id AS new_id
       FROM cards c
       JOIN (
-        SELECT id, oracle_id FROM (
-          SELECT id, oracle_id, ROW_NUMBER() OVER (
-            PARTITION BY oracle_id
-            ORDER BY released_at DESC,
-                     CAST(collector_number AS INTEGER) ASC,
-                     collector_number ASC,
-                     id ASC
-          ) AS rn
-          FROM cards WHERE type_line NOT LIKE 'Basic%'
-        ) WHERE rn = 1
-      ) k ON k.oracle_id = c.oracle_id
-      WHERE c.type_line NOT LIKE 'Basic%' AND c.id <> k.id
-      UNION ALL
-      SELECT c.id, k.id
-      FROM cards c
-      JOIN (
         SELECT id, set_code, oracle_id FROM (
           SELECT id, set_code, oracle_id, ROW_NUMBER() OVER (
             PARTITION BY set_code, oracle_id
@@ -40,10 +24,10 @@ export function dedupeCardPrints(db: Database.Database): number {
                      collector_number ASC,
                      id ASC
           ) AS rn
-          FROM cards WHERE type_line LIKE 'Basic%'
+          FROM cards
         ) WHERE rn = 1
       ) k ON k.oracle_id = c.oracle_id AND k.set_code = c.set_code
-      WHERE c.type_line LIKE 'Basic%' AND c.id <> k.id
+      WHERE c.id <> k.id
     `);
 
     // Deck entries move onto the surviving print; rows landing on the same

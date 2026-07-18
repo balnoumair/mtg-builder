@@ -24,3 +24,32 @@ export function saveDeckSetsFilter(deckId: number, sets: CardFilters['sets']): v
     // ignore quota / private mode
   }
 }
+
+/** Collect non-empty Edition filters keyed by deck uuid for backup export. */
+export function collectDeckSetsFiltersForBackup(
+  decks: Array<{ id: number; uuid?: string | null }>,
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const deck of decks) {
+    if (!deck.uuid) continue;
+    const sets = loadDeckSetsFilter(deck.id);
+    if (sets?.length) out[deck.uuid] = sets;
+  }
+  return out;
+}
+
+/** Apply backup Edition filters to localStorage, matched by uuid → current deck id. */
+export function applyDeckSetsFiltersFromBackup(
+  filterSets: Array<{ uuid: string; sets: string[] }>,
+  decks: Array<{ id: number; uuid?: string | null }>,
+): void {
+  const idByUuid = new Map<string, number>();
+  for (const deck of decks) {
+    if (deck.uuid) idByUuid.set(deck.uuid, deck.id);
+  }
+  for (const entry of filterSets) {
+    const id = idByUuid.get(entry.uuid);
+    if (id === undefined) continue;
+    saveDeckSetsFilter(id, entry.sets.length ? entry.sets : undefined);
+  }
+}

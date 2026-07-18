@@ -13,7 +13,8 @@ const api: ElectronAPI = {
   getCard: (id: string) => ipcRenderer.invoke('cards:get', id),
   getSets: () => ipcRenderer.invoke('cards:sets'),
   getDecks: () => ipcRenderer.invoke('decks:list'),
-  exportBackup: () => ipcRenderer.invoke('backup:export'),
+  exportBackup: (filterSetsByUuid?: Record<string, string[]>) =>
+    ipcRenderer.invoke('backup:export', filterSetsByUuid ?? {}),
   importBackup: () => ipcRenderer.invoke('backup:import'),
   createDeck: (deck: { name: string; format?: string }) => ipcRenderer.invoke('decks:create', deck),
   updateDeck: (id: number, updates: Partial<Deck>) => ipcRenderer.invoke('decks:update', id, updates),

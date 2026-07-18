@@ -139,15 +139,16 @@ export interface ExportBackupResult {
 }
 
 export interface ImportBackupResult {
+  /** Decks newly inserted (no matching local uuid). */
   decksImported: number;
-  /** Decks skipped because a local deck already has the same uuid. */
-  decksSkipped: number;
-  /** Collection cards newly added or whose quantity increased. */
+  /** Existing local decks replaced by the backup copy (matched by uuid). */
+  decksUpdated: number;
+  /** Collection cards written from the backup (new or overwritten). */
   collectionCards: number;
-  /** Collection cards already present with equal or higher quantity. */
-  collectionCardsSkipped: number;
   /** Cards from the backup that no longer exist in the local database; deck is null for collection entries. */
   missing: Array<{ deck: string | null; card: string; quantity: number }>;
+  /** Edition filters to restore into localStorage (empty sets = clear). Absent on cancel/error. */
+  filterSets?: Array<{ uuid: string; sets: string[] }>;
   canceled?: boolean;
   error?: string;
 }
@@ -160,7 +161,7 @@ export interface ElectronAPI {
   getCard(id: string): Promise<Card | null>;
   getSets(): Promise<CardSet[]>;
   getDecks(): Promise<Deck[]>;
-  exportBackup(): Promise<ExportBackupResult>;
+  exportBackup(filterSetsByUuid?: Record<string, string[]>): Promise<ExportBackupResult>;
   importBackup(): Promise<ImportBackupResult>;
   createDeck(deck: { name: string; format?: string }): Promise<Deck>;
   updateDeck(id: number, updates: Partial<Deck>): Promise<Deck>;

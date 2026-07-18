@@ -40,10 +40,10 @@ export function registerIpcHandlers(): void {
     return deckQueries.getDecks(getDb());
   });
 
-  ipcMain.handle('backup:export', async (event) => {
+  ipcMain.handle('backup:export', async (event, filterSetsByUuid: Record<string, string[]> = {}) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return { saved: false };
-    const backup = exportBackup(getDb());
+    const backup = exportBackup(getDb(), filterSetsByUuid);
     if (backup.decks.length === 0 && backup.collection.length === 0) {
       return { saved: false, error: 'Nothing to back up' };
     }
@@ -63,7 +63,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('backup:import', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) {
-      return { decksImported: 0, decksSkipped: 0, collectionCards: 0, collectionCardsSkipped: 0, missing: [] };
+      return {
+        decksImported: 0,
+        decksUpdated: 0,
+        collectionCards: 0,
+        missing: [],
+        filterSets: [],
+      };
     }
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
       filters: [{ name: 'mtg-builder backup', extensions: ['json'] }],
@@ -72,10 +78,10 @@ export function registerIpcHandlers(): void {
     if (canceled || !filePaths[0]) {
       return {
         decksImported: 0,
-        decksSkipped: 0,
+        decksUpdated: 0,
         collectionCards: 0,
-        collectionCardsSkipped: 0,
         missing: [],
+        filterSets: [],
         canceled: true,
       };
     }
@@ -85,10 +91,10 @@ export function registerIpcHandlers(): void {
     } catch (err) {
       return {
         decksImported: 0,
-        decksSkipped: 0,
+        decksUpdated: 0,
         collectionCards: 0,
-        collectionCardsSkipped: 0,
         missing: [],
+        filterSets: [],
         error: err instanceof Error ? err.message : String(err),
       };
     }
