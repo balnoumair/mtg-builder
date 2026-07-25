@@ -18,6 +18,7 @@ import DeckEditor from './components/DeckEditor';
 import CollectionView from './components/CollectionView';
 import WantsView from './components/WantsView';
 import { useDecks } from './hooks/useDecks';
+import { useTags } from './hooks/useTags';
 
 const SIDEBAR_DEFAULT_W = 224;
 const SIDEBAR_MIN_W = 170;
@@ -76,6 +77,36 @@ export default function App() {
     document.body.style.userSelect = '';
   };
   const { decks, loading: decksLoading, createDeck, deleteDeck, updateDeck, refresh: refreshDecks } = useDecks();
+  const { tags, createTag, updateTag, deleteTag, refresh: refreshTags } = useTags();
+  // Session-only: a tag filter left over from last launch would look like
+  // missing decks.
+  const [tagFilter, setTagFilter] = useState<number[]>([]);
+
+  const handleSetDeckTags = useCallback(async (deckId: number, tagIds: number[]) => {
+    await window.electronAPI.setDeckTags(deckId, tagIds);
+    await Promise.all([refreshDecks(), refreshTags()]);
+  }, [refreshDecks, refreshTags]);
+
+  const toggleTagFilter = useCallback((id: number) => {
+    setTagFilter((current) =>
+      current.includes(id) ? current.filter((t) => t !== id) : [...current, id]
+    );
+  }, []);
+
+  const handleDeleteTag = useCallback(async (id: number) => {
+    await deleteTag(id);
+    setTagFilter((current) => current.filter((t) => t !== id));
+    await refreshDecks();
+  }, [deleteTag, refreshDecks]);
+
+  // Any of the selected tags matches, so each extra tag widens the list.
+  const visibleDecks = useMemo(
+    () =>
+      tagFilter.length === 0
+        ? decks
+        : decks.filter((d) => d.tags?.some((t) => tagFilter.includes(t.id))),
+    [decks, tagFilter],
+  );
 
   useEffect(() => {
     window.electronAPI.getDbStatus().then(setDbStatus);
@@ -145,6 +176,7 @@ export default function App() {
         onCancel={dbStatus.ready ? () => setSyncing(false) : undefined}
         onBackupImported={() => {
           refreshDecks();
+          refreshTags();
           bumpCollection();
         }}
       />
@@ -168,7 +200,7 @@ export default function App() {
           view={view}
           width={sidebarWidth}
           onNavigate={setView}
-          decks={decks}
+          decks={visibleDecks}
           onOpenDeck={handleOpenDeck}
           onCreateDeck={handleCreateDeck}
           onDeleteDeck={handleDeleteDeck}
@@ -176,6 +208,13 @@ export default function App() {
           activeDeckId={activeDeckId}
           onSync={handleSync}
           cardCount={dbStatus.cardCount}
+          tags={tags}
+          tagFilter={tagFilter}
+          onToggleTagFilter={toggleTagFilter}
+          onClearTagFilter={() => setTagFilter([])}
+          onRenameTag={(id, name) => updateTag(id, { name })}
+          onRecolorTag={(id, color) => updateTag(id, { color })}
+          onDeleteTag={handleDeleteTag}
         />
         <div
           role="separator"
@@ -214,12 +253,15 @@ export default function App() {
           </ViewPane>
           <ViewPane active={view === 'decks'}>
             <DeckList
-              decks={decks}
+              decks={visibleDecks}
               loading={decksLoading}
               onOpenDeck={handleOpenDeck}
               onCreateDeck={handleCreateDeck}
               onDeleteDeck={handleDeleteDeck}
               onRenameDeck={(id, name) => updateDeck(id, { name })}
+              totalDeckCount={decks.length}
+              filterTags={tags.filter((t) => tagFilter.includes(t.id))}
+              onClearTagFilter={() => setTagFilter([])}
             />
           </ViewPane>
           {activeDeckId !== null && (
@@ -233,6 +275,9 @@ export default function App() {
                 onDeleteDeck={handleDeleteDeck}
                 onDeckCardsChanged={refreshDecks}
                 onCollectionChanged={bumpCollection}
+                tags={tags}
+                onSetDeckTags={handleSetDeckTags}
+                onCreateTag={createTag}
               />
             </ViewPane>
           )}

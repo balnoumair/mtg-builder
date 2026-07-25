@@ -119,6 +119,7 @@ describe('importBackup', () => {
       decksImported: 1,
       decksUpdated: 0,
       collectionCards: 1,
+      tagsImported: 0,
       missing: [],
       filterSets: [{ uuid, sets: ['aaa'] }],
     });
@@ -155,6 +156,7 @@ describe('importBackup', () => {
       decksImported: 0,
       decksUpdated: 1,
       collectionCards: 0,
+      tagsImported: 0,
       missing: [],
       filterSets: [{ uuid, sets: ['bbb'] }],
     });
@@ -211,6 +213,7 @@ describe('importBackup', () => {
       decksImported: 0,
       decksUpdated: 0,
       collectionCards: 2,
+      tagsImported: 0,
       missing: [],
       filterSets: [],
     });
@@ -367,5 +370,134 @@ describe('importBackup', () => {
       }],
     }))).toThrow('invalid filter_sets');
     expect(db.prepare('SELECT COUNT(*) n FROM decks').get()).toEqual({ n: 0 });
+  });
+});
+
+describe('tags', () => {
+  function tagDeck(deckId: number, name: string, color = 'slate'): string {
+    const uuid = randomUUID();
+    const tagId = db.prepare('INSERT INTO tags (uuid, name, color) VALUES (?, ?, ?)')
+      .run(uuid, name, color).lastInsertRowid as number;
+    db.prepare('INSERT INTO deck_tags (deck_id, tag_id) VALUES (?, ?)').run(deckId, tagId);
+    return uuid;
+  }
+
+  function deckTagNames(deckId: number): string[] {
+    return (db.prepare(`
+      SELECT t.name FROM deck_tags dt JOIN tags t ON t.id = dt.tag_id
+      WHERE dt.deck_id = ? ORDER BY t.name
+    `).all(deckId) as { name: string }[]).map((r) => r.name);
+  }
+
+  it('round-trips a deck\'s tags through export and import', () => {
+    const uuid = randomUUID();
+    const deckId = createDeck('Tagged', { uuid });
+    tagDeck(deckId, 'Fast');
+    tagDeck(deckId, 'Cheap', 'plum');
+
+    const backup = exportBackup(db);
+    const fresh = createTestDb();
+    const summary = importBackup(fresh, JSON.parse(JSON.stringify(backup)));
+
+    expect(summary.tagsImported).toBe(2);
+    const restored = fresh.prepare('SELECT id FROM decks WHERE uuid = ?').get(uuid) as { id: number };
+    const names = (fresh.prepare(`
+      SELECT t.name, t.color FROM deck_tags dt JOIN tags t ON t.id = dt.tag_id
+      WHERE dt.deck_id = ? ORDER BY t.name
+    `).all(restored.id) as { name: string; color: string }[]);
+    expect(names).toEqual([
+      { name: 'Cheap', color: 'plum' },
+      { name: 'Fast', color: 'slate' },
+    ]);
+  });
+
+  it('omits the tag fields entirely when nothing is tagged', () => {
+    createDeck('Plain');
+    const backup = exportBackup(db) as Record<string, unknown>;
+
+    expect(backup.tags).toBeUndefined();
+    expect(backup.decks as unknown[]).toHaveLength(1);
+    expect((backup.decks as Record<string, unknown>[])[0].tags).toBeUndefined();
+  });
+
+  it('imports a backup written before tags existed', () => {
+    const uuid = randomUUID();
+    const summary = importBackup(db, {
+      kind: BACKUP_KIND,
+      version: BACKUP_VERSION,
+      exported_at: new Date().toISOString(),
+      decks: [{ uuid, name: 'Legacy', format: '', description: '', owned: 0, cover: null, cards: [] }],
+      collection: [],
+    });
+
+    expect(summary.tagsImported).toBe(0);
+    expect(summary.decksImported).toBe(1);
+  });
+
+  it('reuses a local tag of the same name instead of forking it', () => {
+    const uuid = randomUUID();
+    const deckId = createDeck('Source', { uuid });
+    tagDeck(deckId, 'Commander');
+    const backup = JSON.parse(JSON.stringify(exportBackup(db)));
+
+    // A second machine typed the same tag name by hand, so its uuid differs.
+    const fresh = createTestDb();
+    fresh.prepare('INSERT INTO tags (uuid, name, color) VALUES (?, ?, ?)')
+      .run(randomUUID(), 'commander', 'teal');
+
+    const summary = importBackup(fresh, backup);
+
+    expect(summary.tagsImported).toBe(0);
+    const tags = fresh.prepare('SELECT name, color FROM tags').all();
+    expect(tags).toEqual([{ name: 'commander', color: 'teal' }]);
+  });
+
+  it('replaces the tags on a deck the backup already knows', () => {
+    const uuid = randomUUID();
+    const deckId = createDeck('Deck', { uuid });
+    tagDeck(deckId, 'Keep');
+    const backup = JSON.parse(JSON.stringify(exportBackup(db)));
+
+    tagDeck(deckId, 'AddedLater');
+    expect(deckTagNames(deckId)).toEqual(['AddedLater', 'Keep']);
+
+    importBackup(db, backup);
+
+    expect(deckTagNames(deckId)).toEqual(['Keep']);
+  });
+
+  it('falls back to an auto colour when the backup names an unknown one', () => {
+    const uuid = randomUUID();
+    const deckId = createDeck('Deck', { uuid });
+    const tagUuid = tagDeck(deckId, 'Weird');
+    const backup = JSON.parse(JSON.stringify(exportBackup(db)));
+    backup.tags = [{ uuid: tagUuid, name: 'Weird', color: 'ultraviolet' }];
+
+    const fresh = createTestDb();
+    importBackup(fresh, backup);
+
+    const tag = fresh.prepare('SELECT color FROM tags WHERE name = ?').get('Weird') as { color: string };
+    expect(tag.color).not.toBe('ultraviolet');
+  });
+
+  it('rejects a tag entry with no name', () => {
+    expect(() => importBackup(db, {
+      kind: BACKUP_KIND,
+      version: BACKUP_VERSION,
+      exported_at: new Date().toISOString(),
+      tags: [{ uuid: randomUUID(), name: '  ', color: 'slate' }],
+      decks: [],
+      collection: [],
+    })).toThrow(/tag without a name/i);
+  });
+
+  it('rejects deck tags that are not a list of uuids', () => {
+    expect(() => importBackup(db, {
+      kind: BACKUP_KIND,
+      version: BACKUP_VERSION,
+      exported_at: new Date().toISOString(),
+      decks: [{ uuid: randomUUID(), name: 'Bad', format: '', description: '', owned: 0, cover: null, cards: [], tags: [7] }],
+      collection: [],
+    })).toThrow(/invalid tags/i);
   });
 });

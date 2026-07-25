@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import type { Card, Deck, DeckCard } from '../../shared/types';
+import type { Card, Deck, DeckCard, Tag } from '../../shared/types';
 import { useCardDetail } from '../hooks/useCards';
 import { useDeckEditorCards } from '../hooks/useDeckEditorCards';
 import { useInfiniteScrollSentinel } from '../hooks/useInfiniteScrollSentinel';
@@ -18,6 +18,7 @@ import ExportDeckModal from './ExportDeckModal';
 import ClaimDeckModal from './ClaimDeckModal';
 import DeckChangesModal, { type PendingChangeEntry } from './DeckChangesModal';
 import SplitPane, { PanelCollapseButton } from './SplitPane';
+import DeckTagPicker from './DeckTagPicker';
 import InfiniteScrollFooter from './InfiniteScrollFooter';
 import { COST_PILL, TYPE_PILL, GroupPillHeader, formatCostGroupLabel, type PillStyle } from './PillLabel';
 
@@ -36,6 +37,9 @@ interface Props {
   onDeleteDeck: (id: number) => void | Promise<void>;
   onDeckCardsChanged: () => void;
   onCollectionChanged: () => void;
+  tags: Tag[];
+  onSetDeckTags: (deckId: number, tagIds: number[]) => Promise<void>;
+  onCreateTag: (name: string) => Promise<Tag>;
 }
 
 export default function DeckEditor({
@@ -47,6 +51,9 @@ export default function DeckEditor({
   onDeleteDeck,
   onDeckCardsChanged,
   onCollectionChanged,
+  tags,
+  onSetDeckTags,
+  onCreateTag,
 }: Props) {
   const deck = decks.find((d) => d.id === deckId);
   const {
@@ -630,6 +637,15 @@ export default function DeckEditor({
                 Claim
               </button>
             )}
+          </div>
+
+          <div style={{ marginBottom: 10 }}>
+            <DeckTagPicker
+              tags={tags}
+              deckTags={deck?.tags ?? []}
+              onChange={(tagIds) => void onSetDeckTags(deckId, tagIds)}
+              onCreate={onCreateTag}
+            />
           </div>
 
           {!notesOpen && <DeckStats cards={deckCards} board={activeBoard} />}

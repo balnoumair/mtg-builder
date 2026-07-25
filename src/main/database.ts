@@ -113,6 +113,24 @@ function initSchema(db: BetterSqlite3.Database): void {
       block_name TEXT,
       icon_svg_uri TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      uuid TEXT UNIQUE,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT 'slate',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS deck_tags (
+      deck_id INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
+      tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (deck_id, tag_id)
+    );
+
+    -- Tag names are the user-facing identity, so they collide case-insensitively.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name ON tags(name COLLATE NOCASE);
+    CREATE INDEX IF NOT EXISTS idx_deck_tags_tag ON deck_tags(tag_id);
   `);
 }
 

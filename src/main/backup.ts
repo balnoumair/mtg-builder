@@ -1,5 +1,7 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import { createTag } from './queries/tags';
+import { isTagColor } from '../shared/tagColors';
 
 // Backups identify cards by oracle_id + name + set_code, never by print id:
 // print ids change when prints are re-collapsed or Scryfall data shifts, so a
@@ -7,6 +9,12 @@ import { randomUUID } from 'node:crypto';
 // Decks match by uuid: an existing local deck is replaced by the backup copy
 // (no duplicates). Collection rows for the same card are overwritten by the
 // backup quantity.
+//
+// Tags live in a top-level list and are referenced from each deck by uuid, so
+// renaming a tag in one place does not fork it across decks. `tags` is optional
+// throughout: backups written before tags existed import unchanged, and a deck
+// with no `tags` entry ends up untagged — the same wholesale replacement the
+// rest of a deck's fields already get.
 
 export const BACKUP_KIND = 'mtg-builder-backup';
 export const BACKUP_VERSION = 1;
@@ -34,7 +42,15 @@ interface BackupDeck {
    * Restored to localStorage on import (matched by uuid).
    */
   filter_sets?: string[];
+  /** Tag uuids referencing the top-level `tags` list. Omitted when the deck has none. */
+  tags?: string[];
   cards: BackupDeckCard[];
+}
+
+interface BackupTag {
+  uuid: string;
+  name: string;
+  color: string;
 }
 
 interface BackupCollectionCard {
@@ -49,6 +65,8 @@ export interface AppBackup {
   kind: typeof BACKUP_KIND;
   version: number;
   exported_at: string;
+  /** Absent on backups written before tags existed. */
+  tags?: BackupTag[];
   decks: BackupDeck[];
   collection: BackupCollectionCard[];
 }
@@ -60,6 +78,8 @@ export interface BackupImportSummary {
   decksUpdated: number;
   /** Collection cards written from the backup (new or overwritten). */
   collectionCards: number;
+  /** Tags newly created; tags matched to an existing local tag are not counted. */
+  tagsImported: number;
   /** Cards that no longer exist in the local database; deck is null for collection entries. */
   missing: Array<{ deck: string | null; card: string; quantity: number }>;
   /**
@@ -101,6 +121,14 @@ export function exportBackup(
   `);
   const coverStmt = db.prepare('SELECT oracle_id, set_code FROM cards WHERE id = ?');
 
+  const tags = db.prepare(
+    'SELECT uuid, name, color FROM tags ORDER BY name COLLATE NOCASE'
+  ).all() as BackupTag[];
+  const deckTagsStmt = db.prepare(`
+    SELECT t.uuid FROM deck_tags dt JOIN tags t ON t.id = dt.tag_id
+    WHERE dt.deck_id = ? ORDER BY t.name COLLATE NOCASE
+  `);
+
   const collection = db.prepare(`
     SELECT c.name, c.oracle_id, c.set_code, col.quantity, col.added_at
     FROM collection col JOIN cards c ON c.id = col.card_id
@@ -111,8 +139,10 @@ export function exportBackup(
     kind: BACKUP_KIND,
     version: BACKUP_VERSION,
     exported_at: new Date().toISOString(),
+    ...(tags.length > 0 ? { tags } : {}),
     decks: deckRows.map((deck) => {
       const filter_sets = normalizeFilterSets(filterSetsByUuid[deck.uuid]);
+      const deckTags = (deckTagsStmt.all(deck.id) as { uuid: string }[]).map((t) => t.uuid);
       return {
         uuid: deck.uuid,
         name: deck.name,
@@ -123,6 +153,7 @@ export function exportBackup(
           ? (coverStmt.get(deck.cover_card_id) as BackupDeck['cover']) ?? null
           : null,
         ...(filter_sets ? { filter_sets } : {}),
+        ...(deckTags.length > 0 ? { tags: deckTags } : {}),
         cards: cardsStmt.all(deck.id) as BackupDeckCard[],
       };
     }),
@@ -150,6 +181,31 @@ function isBackupDeckCard(value: unknown): value is BackupDeckCard {
   );
 }
 
+function normalizeDeckTags(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || !value.every((t) => typeof t === 'string' && t.length > 0)) {
+    throw new Error('tags must be an array of tag uuids');
+  }
+  return value.length > 0 ? [...value] : undefined;
+}
+
+function validateTags(value: unknown): BackupTag[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error('Backup tags must be a list');
+  return value.map((raw) => {
+    const tag = raw as BackupTag;
+    if (!tag || typeof tag !== 'object' || typeof tag.name !== 'string' || !tag.name.trim()) {
+      throw new Error('Backup contains a tag without a name');
+    }
+    if (typeof tag.uuid !== 'string' || !tag.uuid) {
+      throw new Error(`Tag "${tag.name}" has an invalid uuid`);
+    }
+    // An unknown colour is not worth failing an import over; the tag just
+    // takes the next auto-assigned hue.
+    return { uuid: tag.uuid, name: tag.name.trim(), color: isTagColor(tag.color) ? tag.color : '' };
+  });
+}
+
 function validateBackup(parsed: unknown): AppBackup {
   const backup = parsed as AppBackup;
   if (!backup || typeof backup !== 'object' || backup.kind !== BACKUP_KIND) {
@@ -161,6 +217,7 @@ function validateBackup(parsed: unknown): AppBackup {
   if (!Array.isArray(backup.decks) || !Array.isArray(backup.collection)) {
     throw new Error('Backup file is malformed');
   }
+  backup.tags = validateTags(backup.tags);
   for (const deck of backup.decks) {
     if (!deck || typeof deck !== 'object' || typeof deck.name !== 'string' || !deck.name) {
       throw new Error('Backup contains a deck without a name');
@@ -175,6 +232,11 @@ function validateBackup(parsed: unknown): AppBackup {
       deck.filter_sets = normalizeFilterSets(deck.filter_sets);
     } catch {
       throw new Error(`Deck "${deck.name}" has invalid filter_sets`);
+    }
+    try {
+      deck.tags = normalizeDeckTags(deck.tags);
+    } catch {
+      throw new Error(`Deck "${deck.name}" has invalid tags`);
     }
   }
   if (!backup.collection.every(isCardIdentity)) {
@@ -232,13 +294,48 @@ export function importBackup(db: Database.Database, parsed: unknown): BackupImpo
       added_at = COALESCE(excluded.added_at, added_at)
   `);
 
+  const findTagByUuid = db.prepare('SELECT id FROM tags WHERE uuid = ?');
+  const findTagByName = db.prepare('SELECT id FROM tags WHERE name = ? COLLATE NOCASE');
+  const claimTagUuid = db.prepare('UPDATE tags SET uuid = ? WHERE id = ?');
+  const clearDeckTags = db.prepare('DELETE FROM deck_tags WHERE deck_id = ?');
+  const insertDeckTag = db.prepare(
+    'INSERT OR IGNORE INTO deck_tags (deck_id, tag_id) VALUES (?, ?)'
+  );
+
   const missing: BackupImportSummary['missing'] = [];
   const filterSets: BackupImportSummary['filterSets'] = [];
   let collectionCards = 0;
   let decksImported = 0;
   let decksUpdated = 0;
+  let tagsImported = 0;
 
   const run = db.transaction(() => {
+    // Resolve every backed-up tag to a local id first, so decks can reference
+    // them by uuid. A tag matches on uuid, then on name — importing onto a
+    // machine where the same tag was typed by hand reuses it instead of
+    // creating a near-duplicate, and the local tag adopts the backup's uuid so
+    // later imports match directly.
+    const tagIdByUuid = new Map<string, number>();
+    for (const tag of backup.tags ?? []) {
+      const local =
+        (findTagByUuid.get(tag.uuid) as { id: number } | undefined) ??
+        (findTagByName.get(tag.name) as { id: number } | undefined);
+
+      if (local) {
+        // A no-op when the uuid already matched. When it was the name that
+        // matched, adopting the uuid is safe (nothing else holds it) and lets
+        // the next import match directly.
+        claimTagUuid.run(tag.uuid, local.id);
+        tagIdByUuid.set(tag.uuid, local.id);
+        continue;
+      }
+
+      const created = createTag(db, { name: tag.name, color: tag.color || undefined });
+      claimTagUuid.run(tag.uuid, created.id);
+      tagIdByUuid.set(tag.uuid, created.id);
+      tagsImported += 1;
+    }
+
     for (const deck of backup.decks) {
       const uuid = typeof deck.uuid === 'string' && deck.uuid ? deck.uuid : randomUUID();
       if (typeof deck.uuid === 'string' && deck.uuid) {
@@ -263,6 +360,14 @@ export function importBackup(db: Database.Database, parsed: unknown): BackupImpo
       } else {
         deckId = insertDeck.run({ uuid, name, format, description, owned }).lastInsertRowid as number;
         decksImported += 1;
+      }
+
+      // Tags are replaced wholesale, like the deck's other fields: a backup
+      // deck with no tags ends up untagged.
+      clearDeckTags.run(deckId);
+      for (const tagUuid of deck.tags ?? []) {
+        const tagId = tagIdByUuid.get(tagUuid);
+        if (tagId !== undefined) insertDeckTag.run(deckId, tagId);
       }
 
       for (const card of deck.cards) {
@@ -311,5 +416,5 @@ export function importBackup(db: Database.Database, parsed: unknown): BackupImpo
   });
   run();
 
-  return { decksImported, decksUpdated, collectionCards, missing, filterSets };
+  return { decksImported, decksUpdated, collectionCards, tagsImported, missing, filterSets };
 }

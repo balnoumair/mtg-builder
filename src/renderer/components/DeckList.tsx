@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import type { Deck } from '../../shared/types';
+import type { Deck, Tag } from '../../shared/types';
 import { groupDecksBySetGroup } from '../../shared/deckSetGroup';
 import DeckGroupLabel, { partitionDecks } from './DeckGroupLabel';
 import DeckRowColorIdentity from './DeckRowColorIdentity';
 import DeckSetGroupLabel from './DeckSetGroupLabel';
+import DeckTag from './DeckTag';
 
 interface Props {
   decks: Deck[];
@@ -12,6 +13,10 @@ interface Props {
   onCreateDeck: (name: string) => void;
   onDeleteDeck: (id: number) => void;
   onRenameDeck: (id: number, name: string) => void;
+  /** Decks before the tag filter, so the header can say what is hidden. */
+  totalDeckCount: number;
+  filterTags: Tag[];
+  onClearTagFilter: () => void;
 }
 
 export default function DeckList({
@@ -21,6 +26,9 @@ export default function DeckList({
   onCreateDeck,
   onDeleteDeck,
   onRenameDeck,
+  totalDeckCount,
+  filterTags,
+  onClearTagFilter,
 }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
@@ -93,7 +101,7 @@ export default function DeckList({
         ) : (
           <span
             style={{
-              flex: 1,
+              flex: '0 1 auto',
               minWidth: 0,
               fontSize: 13,
               fontWeight: 500,
@@ -105,6 +113,22 @@ export default function DeckList({
             {deck.name}
           </span>
         )}
+        {!renaming && deck.tags && deck.tags.length > 0 && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            {deck.tags.slice(0, 3).map((tag) => (
+              <DeckTag key={tag.id} tag={tag} />
+            ))}
+            {deck.tags.length > 3 && (
+              <span
+                title={deck.tags.slice(3).map((t) => t.name).join(', ')}
+                style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)' }}
+              >
+                +{deck.tags.length - 3}
+              </span>
+            )}
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 12 }} />
         <span
           style={{
             fontFamily: 'var(--font-mono)',
@@ -171,27 +195,16 @@ export default function DeckList({
     );
   };
 
+  // An empty section is hidden outright; the whole-list empty state below
+  // covers the case where nothing is left at all.
   const renderDeckSection = (group: 'owned' | 'wishlist', sectionDecks: Deck[]) => {
+    if (sectionDecks.length === 0) return null;
     const subgroups = groupDecksBySetGroup(sectionDecks);
 
     return (
       <section style={{ marginBottom: 20 }}>
         <DeckGroupLabel group={group} count={sectionDecks.length} />
-        {sectionDecks.length === 0 ? (
-          <div
-            style={{
-              background: 'var(--bg-panel)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              padding: '16px 14px',
-              fontSize: 12,
-              color: 'var(--text-faint)',
-              fontStyle: 'italic',
-            }}
-          >
-            {group === 'owned' ? 'No owned decks yet — use Claim in a deck to mark it owned.' : 'No wishlist decks'}
-          </div>
-        ) : (
+        {
           subgroups.map(({ group: setGroup, decks: subgroupDecks }, subgroupIndex) => (
             <div key={`${group}-${setGroup.kind}-${setGroup.label}`} style={{ marginTop: subgroupIndex ? 14 : 0 }}>
               <DeckSetGroupLabel label={setGroup.label} />
@@ -207,7 +220,7 @@ export default function DeckList({
               </div>
             </div>
           ))
-        )}
+        }
       </section>
     );
   };
@@ -239,7 +252,7 @@ export default function DeckList({
             Decks
           </h1>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
-            {decks.length}
+            {filterTags.length > 0 ? `${decks.length}/${totalDeckCount}` : decks.length}
           </span>
           <div style={{ flex: 1 }} />
           <button
@@ -258,6 +271,38 @@ export default function DeckList({
           </button>
         </div>
 
+
+        {filterTags.length > 0 && (
+          <div
+            style={{
+              marginTop: 10,
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 6,
+            }}
+          >
+            <span style={{ fontSize: 11, color: 'var(--text-mute)' }}>Tagged</span>
+            {filterTags.map((tag) => (
+              <DeckTag key={tag.id} tag={tag} active />
+            ))}
+            <button
+              onClick={onClearTagFilter}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                marginLeft: 2,
+                color: 'var(--text-mute)',
+                fontSize: 11,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              Show all
+            </button>
+          </div>
+        )}
 
         {showCreate && (
           <div style={{ marginTop: 10, display: 'flex', gap: 6 }}>
@@ -323,15 +368,19 @@ export default function DeckList({
           <div style={{ color: 'var(--text-mute)', fontSize: 12 }}>Loading…</div>
         ) : decks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 16px' }}>
-            <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>No decks yet</p>
+            <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>
+              {filterTags.length > 0 ? 'No decks with these tags' : 'No decks yet'}
+            </p>
             <p style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 6 }}>
-              Create your first deck to get started
+              {filterTags.length > 0
+                ? 'Pick a different tag, or show all decks.'
+                : 'Create your first deck to get started'}
             </p>
           </div>
         ) : (
           <>
-            {renderDeckSection('owned', ownedDecks)}
             {renderDeckSection('wishlist', wishlistDecks)}
+            {renderDeckSection('owned', ownedDecks)}
           </>
         )}
       </div>

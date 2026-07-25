@@ -1,4 +1,15 @@
 import type { DeckSetGroup } from './deckSetGroup';
+import type { TagColor } from './tagColors';
+
+export interface Tag {
+  id: number;
+  /** Stable identity for backup import; assigned on create. */
+  uuid: string;
+  name: string;
+  color: TagColor;
+  /** Decks carrying this tag; present on the tag list, omitted on a deck's own tags. */
+  deck_count?: number;
+}
 
 export interface Card {
   id: string;
@@ -43,6 +54,7 @@ export interface Deck {
   card_count?: number;
   color_identity?: string[];
   set_group?: DeckSetGroup;
+  tags?: Tag[];
 }
 
 export interface DeckCard {
@@ -145,6 +157,8 @@ export interface ImportBackupResult {
   decksUpdated: number;
   /** Collection cards written from the backup (new or overwritten). */
   collectionCards: number;
+  /** Tags newly created; tags matched to an existing local tag are not counted. */
+  tagsImported: number;
   /** Cards from the backup that no longer exist in the local database; deck is null for collection entries. */
   missing: Array<{ deck: string | null; card: string; quantity: number }>;
   /** Edition filters to restore into localStorage (empty sets = clear). Absent on cancel/error. */
@@ -161,6 +175,11 @@ export interface ElectronAPI {
   getCard(id: string): Promise<Card | null>;
   getSets(): Promise<CardSet[]>;
   getDecks(): Promise<Deck[]>;
+  getTags(): Promise<Tag[]>;
+  createTag(input: { name: string; color?: string }): Promise<Tag>;
+  updateTag(id: number, updates: { name?: string; color?: string }): Promise<Tag>;
+  deleteTag(id: number): Promise<void>;
+  setDeckTags(deckId: number, tagIds: number[]): Promise<void>;
   exportBackup(filterSetsByUuid?: Record<string, string[]>): Promise<ExportBackupResult>;
   importBackup(): Promise<ImportBackupResult>;
   createDeck(deck: { name: string; format?: string }): Promise<Deck>;

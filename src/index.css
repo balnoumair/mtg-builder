@@ -149,6 +149,26 @@ button {
   background: var(--border-strong);
 }
 
+/* Tag rail: an active tag slides out of the stack like a pulled binder tab.
+   The tint and spine still mark the state when motion is off. */
+.tag-rail-row {
+  transition: transform 140ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.tag-rail-row[data-active='true'] {
+  transform: translateX(3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tag-rail-row {
+    transition: none;
+  }
+
+  .tag-rail-row[data-active='true'] {
+    transform: none;
+  }
+}
+
 .scroll-hidden {
   scrollbar-width: none;
   -ms-overflow-style: none;
