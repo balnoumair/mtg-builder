@@ -57,6 +57,9 @@ export default function ImportScreen({ onComplete, onCancel, onBackupImported }:
     parts.push(
       `${result.collectionCards} collection card${result.collectionCards === 1 ? '' : 's'}`,
     );
+    if (result.tagsImported > 0) {
+      parts.push(`${result.tagsImported} new tag${result.tagsImported === 1 ? '' : 's'}`);
+    }
     const summary = parts.join(', ');
     setBackupStatus(
       result.missing.length === 0

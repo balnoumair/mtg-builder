@@ -7,6 +7,7 @@ import * as cardQueries from './queries/cards';
 import * as deckQueries from './queries/decks';
 import * as collectionQueries from './queries/collection';
 import * as wantsQueries from './queries/wants';
+import * as tagQueries from './queries/tags';
 import type { CardFilters, Deck } from '../shared/types';
 
 export function registerIpcHandlers(): void {
@@ -67,6 +68,7 @@ export function registerIpcHandlers(): void {
         decksImported: 0,
         decksUpdated: 0,
         collectionCards: 0,
+        tagsImported: 0,
         missing: [],
         filterSets: [],
       };
@@ -80,6 +82,7 @@ export function registerIpcHandlers(): void {
         decksImported: 0,
         decksUpdated: 0,
         collectionCards: 0,
+        tagsImported: 0,
         missing: [],
         filterSets: [],
         canceled: true,
@@ -93,11 +96,32 @@ export function registerIpcHandlers(): void {
         decksImported: 0,
         decksUpdated: 0,
         collectionCards: 0,
+        tagsImported: 0,
         missing: [],
         filterSets: [],
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  });
+
+  ipcMain.handle('tags:list', () => {
+    return tagQueries.getTags(getDb());
+  });
+
+  ipcMain.handle('tags:create', (_event, input: { name: string; color?: string }) => {
+    return tagQueries.createTag(getDb(), input);
+  });
+
+  ipcMain.handle('tags:update', (_event, id: number, updates: { name?: string; color?: string }) => {
+    return tagQueries.updateTag(getDb(), id, updates);
+  });
+
+  ipcMain.handle('tags:delete', (_event, id: number) => {
+    return tagQueries.deleteTag(getDb(), id);
+  });
+
+  ipcMain.handle('decks:setTags', (_event, deckId: number, tagIds: number[]) => {
+    return tagQueries.setDeckTags(getDb(), deckId, tagIds);
   });
 
   ipcMain.handle('decks:create', (_event, deck: { name: string; format?: string }) => {

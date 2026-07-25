@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import type { Deck } from '../../shared/types';
+import type { Deck, Tag } from '../../shared/types';
 import type { View } from '../lib/types';
 import { groupDecksBySetGroup } from '../../shared/deckSetGroup';
 import DeckGroupLabel, { partitionDecks } from './DeckGroupLabel';
 import DeckRowColorIdentity from './DeckRowColorIdentity';
 import DeckSetGroupLabel from './DeckSetGroupLabel';
+import TagFilterRail from './TagFilterRail';
+import { tagColorTokens } from '../../shared/tagColors';
 
 interface Props {
   view: View;
@@ -18,6 +20,13 @@ interface Props {
   activeDeckId: number | null;
   onSync: () => void;
   cardCount?: number;
+  tags: Tag[];
+  tagFilter: number[];
+  onToggleTagFilter: (id: number) => void;
+  onClearTagFilter: () => void;
+  onRenameTag: (id: number, name: string) => void;
+  onRecolorTag: (id: number, color: string) => void;
+  onDeleteTag: (id: number) => void;
 }
 
 type NavIconKind = 'grid' | 'box' | 'stack' | 'tag';
@@ -119,6 +128,13 @@ export default function Sidebar({
   activeDeckId,
   onSync,
   cardCount,
+  tags,
+  tagFilter,
+  onToggleTagFilter,
+  onClearTagFilter,
+  onRenameTag,
+  onRecolorTag,
+  onDeleteTag,
 }: Props) {
   const [showNewDeck, setShowNewDeck] = useState(false);
   const [newDeckName, setNewDeckName] = useState('');
@@ -210,6 +226,24 @@ export default function Sidebar({
             {deck.name}
           </span>
         )}
+        {!renaming && deck.tags && deck.tags.length > 0 && (
+          <span
+            title={deck.tags.map((t) => t.name).join(', ')}
+            style={{ display: 'inline-flex', gap: 2, flexShrink: 0 }}
+          >
+            {deck.tags.slice(0, 4).map((tag) => (
+              <span
+                key={tag.id}
+                style={{
+                  width: 3,
+                  height: 3,
+                  borderRadius: '50%',
+                  background: tagColorTokens(tag.color).ink,
+                }}
+              />
+            ))}
+          </span>
+        )}
         {!renaming && (
           <div
             style={{ display: 'inline-flex', gap: 4, opacity: 0, transition: 'opacity 120ms' }}
@@ -257,23 +291,20 @@ export default function Sidebar({
     );
   };
 
+  // An empty section is hidden outright; the "No decks yet" / "No matches"
+  // message below covers the case where nothing is left at all.
   const renderDeckSection = (group: 'owned' | 'wishlist', sectionDecks: Deck[]) => {
+    if (sectionDecks.length === 0) return null;
     const subgroups = groupDecksBySetGroup(sectionDecks);
     return (
       <>
         <DeckGroupLabel group={group} count={sectionDecks.length} compact />
-        {sectionDecks.length === 0 ? (
-          <p style={{ padding: '2px 10px 8px', fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic' }}>
-            {group === 'owned' ? 'No owned decks' : 'No wishlist decks'}
-          </p>
-        ) : (
-          subgroups.map(({ group: setGroup, decks: subgroupDecks }) => (
-            <div key={`${group}-${setGroup.kind}-${setGroup.label}`}>
-              <DeckSetGroupLabel label={setGroup.label} compact />
-              {subgroupDecks.map(renderDeckRow)}
-            </div>
-          ))
-        )}
+        {subgroups.map(({ group: setGroup, decks: subgroupDecks }) => (
+          <div key={`${group}-${setGroup.kind}-${setGroup.label}`}>
+            <DeckSetGroupLabel label={setGroup.label} compact />
+            {subgroupDecks.map(renderDeckRow)}
+          </div>
+        ))}
       </>
     );
   };
@@ -351,6 +382,17 @@ export default function Sidebar({
         ))}
       </div>
 
+      {/* Tag rail */}
+      <TagFilterRail
+        tags={tags}
+        selectedIds={tagFilter}
+        onToggle={onToggleTagFilter}
+        onClear={onClearTagFilter}
+        onRename={onRenameTag}
+        onRecolor={onRecolorTag}
+        onDelete={onDeleteTag}
+      />
+
       {/* Decks header */}
       <div
         style={{
@@ -420,12 +462,12 @@ export default function Sidebar({
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 10px', minHeight: 0 }}>
         {filteredDecks.length === 0 && !showNewDeck ? (
           <p style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic' }}>
-            {query ? 'No matches' : 'No decks yet'}
+            {query || tagFilter.length > 0 ? 'No matches' : 'No decks yet'}
           </p>
         ) : (
           <>
-            {renderDeckSection('owned', ownedDecks)}
             {renderDeckSection('wishlist', wishlistDecks)}
+            {renderDeckSection('owned', ownedDecks)}
           </>
         )}
       </div>

@@ -14,6 +14,7 @@ import {
   type SetCatalogEntry,
 } from '../../shared/setOrdering';
 import { getMaxCopies } from '../../shared/deckLimits';
+import { getTagsByDeck } from './tags';
 
 const COLOR_ORDER = ['W', 'U', 'B', 'R', 'G'] as const;
 
@@ -99,6 +100,7 @@ function getDeckSetGroups(db: Database.Database): Map<number, DeckSetGroup> {
 export function getDecks(db: Database.Database): Deck[] {
   const colorIdentities = getDeckColorIdentities(db);
   const setGroups = getDeckSetGroups(db);
+  const tagsByDeck = getTagsByDeck(db);
   const rows = db.prepare(`
     SELECT d.*, COALESCE(SUM(dc.quantity), 0) as card_count
     FROM decks d
@@ -111,6 +113,7 @@ export function getDecks(db: Database.Database): Deck[] {
     owned: !!r.owned,
     color_identity: colorIdentities.get(r.id) ?? [],
     set_group: setGroups.get(r.id) ?? MIXED_DECK_SET_GROUP,
+    tags: tagsByDeck.get(r.id) ?? [],
   }));
 }
 
