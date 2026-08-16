@@ -11,11 +11,7 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    extraResource: [
-      'node_modules/better-sqlite3',
-      'node_modules/bindings',
-      'node_modules/file-uri-to-path',
-    ],
+    extraResource: ['node_modules/better-sqlite3'],
     name: 'MTG Builder',
     icon: './assets/icon',
   },
