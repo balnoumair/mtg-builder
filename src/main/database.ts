@@ -4,16 +4,9 @@ import { dedupeCardPrints } from './dedupe';
 import path from 'node:path';
 import fs from 'node:fs';
 
-// better-sqlite3 is a native module that Vite cannot bundle.
-// In production it and its deps (bindings, file-uri-to-path) live in extraResources.
-// We add resourcesPath to NODE_PATH so `require('bindings')` resolves correctly
-// when called internally by better-sqlite3.
-if (app.isPackaged) {
-  process.env.NODE_PATH = process.resourcesPath;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require('module').Module._initPaths();
-}
-
+// better-sqlite3 is a native module that Vite cannot bundle, so in production
+// it lives in extraResources. It ships Node-API prebuilds and locates them
+// relative to its own package directory, so no module-path fixup is needed.
 const Database: typeof BetterSqlite3 = app.isPackaged
   ? require(path.join(process.resourcesPath, 'better-sqlite3'))
   : require('better-sqlite3');

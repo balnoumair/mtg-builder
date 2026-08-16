@@ -7,18 +7,13 @@
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
-    "prestart": "pnpm run rebuild:electron",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "oxlint .",
-    "pretest": "pnpm run rebuild:node",
     "test": "vitest run",
-    "pretest:watch": "pnpm run rebuild:node",
     "test:watch": "vitest",
-    "rebuild:node": "cd node_modules/better-sqlite3 && prebuild-install -r node --tag-prefix v",
-    "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
     "release": "bash scripts/release.sh",
     "setup": "bash scripts/setup.sh"
   },
@@ -58,7 +53,7 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "better-sqlite3": "^12.8.0",
+    "better-sqlite3": "^13.0.3",
     "electron-squirrel-startup": "^1.0.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

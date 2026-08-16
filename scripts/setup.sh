@@ -7,9 +7,8 @@ pnpm install
 node node_modules/electron/install.js
 node node_modules/esbuild/install.js
 
-# pnpm install fetches better-sqlite3's prebuilt binary for system Node's ABI,
-# not Electron's, so `pnpm start` fails to load it until it's rebuilt here too.
-pnpm exec electron-rebuild -f -w better-sqlite3
+# better-sqlite3 needs no rebuild: it ships Node-API prebuilts, which load
+# unchanged under both Electron and system Node.
 
 # Rebuild every native module that ships only source (binding.gyp, no prebuilt).
 NATIVE_MODULES=(macos-alias fs-xattr)
