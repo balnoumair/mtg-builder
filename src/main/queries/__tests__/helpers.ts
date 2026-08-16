@@ -1,7 +1,23 @@
 import Database from 'better-sqlite3';
+import { afterEach } from 'vitest';
+
+const openDbs: Database.Database[] = [];
+
+// Test databases must be closed deterministically. Left to the garbage
+// collector, better-sqlite3's native destructor can run after the Vitest
+// worker's environment is gone, which aborts the whole worker process
+// ("RemoveEnvironmentCleanupHook: Assertion failed: (env) != nullptr") and
+// fails the run without any test itself failing.
+afterEach(() => {
+  while (openDbs.length > 0) {
+    const db = openDbs.pop()!;
+    if (db.open) db.close();
+  }
+});
 
 export function createTestDb(): Database.Database {
   const db = new Database(':memory:');
+  openDbs.push(db);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
