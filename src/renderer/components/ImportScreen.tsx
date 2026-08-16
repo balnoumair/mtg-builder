@@ -4,11 +4,13 @@ import {
   applyDeckSetsFiltersFromBackup,
   collectDeckSetsFiltersForBackup,
 } from '../lib/deckFilterStorage';
+import SheetSyncSection from './SheetSyncSection';
 
 interface Props {
   onComplete: () => void;
   onCancel?: () => void;
   onBackupImported?: () => void;
+  onSheetPulled?: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -18,7 +20,12 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
-export default function ImportScreen({ onComplete, onCancel, onBackupImported }: Props) {
+export default function ImportScreen({
+  onComplete,
+  onCancel,
+  onBackupImported,
+  onSheetPulled,
+}: Props) {
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,14 +126,20 @@ export default function ImportScreen({ onComplete, onCancel, onBackupImported }:
     }
   })();
 
+  // Opened from inside the app (Back available) this doubles as the manage
+  // screen: backups plus playgroup sheet sync, so it needs room and scroll.
+  const manageMode = !!onCancel && !syncing;
+
   return (
     <div
       style={{
         position: 'relative',
         display: 'flex',
         height: '100vh',
-        alignItems: 'center',
+        alignItems: manageMode ? 'flex-start' : 'center',
         justifyContent: 'center',
+        overflowY: manageMode ? 'auto' : 'hidden',
+        padding: manageMode ? 'calc(var(--titlebar-h) + 52px) 0 40px' : 0,
         background: 'var(--bg-window)',
         color: 'var(--text)',
         fontFamily: 'var(--font-ui)',
@@ -167,7 +180,7 @@ export default function ImportScreen({ onComplete, onCancel, onBackupImported }:
       <div
         style={{
           width: '100%',
-          maxWidth: 420,
+          maxWidth: manageMode ? 680 : 420,
           margin: '0 24px',
           padding: 28,
           background: 'var(--bg-panel)',
@@ -290,6 +303,7 @@ export default function ImportScreen({ onComplete, onCancel, onBackupImported }:
                 {backupStatus}
               </p>
             )}
+            <SheetSyncSection onPulled={onSheetPulled} />
           </div>
         )}
       </div>

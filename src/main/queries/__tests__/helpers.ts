@@ -92,6 +92,28 @@ export function createTestDb(): Database.Database {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name ON tags(name COLLATE NOCASE);
     CREATE INDEX IF NOT EXISTS idx_deck_tags_tag ON deck_tags(tag_id);
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS external_decks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player TEXT NOT NULL,
+      block_label TEXT NOT NULL DEFAULT '',
+      colors TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      row_index INTEGER,
+      synced_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS sheet_blocks (
+      label TEXT PRIMARY KEY,
+      position REAL NOT NULL DEFAULT 0,
+      set_codes TEXT NOT NULL DEFAULT '[]',
+      manual INTEGER NOT NULL DEFAULT 0
+    );
   `);
 
   return db;

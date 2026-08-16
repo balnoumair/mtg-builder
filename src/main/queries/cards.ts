@@ -141,4 +141,24 @@ export function getSets(db: Database.Database): CardSet[] {
   `).all() as CardSet[];
 }
 
+/**
+ * Every set in the catalog, including ones with no cards imported locally
+ * (bonus sheets like `fca` are real sets you can still map a block to).
+ * `getSets` deliberately reports only sets you own cards from, so it is the
+ * wrong source for anything that validates or offers set choices.
+ */
+export function getAllSets(db: Database.Database): CardSet[] {
+  return db.prepare(`
+    SELECT
+      code,
+      name,
+      released_at as releasedAt,
+      block_code as blockCode,
+      block_name as blockName,
+      icon_svg_uri as iconSvgUri
+    FROM sets
+    ORDER BY released_at DESC, name ASC
+  `).all() as CardSet[];
+}
+
 export { VALID_LAYOUTS };

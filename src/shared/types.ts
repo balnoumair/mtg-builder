@@ -167,6 +167,69 @@ export interface ImportBackupResult {
   error?: string;
 }
 
+/** A deck belonging to another player, mirrored from the playgroup sheet. */
+export interface ExternalDeck {
+  id: number;
+  player: string;
+  /** The sheet's own Spanish wording, kept for reference and pushes. */
+  block_label: string;
+  /** The same block resolved to the English set/block name the app uses. */
+  set_label: string;
+  /** WUBRG letters; the sheet stores these as emoji. */
+  colors: string[];
+  name: string;
+  block_position: number;
+  synced_at: string;
+}
+
+export interface SheetSyncSettings {
+  playerName: string;
+  spreadsheetId: string;
+  serviceAccountKeyPath: string;
+  lastPulledAt: string;
+  lastPushedAt: string;
+}
+
+/** One row of the sheet's block vocabulary and the sets it maps to. */
+export interface SheetBlockMapping {
+  label: string;
+  position: number;
+  setCodes: string[];
+  /** True when the user edited it; edits survive pulls. */
+  manual: boolean;
+  /** Whether a seeded default exists to reset back to. */
+  hasDefault: boolean;
+}
+
+export interface SheetPullResult {
+  imported: number;
+  players: string[];
+  blockLabels: number;
+  error?: string;
+}
+
+/** One planned row write: `before` is what the preview saw, `row` what it becomes. */
+export interface SheetPushRowChange {
+  sheetRow: number;
+  before: string[];
+  row: string[];
+}
+
+export interface SheetPushPlan {
+  playerName: string;
+  spreadsheetId: string;
+  updates: SheetPushRowChange[];
+  appends: SheetPushRowChange[];
+  clears: SheetPushRowChange[];
+  /** Rows already matching a local deck, as ready-made clear operations. */
+  matched: SheetPushRowChange[];
+  /** Owned decks whose sets match no sheet label; need a manual assignment. */
+  unmapped: Array<{ deckId: number; deckName: string; setCodes: string[] }>;
+  duplicates: string[];
+  warnings: string[];
+  error?: string;
+}
+
 export interface ElectronAPI {
   getDbStatus(): Promise<DbStatus>;
   syncCards(): Promise<void>;
@@ -174,6 +237,8 @@ export interface ElectronAPI {
   searchCards(filters: CardFilters): Promise<CardSearchResult>;
   getCard(id: string): Promise<Card | null>;
   getSets(): Promise<CardSet[]>;
+  /** Every set in the catalog, including ones with no cards imported. */
+  getAllSets(): Promise<CardSet[]>;
   getDecks(): Promise<Deck[]>;
   getTags(): Promise<Tag[]>;
   createTag(input: { name: string; color?: string }): Promise<Tag>;
@@ -200,6 +265,18 @@ export interface ElectronAPI {
   removeFromCollection(cardId: string): Promise<void>;
   getCollectionStats(): Promise<CollectionStats>;
   getWants(): Promise<WantItem[]>;
+  getSheetSyncSettings(): Promise<SheetSyncSettings>;
+  updateSheetSyncSettings(updates: Partial<SheetSyncSettings>): Promise<SheetSyncSettings>;
+  pickServiceAccountKey(): Promise<SheetSyncSettings>;
+  pullSheet(): Promise<SheetPullResult>;
+  getExternalDecks(): Promise<ExternalDeck[]>;
+  getSheetBlockLabels(): Promise<string[]>;
+  getSheetBlockMappings(): Promise<SheetBlockMapping[]>;
+  setSheetBlockCodes(label: string, setCodes: string[]): Promise<void>;
+  resetSheetBlockCodes(label: string): Promise<void>;
+  planSheetPush(): Promise<SheetPushPlan>;
+  executeSheetPush(plan: SheetPushPlan): Promise<{ written: number; error?: string }>;
+  assignSheetBlock(label: string, setCodes: string[]): Promise<void>;
 }
 
 declare global {

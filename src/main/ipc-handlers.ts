@@ -8,7 +8,18 @@ import * as deckQueries from './queries/decks';
 import * as collectionQueries from './queries/collection';
 import * as wantsQueries from './queries/wants';
 import * as tagQueries from './queries/tags';
-import type { CardFilters, Deck } from '../shared/types';
+import * as settingsQueries from './queries/settings';
+import * as externalDeckQueries from './queries/externalDecks';
+import {
+  pullFromSheet,
+  getSheetBlocks,
+  getSheetBlockMappings,
+  setSheetBlockCodes,
+  resetSheetBlockCodes,
+  parseSpreadsheetId,
+} from './sheet-sync/pull';
+import { planPush, executePush, assignBlockMapping } from './sheet-sync/push';
+import type { CardFilters, Deck, SheetPushPlan, SheetSyncSettings } from '../shared/types';
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('db:status', () => {
@@ -35,6 +46,10 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('cards:sets', () => {
     return cardQueries.getSets(getDb());
+  });
+
+  ipcMain.handle('cards:allSets', () => {
+    return cardQueries.getAllSets(getDb());
   });
 
   ipcMain.handle('decks:list', () => {
@@ -195,5 +210,110 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('wants:list', () => {
     return wantsQueries.getWants(getDb());
+  });
+
+  // Playgroup sheet sync
+  ipcMain.handle('sheet:getSettings', () => {
+    return settingsQueries.getSheetSyncSettings(getDb());
+  });
+
+  ipcMain.handle('sheet:updateSettings', (_event, updates: Partial<SheetSyncSettings>) => {
+    const db = getDb();
+    if (updates.playerName !== undefined) {
+      settingsQueries.setSetting(db, 'sheetSync.playerName', updates.playerName);
+    }
+    if (updates.spreadsheetId !== undefined) {
+      // Accept a pasted sheet URL as readily as a bare id.
+      settingsQueries.setSetting(
+        db,
+        'sheetSync.spreadsheetId',
+        parseSpreadsheetId(updates.spreadsheetId),
+      );
+    }
+    if (updates.serviceAccountKeyPath !== undefined) {
+      settingsQueries.setSetting(
+        db, 'sheetSync.serviceAccountKeyPath', updates.serviceAccountKeyPath
+      );
+    }
+    return settingsQueries.getSheetSyncSettings(db);
+  });
+
+  ipcMain.handle('sheet:pickKey', async (event) => {
+    const db = getDb();
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return settingsQueries.getSheetSyncSettings(db);
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      title: 'Select Google service-account key',
+      filters: [{ name: 'Service account key', extensions: ['json'] }],
+      properties: ['openFile'],
+    });
+    if (!canceled && filePaths[0]) {
+      settingsQueries.setSetting(db, 'sheetSync.serviceAccountKeyPath', filePaths[0]);
+    }
+    return settingsQueries.getSheetSyncSettings(db);
+  });
+
+  ipcMain.handle('sheet:pull', async () => {
+    try {
+      return await pullFromSheet(getDb());
+    } catch (err) {
+      return {
+        imported: 0,
+        players: [],
+        blockLabels: 0,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
+
+  ipcMain.handle('sheet:externalDecks', () => {
+    return externalDeckQueries.getExternalDecks(getDb());
+  });
+
+  ipcMain.handle('sheet:blockLabels', () => {
+    return getSheetBlocks(getDb()).map((b) => b.label);
+  });
+
+  ipcMain.handle('sheet:blockMappings', () => {
+    return getSheetBlockMappings(getDb());
+  });
+
+  ipcMain.handle('sheet:setBlockCodes', (_event, label: string, setCodes: string[]) => {
+    return setSheetBlockCodes(getDb(), label, setCodes);
+  });
+
+  ipcMain.handle('sheet:resetBlockCodes', (_event, label: string) => {
+    return resetSheetBlockCodes(getDb(), label);
+  });
+
+  ipcMain.handle('sheet:planPush', async () => {
+    try {
+      return await planPush(getDb());
+    } catch (err) {
+      return {
+        playerName: '',
+        spreadsheetId: '',
+        updates: [],
+        appends: [],
+        clears: [],
+        matched: [],
+        unmapped: [],
+        duplicates: [],
+        warnings: [],
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
+
+  ipcMain.handle('sheet:executePush', async (_event, plan: SheetPushPlan) => {
+    try {
+      return await executePush(getDb(), plan);
+    } catch (err) {
+      return { written: 0, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('sheet:assignBlock', (_event, label: string, setCodes: string[]) => {
+    return assignBlockMapping(getDb(), label, setCodes);
   });
 }
