@@ -1,7 +1,32 @@
 import Database from 'better-sqlite3';
+import { afterEach } from 'vitest';
+
+const testDbs: Database.Database[] = [];
+
+// Test databases are closed after each test, and then deliberately kept
+// referenced for the life of the worker.
+//
+// Closing releases SQLite's resources, but it does not stop better-sqlite3's
+// C++ destructor from running when V8 finalizes the wrapper object. That
+// destructor calls RemoveEnvironmentCleanupHook, which aborts the process if
+// it runs after the worker's environment is already gone:
+//
+//   node::RemoveEnvironmentCleanupHook … Assertion failed: (env) != nullptr
+//   Error: Worker exited unexpectedly
+//
+// No test fails when that happens — the worker dies and its whole file's
+// results go missing. Objects that stay reachable are never finalized, so
+// holding the references avoids the race entirely. The retained wrappers are
+// empty once closed, so this costs nothing.
+afterEach(() => {
+  for (const db of testDbs) {
+    if (db.open) db.close();
+  }
+});
 
 export function createTestDb(): Database.Database {
   const db = new Database(':memory:');
+  testDbs.push(db);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
@@ -92,6 +117,28 @@ export function createTestDb(): Database.Database {
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name ON tags(name COLLATE NOCASE);
     CREATE INDEX IF NOT EXISTS idx_deck_tags_tag ON deck_tags(tag_id);
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS external_decks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player TEXT NOT NULL,
+      block_label TEXT NOT NULL DEFAULT '',
+      colors TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      row_index INTEGER,
+      synced_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS sheet_blocks (
+      label TEXT PRIMARY KEY,
+      position REAL NOT NULL DEFAULT 0,
+      set_codes TEXT NOT NULL DEFAULT '[]',
+      manual INTEGER NOT NULL DEFAULT 0
+    );
   `);
 
   return db;

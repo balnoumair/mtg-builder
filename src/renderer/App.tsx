@@ -17,6 +17,7 @@ import DeckList from './components/DeckList';
 import DeckEditor from './components/DeckEditor';
 import CollectionView from './components/CollectionView';
 import WantsView from './components/WantsView';
+import ExternalDecksView from './components/ExternalDecksView';
 import { useDecks } from './hooks/useDecks';
 import { useTags } from './hooks/useTags';
 
@@ -45,6 +46,8 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const [collectionVersion, setCollectionVersion] = useState(0);
   const bumpCollection = useCallback(() => setCollectionVersion((v) => v + 1), []);
+  const [sheetSyncVersion, setSheetSyncVersion] = useState(0);
+  const bumpSheetSync = useCallback(() => setSheetSyncVersion((v) => v + 1), []);
   const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
   const sidebarDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -148,6 +151,7 @@ export default function App() {
     if (view === 'collection') return { title: 'Card Browser', subtitle: '' };
     if (view === 'my-cards') return { title: 'My Cards', subtitle: '' };
     if (view === 'wants') return { title: 'Wants', subtitle: '' };
+    if (view === 'others-decks') return { title: "Others' Decks", subtitle: '' };
     return { title: 'Decks', subtitle: '' };
   }, [view, activeDeckId, decks]);
 
@@ -179,6 +183,7 @@ export default function App() {
           refreshTags();
           bumpCollection();
         }}
+        onSheetPulled={bumpSheetSync}
       />
     );
   }
@@ -262,6 +267,12 @@ export default function App() {
               totalDeckCount={decks.length}
               filterTags={tags.filter((t) => tagFilter.includes(t.id))}
               onClearTagFilter={() => setTagFilter([])}
+            />
+          </ViewPane>
+          <ViewPane active={view === 'others-decks'}>
+            <ExternalDecksView
+              active={view === 'others-decks'}
+              syncVersion={sheetSyncVersion}
             />
           </ViewPane>
           {activeDeckId !== null && (

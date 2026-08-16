@@ -29,13 +29,14 @@ interface Props {
   onDeleteTag: (id: number) => void;
 }
 
-type NavIconKind = 'grid' | 'box' | 'stack' | 'tag';
+type NavIconKind = 'grid' | 'box' | 'stack' | 'tag' | 'people';
 
 const NAV_ITEMS: { key: View; label: string; icon: NavIconKind }[] = [
   { key: 'collection', label: 'Card Browser', icon: 'grid' },
   { key: 'my-cards', label: 'My Cards', icon: 'box' },
   { key: 'wants', label: 'Wants', icon: 'tag' },
   { key: 'decks', label: 'Decks', icon: 'stack' },
+  { key: 'others-decks', label: "Others' Decks", icon: 'people' },
 ];
 
 function NavIcon({ icon }: { icon: NavIconKind }) {
@@ -65,6 +66,13 @@ function NavIcon({ icon }: { icon: NavIconKind }) {
       <>
         <path d="M1.5 1.5H6.1L11.5 6.9L6.9 11.5L1.5 6.1V1.5z" stroke="currentColor" strokeLinejoin="round" />
         <circle cx="4.2" cy="4.2" r="1" stroke="currentColor" />
+      </>
+    ),
+    people: (
+      <>
+        <circle cx="5" cy="4.3" r="2.1" stroke="currentColor" />
+        <path d="M1.6 11.2c0-1.9 1.5-3.2 3.4-3.2s3.4 1.3 3.4 3.2" stroke="currentColor" strokeLinecap="round" />
+        <path d="M9 2.6a2.1 2.1 0 010 3.9M9.6 8.3c1.2.4 1.9 1.5 1.9 2.9" stroke="currentColor" strokeLinecap="round" />
       </>
     ),
   };

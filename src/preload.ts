@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { CardFilters, Deck, ElectronAPI, ImportProgress } from './shared/types';
+import type {
+  CardFilters,
+  Deck,
+  ElectronAPI,
+  ImportProgress,
+  SheetPushPlan,
+  SheetSyncSettings,
+} from './shared/types';
 
 const api: ElectronAPI = {
   getDbStatus: () => ipcRenderer.invoke('db:status'),
@@ -12,6 +19,7 @@ const api: ElectronAPI = {
   searchCards: (filters: CardFilters) => ipcRenderer.invoke('cards:search', filters),
   getCard: (id: string) => ipcRenderer.invoke('cards:get', id),
   getSets: () => ipcRenderer.invoke('cards:sets'),
+  getAllSets: () => ipcRenderer.invoke('cards:allSets'),
   getDecks: () => ipcRenderer.invoke('decks:list'),
   getTags: () => ipcRenderer.invoke('tags:list'),
   createTag: (input: { name: string; color?: string }) => ipcRenderer.invoke('tags:create', input),
@@ -39,6 +47,21 @@ const api: ElectronAPI = {
   removeFromCollection: (cardId: string) => ipcRenderer.invoke('collection:remove', cardId),
   getCollectionStats: () => ipcRenderer.invoke('collection:stats'),
   getWants: () => ipcRenderer.invoke('wants:list'),
+  getSheetSyncSettings: () => ipcRenderer.invoke('sheet:getSettings'),
+  updateSheetSyncSettings: (updates: Partial<SheetSyncSettings>) =>
+    ipcRenderer.invoke('sheet:updateSettings', updates),
+  pickServiceAccountKey: () => ipcRenderer.invoke('sheet:pickKey'),
+  pullSheet: () => ipcRenderer.invoke('sheet:pull'),
+  getExternalDecks: () => ipcRenderer.invoke('sheet:externalDecks'),
+  getSheetBlockLabels: () => ipcRenderer.invoke('sheet:blockLabels'),
+  getSheetBlockMappings: () => ipcRenderer.invoke('sheet:blockMappings'),
+  setSheetBlockCodes: (label: string, setCodes: string[]) =>
+    ipcRenderer.invoke('sheet:setBlockCodes', label, setCodes),
+  resetSheetBlockCodes: (label: string) => ipcRenderer.invoke('sheet:resetBlockCodes', label),
+  planSheetPush: () => ipcRenderer.invoke('sheet:planPush'),
+  executeSheetPush: (plan: SheetPushPlan) => ipcRenderer.invoke('sheet:executePush', plan),
+  assignSheetBlock: (label: string, setCodes: string[]) =>
+    ipcRenderer.invoke('sheet:assignBlock', label, setCodes),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', api);

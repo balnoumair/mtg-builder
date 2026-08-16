@@ -131,6 +131,34 @@ function initSchema(db: BetterSqlite3.Database): void {
     -- Tag names are the user-facing identity, so they collide case-insensitively.
     CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name ON tags(name COLLATE NOCASE);
     CREATE INDEX IF NOT EXISTS idx_deck_tags_tag ON deck_tags(tag_id);
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    -- Other players' decks pulled from the shared playgroup sheet. Replaced
+    -- wholesale on every pull; deliberately outside decks so they never enter
+    -- deck lists, tags, or the backup JSON.
+    CREATE TABLE IF NOT EXISTS external_decks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player TEXT NOT NULL,
+      block_label TEXT NOT NULL DEFAULT '',
+      colors TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      row_index INTEGER,
+      synced_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Block/edition vocabulary mirrored from the sheet's EDICIONES tab.
+    -- set_codes is a JSON array; manual = 1 marks a user-assigned mapping
+    -- that must survive dictionary reseeds.
+    CREATE TABLE IF NOT EXISTS sheet_blocks (
+      label TEXT PRIMARY KEY,
+      position REAL NOT NULL DEFAULT 0,
+      set_codes TEXT NOT NULL DEFAULT '[]',
+      manual INTEGER NOT NULL DEFAULT 0
+    );
   `);
 }
 
