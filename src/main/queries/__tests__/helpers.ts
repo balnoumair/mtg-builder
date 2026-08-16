@@ -1,23 +1,32 @@
 import Database from 'better-sqlite3';
 import { afterEach } from 'vitest';
 
-const openDbs: Database.Database[] = [];
+const testDbs: Database.Database[] = [];
 
-// Test databases must be closed deterministically. Left to the garbage
-// collector, better-sqlite3's native destructor can run after the Vitest
-// worker's environment is gone, which aborts the whole worker process
-// ("RemoveEnvironmentCleanupHook: Assertion failed: (env) != nullptr") and
-// fails the run without any test itself failing.
+// Test databases are closed after each test, and then deliberately kept
+// referenced for the life of the worker.
+//
+// Closing releases SQLite's resources, but it does not stop better-sqlite3's
+// C++ destructor from running when V8 finalizes the wrapper object. That
+// destructor calls RemoveEnvironmentCleanupHook, which aborts the process if
+// it runs after the worker's environment is already gone:
+//
+//   node::RemoveEnvironmentCleanupHook … Assertion failed: (env) != nullptr
+//   Error: Worker exited unexpectedly
+//
+// No test fails when that happens — the worker dies and its whole file's
+// results go missing. Objects that stay reachable are never finalized, so
+// holding the references avoids the race entirely. The retained wrappers are
+// empty once closed, so this costs nothing.
 afterEach(() => {
-  while (openDbs.length > 0) {
-    const db = openDbs.pop()!;
+  for (const db of testDbs) {
     if (db.open) db.close();
   }
 });
 
 export function createTestDb(): Database.Database {
   const db = new Database(':memory:');
-  openDbs.push(db);
+  testDbs.push(db);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
