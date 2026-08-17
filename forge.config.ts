@@ -15,7 +15,9 @@ const config: ForgeConfig = {
     name: 'MTG Builder',
     icon: './assets/icon',
   },
-  rebuildConfig: {},
+  rebuildConfig: {
+    ignoreModules: ['better-sqlite3'],
+  },
   makers: [
     new MakerSquirrel({
       name: 'mtg_builder',
