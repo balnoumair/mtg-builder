@@ -1,7 +1,9 @@
 import { useEffect } from 'react';
 import type { Card } from '../../shared/types';
 import ManaSymbols from './ManaSymbols';
+import CardSizeControl from './CardSizeControl';
 import { getManaMeta } from '../lib/mana';
+import { CARD_DETAIL_WIDTH, useCardSize } from '../lib/cardSize';
 
 interface Props {
   card: Card;
@@ -43,6 +45,8 @@ export default function CardDetail({
   const toughness = card.toughness;
   const hasPT = power !== null && toughness !== null;
   const owned = collectionQuantity ?? 0;
+  const [cardSize, setCardSize] = useCardSize();
+  const cardWidth = CARD_DETAIL_WIDTH[cardSize];
 
   return (
     <div
@@ -58,6 +62,7 @@ export default function CardDetail({
         alignItems: 'center',
         justifyContent: 'center',
         padding: 28,
+        overflow: 'auto',
         animation: 'cardPreviewIn 140ms ease-out',
       }}
     >
@@ -67,8 +72,8 @@ export default function CardDetail({
           display: 'flex',
           gap: 18,
           maxWidth: 760,
-          width: '100%',
-          maxHeight: '100%',
+          width: 'min(100%, 760px)',
+          maxHeight: 'calc(100vh - 56px)',
           fontFamily: 'var(--font-ui)',
           color: 'var(--text)',
         }}
@@ -76,8 +81,10 @@ export default function CardDetail({
         {/* Card face */}
         <div
           style={{
-            flex: '0 0 280px',
+            flex: `0 1 ${cardWidth}px`,
+            width: `min(${cardWidth}px, 42vw)`,
             aspectRatio: '63 / 88',
+            maxHeight: 'calc(100vh - 56px)',
             borderRadius: 12,
             overflow: 'hidden',
             background: 'var(--bg-panel)',
@@ -91,7 +98,7 @@ export default function CardDetail({
             <img
               src={card.image_uri_normal}
               alt={card.name}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
             />
           ) : (
             <>
@@ -227,17 +234,19 @@ export default function CardDetail({
           }}
         >
           <div>
-            <div
-              style={{
-                fontSize: 9.5,
-                fontFamily: 'var(--font-mono)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: 'var(--text-mute)',
-                marginBottom: 6,
-              }}
-            >
-              Card
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 }}>
+              <div
+                style={{
+                  fontSize: 9.5,
+                  fontFamily: 'var(--font-mono)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: 'var(--text-mute)',
+                }}
+              >
+                Card
+              </div>
+              <CardSizeControl value={cardSize} onChange={setCardSize} />
             </div>
             <div
               style={{

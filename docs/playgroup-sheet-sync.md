@@ -1,7 +1,8 @@
 # Sheet sync setup
 
-Pulling needs nothing — it reads the sheet's public CSV export. Only **pushing**
-needs the steps below, because writing to a Google Sheet requires credentials.
+Pulling and pushing both use the Google Sheets API so sheet filters never hide
+rows from the app. Pulling needs a service account with Viewer access; pushing
+needs Editor access.
 
 ## What you need to do
 
@@ -14,28 +15,31 @@ needs the steps below, because writing to a Google Sheet requires credentials.
    Name it anything (e.g. `mtg-builder`), skip the optional role/access steps,
    and click Done.
 4. Open the service account → **Keys → Add key → Create new key → JSON**.
-   A `.json` file downloads. Keep it somewhere stable, e.g.
-   `~/.config/mtg-builder/service-account.json`. Treat it like a password.
+   A `.json` file downloads. Treat it like a password until it is selected in
+   the app; the app then keeps its own private local copy.
 
 ### 2. Share the spreadsheet with the service account
 
 1. Open the JSON key and copy the `client_email` value — it looks like
    `mtg-builder@your-project.iam.gserviceaccount.com`.
 2. In the playgroup spreadsheet, click **Share**, paste that address, set the
-   role to **Editor**, and send. (This is the one step that needs whoever owns
-   the doc; it's the same as adding any collaborator.)
+   role to **Viewer** for pull-only access or **Editor** if you also want to
+   push, and send. (This is the one step that needs whoever owns the doc; it's
+   the same as adding any collaborator.)
 
 ### 3. Point the app at the key
 
 In the app: **Import/Export screen → Playgroup sheet → Set service-account
-key**, and pick the JSON file. Confirm "Your name in the sheet" says `Bryan` —
-it must match column A exactly (the EDICIONES roster already lists Bryan).
+key**, and pick the JSON file. The app copies it into its private data folder,
+so the original file can be moved or deleted afterward. Confirm "Your name in
+the sheet" says `Bryan` — it must match column A exactly (the EDICIONES roster
+already lists Bryan).
 
 ## Using it
 
-- **Pull others' decks** — reads MAZOS and EDICIONES, replaces the local copy of
-  everyone else's decks. Available from the sync section or the "Others' Decks"
-  view. No credentials needed.
+- **Pull others' decks** — reads raw values from MAZOS and EDICIONES, ignoring
+  any active sheet filters, and replaces the local copy of everyone else's
+  decks. Available from the sync section or the "Others' Decks" view.
 - **Push my decks…** — shows a preview of every row it would add, change, or
   clear. Nothing is written until you press **Write N rows**.
 
@@ -58,5 +62,5 @@ it must match column A exactly (the EDICIONES roster already lists Bryan).
   lists, so pulled decks are read-only entries, not real decks.
 - Renaming a deck shows up in the preview as a clear plus an add, because the
   sheet has no deck id to match on. It is visible before you confirm.
-- Pulling requires the doc to stay link-viewable ("anyone with the link can
-  view"). If the group restricts it, pull will report that clearly.
+- Pulling requires the spreadsheet to be shared with the service account. If
+  the group restricts access, pull will report that clearly.

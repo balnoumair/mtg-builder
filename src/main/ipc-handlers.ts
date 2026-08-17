@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron';
+import { app, ipcMain, BrowserWindow, dialog } from 'electron';
 import fs from 'node:fs';
 import { getDb } from './database';
 import { syncCards } from './import';
@@ -19,6 +19,7 @@ import {
   parseSpreadsheetId,
 } from './sheet-sync/pull';
 import { planPush, executePush, assignBlockMapping } from './sheet-sync/push';
+import { copyServiceAccountKey } from './sheet-sync/googleAuth';
 import type { CardFilters, Deck, SheetPushPlan, SheetSyncSettings } from '../shared/types';
 
 export function registerIpcHandlers(): void {
@@ -248,7 +249,8 @@ export function registerIpcHandlers(): void {
       properties: ['openFile'],
     });
     if (!canceled && filePaths[0]) {
-      settingsQueries.setSetting(db, 'sheetSync.serviceAccountKeyPath', filePaths[0]);
+      const localKeyPath = copyServiceAccountKey(filePaths[0], app.getPath('userData'));
+      settingsQueries.setSetting(db, 'sheetSync.serviceAccountKeyPath', localKeyPath);
     }
     return settingsQueries.getSheetSyncSettings(db);
   });

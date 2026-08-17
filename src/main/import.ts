@@ -4,6 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
 import readline from 'node:readline';
+import { createGunzip } from 'node:zlib';
 import { app } from 'electron';
 import type Database from 'better-sqlite3';
 import { createIndexes } from './database';
@@ -79,7 +80,10 @@ interface ScryCard {
 
 interface BulkDataEntry {
   type: string;
-  download_uri: string;
+  /** Legacy Scryfall bulk export URL. */
+  download_uri?: string;
+  /** Current Scryfall JSONL bulk export URL. */
+  jsonl_download_uri?: string;
 }
 
 interface BulkDataResponse {
@@ -154,7 +158,9 @@ async function fetchBulkDataUrl(): Promise<string> {
   const body = (await res.json()) as BulkDataResponse;
   const entry = body.data.find((d) => d.type === 'default_cards');
   if (!entry) throw new Error('default_cards bulk data not found');
-  return entry.download_uri;
+  const url = entry.download_uri || entry.jsonl_download_uri;
+  if (!url) throw new Error('default_cards bulk data has no download URL');
+  return url;
 }
 
 function downloadFile(
@@ -166,7 +172,12 @@ function downloadFile(
     const proto = url.startsWith('https') ? https : http;
     proto.get(url, { headers: { ...SCRYFALL_HEADERS, Accept: '*/*' } }, (res) => {
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        downloadFile(res.headers.location, dest, onProgress).then(resolve, reject);
+        const location = res.headers.location;
+        if (typeof location !== 'string') {
+          reject(new Error('Download redirect has no valid location'));
+          return;
+        }
+        downloadFile(location, dest, onProgress).then(resolve, reject);
         return;
       }
       if (res.statusCode && res.statusCode >= 400) {
@@ -176,14 +187,32 @@ function downloadFile(
       const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
       let downloaded = 0;
       const file = fs.createWriteStream(dest);
+      const contentEncoding = res.headers['content-encoding'];
+      const isGzip = /\.gz(?:$|[?#])/.test(url) ||
+        (typeof contentEncoding === 'string' && contentEncoding.includes('gzip'));
+      const source = isGzip ? res.pipe(createGunzip()) : res;
+      let settled = false;
+      const fail = (err: Error) => {
+        if (settled) return;
+        settled = true;
+        file.destroy();
+        fs.unlink(dest, () => {});
+        reject(err);
+      };
       res.on('data', (chunk: Buffer) => {
         downloaded += chunk.length;
         onProgress(downloaded, totalBytes);
       });
-      res.pipe(file);
-      file.on('finish', () => { file.close(); resolve(); });
-      file.on('error', (err) => { fs.unlink(dest, () => {}); reject(err); });
-      res.on('error', (err) => { fs.unlink(dest, () => {}); reject(err); });
+      source.on('error', fail);
+      file.on('finish', () => {
+        if (settled) return;
+        settled = true;
+        file.close();
+        resolve();
+      });
+      file.on('error', fail);
+      res.on('error', fail);
+      source.pipe(file);
     }).on('error', reject);
   });
 }

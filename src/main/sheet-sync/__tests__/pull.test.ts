@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type Database from 'better-sqlite3';
 import { createTestDb, insertTestSet } from '../../queries/__tests__/helpers';
 import {
   assertMazosHeader,
+  fetchSheetValues,
   getSheetBlocks,
   parseMazosRows,
   parseSpreadsheetId,
@@ -62,6 +63,34 @@ describe('requireSpreadsheetId', () => {
 
   it('passes a configured id straight through', () => {
     expect(requireSpreadsheetId('abc123')).toBe('abc123');
+  });
+});
+
+describe('fetchSheetValues', () => {
+  it('reads raw tab values through the Sheets API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ values: [['Jugador'], ['Toni']] }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      await expect(fetchSheetValues('token', 'sheet-id', 'MAZOS')).resolves.toEqual([
+        ['Jugador'],
+        ['Toni'],
+      ]);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://sheets.googleapis.com/v4/spreadsheets/sheet-id/values/MAZOS!A%3AD?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE',
+        {
+          headers: {
+            Authorization: 'Bearer token',
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

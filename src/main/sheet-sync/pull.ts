@@ -1,19 +1,14 @@
 import type Database from 'better-sqlite3';
-import { parseCsv } from './csv';
 import { SHEET_BLOCK_SETS, emojiToColors, type SheetBlock } from './blockMap';
 import type { SheetBlockMapping } from '../../shared/types';
 import { replaceExternalDecks, type ExternalDeckRow } from '../queries/externalDecks';
-import { getSetting, setSetting } from '../queries/settings';
+import { getAccessToken } from './googleAuth';
+import { getSheetSyncSettings, setSetting } from '../queries/settings';
 
 export const MAZOS_SHEET = 'MAZOS';
 export const EDICIONES_SHEET = 'EDICIONES';
 const EXPECTED_HEADER = ['Jugador', 'Bloque/Edición', 'Colores', 'Mazo'];
-
-// gviz addresses tabs by name and works unauthenticated on link-shared docs,
-// so pulling needs no Google credentials at all.
-function csvUrl(spreadsheetId: string, sheetName: string): string {
-  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
-}
+const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets';
 
 /**
  * Accepts either a bare spreadsheet id or any Google Sheets URL containing
@@ -35,20 +30,44 @@ export function requireSpreadsheetId(spreadsheetId: string): string {
   return spreadsheetId;
 }
 
-export async function fetchSheetCsv(
+export async function sheetsApi(
+  token: string,
+  path: string,
+  init?: RequestInit,
+): Promise<Record<string, unknown>> {
+  const res = await fetch(`${SHEETS_API}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...init?.headers,
+    },
+  });
+  const body = (await res.json()) as Record<string, unknown>;
+  if (!res.ok) {
+    const error = body.error as { message?: string; status?: string } | undefined;
+    if (error?.status === 'PERMISSION_DENIED') {
+      throw new Error(
+        'The service account has no access — share the spreadsheet with its client_email (Viewer is enough for pull; Editor is required for push).',
+      );
+    }
+    throw new Error(`Sheets API error: ${error?.message ?? res.status}`);
+  }
+  return body;
+}
+
+export async function fetchSheetValues(
+  token: string,
   spreadsheetId: string,
   sheetName: string,
 ): Promise<string[][]> {
   requireSpreadsheetId(spreadsheetId);
-  const res = await fetch(csvUrl(spreadsheetId, sheetName));
-  if (!res.ok) {
-    throw new Error(`Sheet fetch failed (${res.status}) — is the document shared as "anyone with link can view"?`);
-  }
-  const text = await res.text();
-  if (text.trimStart().startsWith('<')) {
-    throw new Error('Sheet returned a sign-in page instead of CSV — sharing must be "anyone with link can view".');
-  }
-  return parseCsv(text);
+  const range = encodeURIComponent(`${sheetName}!A:D`);
+  const body = await sheetsApi(
+    token,
+    `/${spreadsheetId}/values/${range}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE`,
+  );
+  return (body.values ?? []) as string[][];
 }
 
 export function assertMazosHeader(rows: string[][]): void {
@@ -177,12 +196,15 @@ export interface PullResult {
 }
 
 export async function pullFromSheet(db: Database.Database): Promise<PullResult> {
-  const spreadsheetId = requireSpreadsheetId(getSetting(db, 'sheetSync.spreadsheetId'));
-  const playerName = getSetting(db, 'sheetSync.playerName').trim().toLowerCase();
+  const { playerName: configuredPlayer, spreadsheetId: configuredSheet, serviceAccountKeyPath } =
+    getSheetSyncSettings(db);
+  const spreadsheetId = requireSpreadsheetId(configuredSheet);
+  const playerName = configuredPlayer.trim().toLowerCase();
+  const token = await getAccessToken(serviceAccountKeyPath);
 
   const [mazos, ediciones] = await Promise.all([
-    fetchSheetCsv(spreadsheetId, MAZOS_SHEET),
-    fetchSheetCsv(spreadsheetId, EDICIONES_SHEET),
+    fetchSheetValues(token, spreadsheetId, MAZOS_SHEET),
+    fetchSheetValues(token, spreadsheetId, EDICIONES_SHEET),
   ]);
   assertMazosHeader(mazos);
 
