@@ -77,7 +77,12 @@ export default function SheetSyncSection({ onPulled }: Props) {
   };
 
   const handlePickKey = async () => {
-    setSettings(await window.electronAPI.pickServiceAccountKey());
+    setError(null);
+    try {
+      setSettings(await window.electronAPI.pickServiceAccountKey());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   };
 
   if (!settings) return null;
@@ -139,7 +144,7 @@ export default function SheetSyncSection({ onPulled }: Props) {
           <p style={hint}>
             {hasSheet
               ? 'Paste a full sheet link or its id; the link is stored as an id.'
-              : 'Required. Pulling needs the sheet shared as “anyone with the link can view”.'}
+              : 'Required. The sheet must be shared with your service account.'}
           </p>
         </Card>
 
@@ -180,15 +185,17 @@ export default function SheetSyncSection({ onPulled }: Props) {
         <Card title="Pull others' decks">
           <button
             onClick={() => void handlePull()}
-            disabled={busy !== null || !hasSheet}
-            style={{ ...actionBtn, opacity: busy !== null || !hasSheet ? 0.5 : 1 }}
+            disabled={busy !== null || !hasSheet || !hasKey}
+            style={{ ...actionBtn, opacity: busy !== null || !hasSheet || !hasKey ? 0.5 : 1 }}
           >
             {busy === 'pull' ? 'Pulling…' : 'Pull now'}
           </button>
           <p style={hint}>
-            {hasSheet
-              ? "Replaces the local copy of everyone else's decks. Needs no Google account."
-              : 'Add the spreadsheet above first.'}
+            {!hasSheet
+              ? 'Add the spreadsheet above first.'
+              : !hasKey
+                ? 'Set the service-account key below first. Viewer access is enough for pulling.'
+                : "Replaces the local copy of everyone else's decks and ignores sheet filters."}
           </p>
         </Card>
 
@@ -196,8 +203,8 @@ export default function SheetSyncSection({ onPulled }: Props) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               onClick={() => void handlePlanPush()}
-              disabled={busy !== null || !hasSheet}
-              style={{ ...actionBtn, opacity: busy !== null || !hasSheet ? 0.5 : 1 }}
+              disabled={busy !== null || !hasSheet || !hasKey}
+              style={{ ...actionBtn, opacity: busy !== null || !hasSheet || !hasKey ? 0.5 : 1 }}
             >
               {busy === 'plan' ? 'Preparing…' : plan ? 'Rebuild plan' : 'Prepare push'}
             </button>
@@ -207,7 +214,7 @@ export default function SheetSyncSection({ onPulled }: Props) {
           </div>
           <p style={{ ...hint, fontFamily: 'var(--font-mono)', fontSize: 9 }}>
             {hasKey
-              ? `Key: ${settings.serviceAccountKeyPath}`
+              ? 'Key configured locally. The original JSON can be moved or deleted.'
               : 'Pushing needs a service-account key with editor access to the sheet.'}
           </p>
         </Card>

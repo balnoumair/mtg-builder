@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
+import http from 'node:http';
 import path from 'node:path';
 import os from 'node:os';
+import { gzipSync } from 'node:zlib';
 import type Database from 'better-sqlite3';
 import { createTestDb } from '../queries/__tests__/helpers';
 
@@ -13,7 +15,7 @@ vi.mock('electron', () => ({
   },
 }));
 
-const { importCardsFromFile } = await import('../import');
+const { importCardsFromFile, syncCards } = await import('../import');
 const { dedupeCardPrints } = await import('../dedupe');
 
 interface BulkCardOverrides {
@@ -166,6 +168,41 @@ describe('importCardsFromFile filters', () => {
     expect(row.oracle_text).toBe('Flying\nWhenever you cast a creature spell, Abigale becomes prepared.');
     expect(row.image_uri_normal).toBe('https://cards.scryfall.io/normal/front/abigale.jpg');
     expect(row.face_back_name).toBe('Heroic Stanza');
+  });
+});
+
+describe('syncCards', () => {
+  it('imports the current gzip-compressed JSONL bulk format', async () => {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/gzip' });
+      res.end(gzipSync(`${JSON.stringify(bulkCard({ name: 'Current bulk card' }))}\n`));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Test server did not start');
+      const downloadUrl = `http://127.0.0.1:${address.port}/default-cards.jsonl.gz`;
+
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: [{ type: 'default_cards', jsonl_download_uri: downloadUrl }] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: [] }),
+        }));
+
+      await syncCards(db, () => {});
+
+      expect(cardNames(db)).toEqual(['Current bulk card']);
+    } finally {
+      vi.unstubAllGlobals();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+      });
+    }
   });
 });
 

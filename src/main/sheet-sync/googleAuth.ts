@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { createSign } from 'node:crypto';
 
 // Service-account auth without googleapis: sign a JWT with the key's RS256
@@ -7,6 +8,7 @@ import { createSign } from 'node:crypto';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+const LOCAL_KEY_FILENAME = 'mtg-builder-google-service-account.json';
 
 interface ServiceAccountKey {
   client_email: string;
@@ -32,6 +34,27 @@ export function readServiceAccountKey(keyPath: string): ServiceAccountKey {
     throw new Error('The selected file is not a Google service-account key (missing client_email/private_key).');
   }
   return key as ServiceAccountKey;
+}
+
+/**
+ * Validate and copy a selected key into the app-owned data directory. The
+ * caller can then keep, move, or delete the original downloaded key.
+ */
+export function copyServiceAccountKey(sourcePath: string, userDataPath: string): string {
+  readServiceAccountKey(sourcePath);
+
+  const destinationPath = path.join(userDataPath, LOCAL_KEY_FILENAME);
+  fs.mkdirSync(userDataPath, { recursive: true });
+  if (path.resolve(sourcePath) !== path.resolve(destinationPath)) {
+    fs.copyFileSync(sourcePath, destinationPath);
+  }
+  // Keep the credential private on platforms that support POSIX permissions.
+  try {
+    fs.chmodSync(destinationPath, 0o600);
+  } catch {
+    // Windows uses ACLs rather than POSIX mode bits.
+  }
+  return destinationPath;
 }
 
 let cached: { token: string; expiresAt: number; keyPath: string } | null = null;

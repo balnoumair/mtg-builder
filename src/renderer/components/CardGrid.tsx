@@ -2,6 +2,8 @@ import type { Card } from '../../shared/types';
 import CardImage from './CardImage';
 import ManaSymbols, { ColorIdentity } from './ManaSymbols';
 import { getManaMeta } from '../lib/mana';
+import CardSizeControl from './CardSizeControl';
+import { CARD_GRID_MIN_WIDTH, useCardSize } from '../lib/cardSize';
 import { getMaxCopies, PLAYSET_SIZE } from '../../shared/deckLimits';
 
 interface Props {
@@ -41,19 +43,30 @@ export default function CardGrid({
   selectedId,
   view = 'grid',
 }: Props) {
+  const [cardSize, setCardSize] = useCardSize();
+  const minTileWidth = CARD_GRID_MIN_WIDTH[cardSize];
+  const sizeControl = view === 'grid' ? (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+      <CardSizeControl value={cardSize} onChange={setCardSize} />
+    </div>
+  ) : null;
+
   if (loading && cards.length === 0) {
     return (
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
-          gap: 14,
-        }}
-      >
-        {Array.from({ length: 16 }).map((_, i) => (
-          <div key={i} className="card-skeleton" style={{ aspectRatio: '488 / 680' }} />
-        ))}
-      </div>
+      <>
+        {sizeControl}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(auto-fill, minmax(${minTileWidth}px, 1fr))`,
+            gap: 14,
+          }}
+        >
+          {Array.from({ length: 16 }).map((_, i) => (
+            <div key={i} className="card-skeleton" style={{ aspectRatio: '488 / 680' }} />
+          ))}
+        </div>
+      </>
     );
   }
 
@@ -238,40 +251,43 @@ export default function CardGrid({
   }
 
   return (
-    <div
-      className={`card-results${loading ? ' refreshing' : ''}`}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
-        gap: 14,
-      }}
-    >
-      {cards.map((card) => {
-        const inDeck = deckQuantities?.[card.id] ?? 0;
-        const max = onAddPlayset && !unlimitedNames?.has(card.name) ? getMaxCopies(card) : null;
-        const atMax = max !== null && inDeck >= max;
-        return (
-          <CardTile
-            key={card.id}
-            card={card}
-            owned={ownedQuantities?.[card.id] ?? 0}
-            inDeck={inDeck}
-            selected={selectedId === card.id}
-            onClick={() => onCardClick(card)}
-            onDoubleClick={
-              onViewCard
-                ? () => onViewCard(card)
-                : onCardDoubleClick
-                  ? () => onCardDoubleClick(card)
-                  : undefined
-            }
-            onView={onViewCard ? () => onViewCard(card) : undefined}
-            onAdd={!onViewCard && onAddToDeck ? () => onAddToDeck(card) : undefined}
-            onAddPlayset={onAddPlayset && !atMax ? () => onAddPlayset(card) : undefined}
-          />
-        );
-      })}
-    </div>
+    <>
+      {sizeControl}
+      <div
+        className={`card-results${loading ? ' refreshing' : ''}`}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(auto-fill, minmax(${minTileWidth}px, 1fr))`,
+          gap: 14,
+        }}
+      >
+        {cards.map((card) => {
+          const inDeck = deckQuantities?.[card.id] ?? 0;
+          const max = onAddPlayset && !unlimitedNames?.has(card.name) ? getMaxCopies(card) : null;
+          const atMax = max !== null && inDeck >= max;
+          return (
+            <CardTile
+              key={card.id}
+              card={card}
+              owned={ownedQuantities?.[card.id] ?? 0}
+              inDeck={inDeck}
+              selected={selectedId === card.id}
+              onClick={() => onCardClick(card)}
+              onDoubleClick={
+                onViewCard
+                  ? () => onViewCard(card)
+                  : onCardDoubleClick
+                    ? () => onCardDoubleClick(card)
+                    : undefined
+              }
+              onView={onViewCard ? () => onViewCard(card) : undefined}
+              onAdd={!onViewCard && onAddToDeck ? () => onAddToDeck(card) : undefined}
+              onAddPlayset={onAddPlayset && !atMax ? () => onAddPlayset(card) : undefined}
+            />
+          );
+        })}
+      </div>
+    </>
   );
 }
 

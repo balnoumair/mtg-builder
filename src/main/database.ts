@@ -155,7 +155,7 @@ function initSchema(db: BetterSqlite3.Database): void {
   `);
 }
 
-function runMigrations(db: BetterSqlite3.Database): void {
+export function runMigrations(db: BetterSqlite3.Database): void {
   const deckCols = db.prepare("PRAGMA table_info(decks)").all() as { name: string }[];
   if (!deckCols.some(c => c.name === 'owned')) {
     db.exec("ALTER TABLE decks ADD COLUMN owned INTEGER DEFAULT 0");
@@ -188,13 +188,6 @@ function runMigrations(db: BetterSqlite3.Database): void {
     db.exec(`
       UPDATE deck_cards SET owned_quantity = quantity
       WHERE deck_id IN (SELECT id FROM decks WHERE owned = 1)
-    `);
-  } else {
-    // Repair any owned-deck rows that are missing a confirmed baseline.
-    db.exec(`
-      UPDATE deck_cards SET owned_quantity = quantity
-      WHERE owned_quantity IS NULL
-        AND deck_id IN (SELECT id FROM decks WHERE owned = 1)
     `);
   }
   if (!deckCardCols.some(c => c.name === 'ignore_copy_limit')) {
