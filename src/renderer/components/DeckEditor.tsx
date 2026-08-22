@@ -384,7 +384,9 @@ export default function DeckEditor({
         defaultRightWidth={360}
         minLeft={300}
         minRight={260}
-        leftLabel="Search"
+        defaultLeftCollapsed
+        resetKey={`${deckId}:${active}`}
+        leftLabel="Card finder"
         rightLabel="Deck"
         left={({ collapse }) => (
             <div
@@ -441,7 +443,7 @@ export default function DeckEditor({
                   <ViewToggle value={searchView} onChange={setSearchView} />
                   <PanelCollapseButton
                     direction="left"
-                    title="Hide search panel"
+                    title="Hide card finder"
                     onClick={collapse}
                   />
                 </div>

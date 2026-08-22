@@ -24,6 +24,8 @@ interface Props {
   minLeft?: number;
   minRight?: number;
   storageKey?: string;
+  defaultLeftCollapsed?: boolean;
+  resetKey?: string | number;
 }
 
 const DIVIDER_W = 4;
@@ -118,11 +120,13 @@ export default function SplitPane({
   minLeft = 300,
   minRight = 260,
   storageKey,
+  defaultLeftCollapsed = false,
+  resetKey,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const lastRightWidth = useRef(loadWidth(storageKey, defaultRightWidth));
   const [rightWidth, setRightWidth] = useState(lastRightWidth.current);
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [leftCollapsed, setLeftCollapsed] = useState(defaultLeftCollapsed);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -151,6 +155,12 @@ export default function SplitPane({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [clampRightWidth]);
+
+  useEffect(() => {
+    if (resetKey === undefined) return;
+    setLeftCollapsed(defaultLeftCollapsed);
+    setRightCollapsed(false);
+  }, [defaultLeftCollapsed, resetKey]);
 
   const collapseLeft = useCallback(() => {
     setLeftCollapsed(true);
