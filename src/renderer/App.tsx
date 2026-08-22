@@ -12,6 +12,7 @@ import type { View } from './lib/types';
 import ImportScreen from './components/ImportScreen';
 import Sidebar from './components/Sidebar';
 import Titlebar from './components/Titlebar';
+import DeckSwitcherModal from './components/DeckSwitcherModal';
 import CardBrowser from './components/CardBrowser';
 import DeckList from './components/DeckList';
 import DeckEditor from './components/DeckEditor';
@@ -43,6 +44,7 @@ export default function App() {
   const [dbStatus, setDbStatus] = useState<DbStatus | null>(null);
   const [view, setView] = useState<View>('collection');
   const [activeDeckId, setActiveDeckId] = useState<number | null>(null);
+  const [deckSwitcherOpen, setDeckSwitcherOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [collectionVersion, setCollectionVersion] = useState(0);
   const bumpCollection = useCallback(() => setCollectionVersion((v) => v + 1), []);
@@ -115,6 +117,17 @@ export default function App() {
     window.electronAPI.getDbStatus().then(setDbStatus);
   }, []);
 
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'e') {
+        event.preventDefault();
+        if (dbStatus?.ready && !syncing) setDeckSwitcherOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [dbStatus?.ready, syncing]);
+
   const handleSyncComplete = () => {
     window.electronAPI.getDbStatus().then(setDbStatus);
     setSyncing(false);
@@ -123,6 +136,7 @@ export default function App() {
   const handleOpenDeck = (id: number) => {
     setActiveDeckId(id);
     setView('deck-editor');
+    setDeckSwitcherOpen(false);
   };
 
   const handleDeleteDeck = async (id: number) => {
@@ -205,21 +219,8 @@ export default function App() {
           view={view}
           width={sidebarWidth}
           onNavigate={setView}
-          decks={visibleDecks}
-          onOpenDeck={handleOpenDeck}
-          onCreateDeck={handleCreateDeck}
-          onDeleteDeck={handleDeleteDeck}
-          onRenameDeck={(id, name) => updateDeck(id, { name })}
-          activeDeckId={activeDeckId}
           onSync={handleSync}
           cardCount={dbStatus.cardCount}
-          tags={tags}
-          tagFilter={tagFilter}
-          onToggleTagFilter={toggleTagFilter}
-          onClearTagFilter={() => setTagFilter([])}
-          onRenameTag={(id, name) => updateTag(id, { name })}
-          onRecolorTag={(id, color) => updateTag(id, { color })}
-          onDeleteTag={handleDeleteTag}
         />
         <div
           role="separator"
@@ -265,8 +266,14 @@ export default function App() {
               onDeleteDeck={handleDeleteDeck}
               onRenameDeck={(id, name) => updateDeck(id, { name })}
               totalDeckCount={decks.length}
+              tags={tags}
+              tagFilter={tagFilter}
+              onToggleTagFilter={toggleTagFilter}
               filterTags={tags.filter((t) => tagFilter.includes(t.id))}
               onClearTagFilter={() => setTagFilter([])}
+              onRenameTag={(id, name) => updateTag(id, { name })}
+              onRecolorTag={(id, color) => updateTag(id, { color })}
+              onDeleteTag={handleDeleteTag}
             />
           </ViewPane>
           <ViewPane active={view === 'others-decks'}>
@@ -293,6 +300,14 @@ export default function App() {
             </ViewPane>
           )}
         </main>
+        {deckSwitcherOpen && (
+          <DeckSwitcherModal
+            decks={decks}
+            activeDeckId={activeDeckId}
+            onOpenDeck={handleOpenDeck}
+            onClose={() => setDeckSwitcherOpen(false)}
+          />
+        )}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import DeckGroupLabel, { partitionDecks } from './DeckGroupLabel';
 import DeckRowColorIdentity from './DeckRowColorIdentity';
 import DeckSetGroupLabel from './DeckSetGroupLabel';
 import DeckTag from './DeckTag';
+import TagFilterRail from './TagFilterRail';
 
 interface Props {
   decks: Deck[];
@@ -15,6 +16,12 @@ interface Props {
   onRenameDeck: (id: number, name: string) => void;
   /** Decks before the tag filter, so the header can say what is hidden. */
   totalDeckCount: number;
+  tags: Tag[];
+  tagFilter: number[];
+  onToggleTagFilter: (id: number) => void;
+  onRenameTag: (id: number, name: string) => void;
+  onRecolorTag: (id: number, color: string) => void;
+  onDeleteTag: (id: number) => void;
   filterTags: Tag[];
   onClearTagFilter: () => void;
 }
@@ -27,6 +34,12 @@ export default function DeckList({
   onDeleteDeck,
   onRenameDeck,
   totalDeckCount,
+  tags,
+  tagFilter,
+  onToggleTagFilter,
+  onRenameTag,
+  onRecolorTag,
+  onDeleteTag,
   filterTags,
   onClearTagFilter,
 }: Props) {
@@ -64,7 +77,9 @@ export default function DeckList({
           alignItems: 'center',
           gap: 12,
           padding: '0 14px',
-          height: 44,
+          minHeight: 44,
+          paddingTop: 6,
+          paddingBottom: 6,
           borderTop: rowIndex ? '1px solid var(--border)' : 'none',
           cursor: renaming ? 'default' : 'pointer',
         }}
@@ -76,58 +91,59 @@ export default function DeckList({
         }}
       >
         <DeckRowColorIdentity colors={deck.color_identity} />
-        {renaming ? (
-          <input
-            autoFocus
-            value={renameValue}
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename(deck.id);
-              if (e.key === 'Escape') setRenamingId(null);
-            }}
-            onBlur={() => commitRename(deck.id)}
-            style={{
-              flex: 1,
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border-input)',
-              borderRadius: 'var(--radius-sm)',
-              padding: '3px 8px',
-              color: 'var(--text)',
-              fontSize: 13,
-              outline: 'none',
-            }}
-          />
-        ) : (
-          <span
-            style={{
-              flex: '0 1 auto',
-              minWidth: 0,
-              fontSize: 13,
-              fontWeight: 500,
-              overflow: 'hidden',
-              whiteSpace: 'nowrap',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {deck.name}
-          </span>
-        )}
-        {!renaming && deck.tags && deck.tags.length > 0 && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-            {deck.tags.slice(0, 3).map((tag) => (
-              <DeckTag key={tag.id} tag={tag} />
-            ))}
-            {deck.tags.length > 3 && (
-              <span
-                title={deck.tags.slice(3).map((t) => t.name).join(', ')}
-                style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)' }}
-              >
-                +{deck.tags.length - 3}
-              </span>
-            )}
-          </div>
-        )}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {renaming ? (
+            <input
+              autoFocus
+              value={renameValue}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename(deck.id);
+                if (e.key === 'Escape') setRenamingId(null);
+              }}
+              onBlur={() => commitRename(deck.id)}
+              style={{
+                width: '100%',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-input)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '3px 8px',
+                color: 'var(--text)',
+                fontSize: 13,
+                outline: 'none',
+              }}
+            />
+          ) : (
+            <span
+              style={{
+                minWidth: 0,
+                fontSize: 13,
+                fontWeight: 500,
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {deck.name}
+            </span>
+          )}
+          {!renaming && deck.tags && deck.tags.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden' }}>
+              {deck.tags.slice(0, 3).map((tag) => (
+                <DeckTag key={tag.id} tag={tag} />
+              ))}
+              {deck.tags.length > 3 && (
+                <span
+                  title={deck.tags.slice(3).map((t) => t.name).join(', ')}
+                  style={{ flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)' }}
+                >
+                  +{deck.tags.length - 3}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
         <div style={{ flex: 1, minWidth: 12 }} />
         <span
           style={{
@@ -303,6 +319,16 @@ export default function DeckList({
             </button>
           </div>
         )}
+
+        <TagFilterRail
+          tags={tags}
+          selectedIds={tagFilter}
+          onToggle={onToggleTagFilter}
+          onClear={onClearTagFilter}
+          onRename={onRenameTag}
+          onRecolor={onRecolorTag}
+          onDelete={onDeleteTag}
+        />
 
         {showCreate && (
           <div style={{ marginTop: 10, display: 'flex', gap: 6 }}>

@@ -47,6 +47,36 @@ export default function CardDetail({
   const owned = collectionQuantity ?? 0;
   const [cardSize, setCardSize] = useCardSize();
   const cardWidth = CARD_DETAIL_WIDTH[cardSize];
+  const hasBackFace = Boolean(card.face_back_image_uri_normal);
+  const faceFrameStyle: React.CSSProperties = {
+    flex: hasBackFace ? '1 1 0' : `0 1 ${cardWidth}px`,
+    width: hasBackFace ? undefined : `min(${cardWidth}px, 42vw)`,
+    minWidth: hasBackFace ? 0 : undefined,
+    aspectRatio: '63 / 88',
+    maxHeight: 'calc(100vh - 56px)',
+    borderRadius: 12,
+    overflow: 'hidden',
+    background: 'var(--bg-panel)',
+    border: '1px solid var(--border)',
+    boxShadow: '0 24px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04)',
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'relative',
+  };
+  const faceLabelStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    padding: '3px 6px',
+    borderRadius: 'var(--radius-sm)',
+    background: 'rgba(0,0,0,0.62)',
+    border: '1px solid rgba(255,255,255,0.14)',
+    color: 'rgba(255,255,255,0.82)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: 8.5,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+  };
 
   return (
     <div
@@ -70,159 +100,170 @@ export default function CardDetail({
         onClick={(e) => e.stopPropagation()}
         style={{
           display: 'flex',
+          flexWrap: hasBackFace ? 'wrap' : undefined,
+          alignItems: 'flex-start',
           gap: 18,
-          maxWidth: 760,
-          width: 'min(100%, 760px)',
+          maxWidth: hasBackFace ? 1080 : 760,
+          width: hasBackFace ? 'min(100%, 1080px)' : 'min(100%, 760px)',
           maxHeight: 'calc(100vh - 56px)',
           fontFamily: 'var(--font-ui)',
           color: 'var(--text)',
         }}
       >
-        {/* Card face */}
+        {/* Card faces */}
         <div
           style={{
-            flex: `0 1 ${cardWidth}px`,
-            width: `min(${cardWidth}px, 42vw)`,
-            aspectRatio: '63 / 88',
-            maxHeight: 'calc(100vh - 56px)',
-            borderRadius: 12,
-            overflow: 'hidden',
-            background: 'var(--bg-panel)',
-            border: '1px solid var(--border)',
-            boxShadow: '0 24px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04)',
-            display: 'flex',
-            flexDirection: 'column',
+            display: hasBackFace ? 'flex' : undefined,
+            gap: hasBackFace ? 12 : undefined,
+            flex: hasBackFace ? `0 1 ${cardWidth * 2 + 12}px` : undefined,
+            width: hasBackFace ? `min(${cardWidth * 2 + 12}px, 100%)` : undefined,
+            minWidth: 0,
           }}
         >
-          {card.image_uri_normal ? (
-            <img
-              src={card.image_uri_normal}
-              alt={card.name}
-              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-            />
-          ) : (
-            <>
-              <div
-                style={{
-                  padding: '10px 12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  background: 'rgba(0,0,0,0.3)',
-                  borderBottom: '1px solid var(--border)',
-                }}
-              >
-                <span
+          <div style={faceFrameStyle}>
+            {card.image_uri_normal ? (
+              <img
+                src={card.image_uri_normal}
+                alt={card.name}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+              />
+            ) : (
+              <>
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: 'rgba(0,0,0,0.3)',
+                    borderBottom: '1px solid var(--border)',
+                  }}
+                >
+                  <span
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: 13.5,
+                      fontWeight: 600,
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {card.name}
+                  </span>
+                  <ManaSymbols cost={card.mana_cost} size={12} />
+                </div>
+                <div
                   style={{
                     flex: 1,
-                    minWidth: 0,
-                    fontSize: 13.5,
-                    fontWeight: 600,
-                    overflow: 'hidden',
-                    whiteSpace: 'nowrap',
-                    textOverflow: 'ellipsis',
+                    background: tint
+                      ? `linear-gradient(160deg, ${tint.hex}38, ${tint.hex}10 60%, transparent)`
+                      : 'var(--bg-input)',
+                    backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0 8px, transparent 8px 18px)${tint ? `, linear-gradient(160deg, ${tint.hex}38, ${tint.hex}10 60%, transparent)` : ''}`,
+                    position: 'relative',
                   }}
                 >
-                  {card.name}
-                </span>
-                <ManaSymbols cost={card.mana_cost} size={12} />
-              </div>
-              <div
-                style={{
-                  flex: 1,
-                  background: tint
-                    ? `linear-gradient(160deg, ${tint.hex}38, ${tint.hex}10 60%, transparent)`
-                    : 'var(--bg-input)',
-                  backgroundImage: `repeating-linear-gradient(135deg, rgba(255,255,255,0.03) 0 8px, transparent 8px 18px)${tint ? `, linear-gradient(160deg, ${tint.hex}38, ${tint.hex}10 60%, transparent)` : ''}`,
-                  position: 'relative',
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 10,
-                    left: 12,
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 9,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    color: 'var(--text-faint)',
-                  }}
-                >
-                  art
-                </span>
-                {hasPT && (
                   <span
                     style={{
                       position: 'absolute',
-                      bottom: 10,
-                      right: 12,
-                      padding: '3px 8px',
-                      fontSize: 13,
-                      fontWeight: 600,
-                      background: 'rgba(0,0,0,0.55)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: 4,
-                      fontVariantNumeric: 'tabular-nums',
-                    }}
-                  >
-                    {power}/{toughness}
-                  </span>
-                )}
-              </div>
-              <div
-                style={{
-                  padding: '8px 12px',
-                  fontSize: 11.5,
-                  color: 'var(--text-dim)',
-                  borderTop: '1px solid var(--border)',
-                  background: 'var(--bg-row)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                <span>{card.type_line}</span>
-                <div style={{ flex: 1 }} />
-                {rarity && (
-                  <span
-                    style={{
+                      top: 10,
+                      left: 12,
                       fontFamily: 'var(--font-mono)',
                       fontSize: 9,
                       textTransform: 'uppercase',
                       letterSpacing: '0.08em',
-                      color: 'var(--text-mute)',
+                      color: 'var(--text-faint)',
                     }}
                   >
-                    {rarity}
+                    art
                   </span>
-                )}
-              </div>
-              <div
-                style={{
-                  padding: '12px 12px 14px',
-                  background: 'var(--bg-panel)',
-                  fontSize: 12,
-                  lineHeight: 1.5,
-                  color: 'var(--text)',
-                  flexShrink: 0,
-                }}
-              >
-                {(card.oracle_text || '').split('\n').map((line, i) => (
-                  <p key={i} style={{ margin: i ? '6px 0 0' : 0 }}>
-                    {line || ' '}
-                  </p>
-                ))}
-              </div>
-            </>
+                  {hasPT && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: 10,
+                        right: 12,
+                        padding: '3px 8px',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        background: 'rgba(0,0,0,0.55)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: 4,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {power}/{toughness}
+                    </span>
+                  )}
+                </div>
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: 11.5,
+                    color: 'var(--text-dim)',
+                    borderTop: '1px solid var(--border)',
+                    background: 'var(--bg-row)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <span>{card.type_line}</span>
+                  <div style={{ flex: 1 }} />
+                  {rarity && (
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        color: 'var(--text-mute)',
+                      }}
+                    >
+                      {rarity}
+                    </span>
+                  )}
+                </div>
+                <div
+                  style={{
+                    padding: '12px 12px 14px',
+                    background: 'var(--bg-panel)',
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    color: 'var(--text)',
+                    flexShrink: 0,
+                  }}
+                >
+                  {(card.oracle_text || '').split('\n').map((line, i) => (
+                    <p key={i} style={{ margin: i ? '6px 0 0' : 0 }}>
+                      {line || ' '}
+                    </p>
+                  ))}
+                </div>
+              </>
+            )}
+            {hasBackFace && <span style={faceLabelStyle}>Front</span>}
+          </div>
+
+          {hasBackFace && (
+            <div style={faceFrameStyle}>
+              <img
+                src={card.face_back_image_uri_normal!}
+                alt={card.face_back_name ? `${card.face_back_name} (back face)` : `${card.name} (back face)`}
+                style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+              />
+              <span style={faceLabelStyle}>Back</span>
+            </div>
           )}
         </div>
 
         {/* Side panel */}
         <div
+          onClick={(e) => e.stopPropagation()}
           style={{
-            flex: 1,
-            minWidth: 0,
+            flex: hasBackFace ? '1 1 260px' : 1,
+            minWidth: hasBackFace ? 260 : 0,
             display: 'flex',
             flexDirection: 'column',
             gap: 14,
