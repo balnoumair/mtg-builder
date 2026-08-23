@@ -26,6 +26,7 @@ const SIDEBAR_DEFAULT_W = 224;
 const SIDEBAR_MIN_W = 170;
 const SIDEBAR_MAX_W = 420;
 const SIDEBAR_W_KEY = 'sidebar-width';
+type DeckListFilter = 'all' | 'attention';
 
 function clampSidebarWidth(width: number): number {
   return Math.max(SIDEBAR_MIN_W, Math.min(SIDEBAR_MAX_W, width));
@@ -86,6 +87,7 @@ export default function App() {
   // Session-only: a tag filter left over from last launch would look like
   // missing decks.
   const [tagFilter, setTagFilter] = useState<number[]>([]);
+  const [deckListFilter, setDeckListFilter] = useState<DeckListFilter>('all');
 
   const handleSetDeckTags = useCallback(async (deckId: number, tagIds: number[]) => {
     await window.electronAPI.setDeckTags(deckId, tagIds);
@@ -107,10 +109,13 @@ export default function App() {
   // Any of the selected tags matches, so each extra tag widens the list.
   const visibleDecks = useMemo(
     () =>
-      tagFilter.length === 0
-        ? decks
-        : decks.filter((d) => d.tags?.some((t) => tagFilter.includes(t.id))),
-    [decks, tagFilter],
+      decks.filter((d) => {
+        const matchesTags = tagFilter.length === 0 || d.tags?.some((t) => tagFilter.includes(t.id));
+        const matchesAttention =
+          deckListFilter === 'all' || !d.owned || !!d.has_unconfirmed_changes;
+        return matchesTags && matchesAttention;
+      }),
+    [decks, tagFilter, deckListFilter],
   );
 
   useEffect(() => {
@@ -266,6 +271,8 @@ export default function App() {
               onDeleteDeck={handleDeleteDeck}
               onRenameDeck={(id, name) => updateDeck(id, { name })}
               totalDeckCount={decks.length}
+              deckListFilter={deckListFilter}
+              onDeckListFilterChange={setDeckListFilter}
               tags={tags}
               tagFilter={tagFilter}
               onToggleTagFilter={toggleTagFilter}

@@ -14,8 +14,10 @@ interface Props {
   onCreateDeck: (name: string) => void;
   onDeleteDeck: (id: number) => void;
   onRenameDeck: (id: number, name: string) => void;
-  /** Decks before the tag filter, so the header can say what is hidden. */
+  /** Total decks before list filters, so the header can say what is hidden. */
   totalDeckCount: number;
+  deckListFilter: 'all' | 'attention';
+  onDeckListFilterChange: (filter: 'all' | 'attention') => void;
   tags: Tag[];
   tagFilter: number[];
   onToggleTagFilter: (id: number) => void;
@@ -34,6 +36,8 @@ export default function DeckList({
   onDeleteDeck,
   onRenameDeck,
   totalDeckCount,
+  deckListFilter,
+  onDeckListFilterChange,
   tags,
   tagFilter,
   onToggleTagFilter,
@@ -92,42 +96,48 @@ export default function DeckList({
       >
         <DeckRowColorIdentity colors={deck.color_identity} />
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {renaming ? (
-            <input
-              autoFocus
-              value={renameValue}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename(deck.id);
-                if (e.key === 'Escape') setRenamingId(null);
-              }}
-              onBlur={() => commitRename(deck.id)}
-              style={{
-                width: '100%',
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border-input)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '3px 8px',
-                color: 'var(--text)',
-                fontSize: 13,
-                outline: 'none',
-              }}
-            />
-          ) : (
-            <span
-              style={{
-                minWidth: 0,
-                fontSize: 13,
-                fontWeight: 500,
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {deck.name}
-            </span>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            {renaming ? (
+              <input
+                autoFocus
+                value={renameValue}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename(deck.id);
+                  if (e.key === 'Escape') setRenamingId(null);
+                }}
+                onBlur={() => commitRename(deck.id)}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border-input)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '3px 8px',
+                  color: 'var(--text)',
+                  fontSize: 13,
+                  outline: 'none',
+                }}
+              />
+            ) : (
+              <span
+                style={{
+                  minWidth: 0,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {deck.name}
+              </span>
+            )}
+            {!renaming && deck.has_unconfirmed_changes && (
+              <PendingChangesIcon title="Unconfirmed changes" />
+            )}
+          </div>
           {!renaming && deck.tags && deck.tags.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden' }}>
               {deck.tags.slice(0, 3).map((tag) => (
@@ -241,6 +251,9 @@ export default function DeckList({
     );
   };
 
+  const hasDeckFilters = filterTags.length > 0 || deckListFilter !== 'all';
+  const attentionFilterActive = deckListFilter === 'attention';
+
   return (
     <div
       style={{
@@ -268,7 +281,7 @@ export default function DeckList({
             Decks
           </h1>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
-            {filterTags.length > 0 ? `${decks.length}/${totalDeckCount}` : decks.length}
+            {hasDeckFilters ? `${decks.length}/${totalDeckCount}` : decks.length}
           </span>
           <div style={{ flex: 1 }} />
           <button
@@ -320,15 +333,38 @@ export default function DeckList({
           </div>
         )}
 
-        <TagFilterRail
-          tags={tags}
-          selectedIds={tagFilter}
-          onToggle={onToggleTagFilter}
-          onClear={onClearTagFilter}
-          onRename={onRenameTag}
-          onRecolor={onRecolorTag}
-          onDelete={onDeleteTag}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            type="button"
+            aria-pressed={attentionFilterActive}
+            onClick={() => onDeckListFilterChange(attentionFilterActive ? 'all' : 'attention')}
+            title="Show owned decks with unconfirmed changes and all wishlist decks"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '5px 9px',
+              background: attentionFilterActive ? 'rgba(201, 168, 108, 0.12)' : 'var(--bg-chip)',
+              border: `1px solid ${attentionFilterActive ? 'rgba(201, 168, 108, 0.4)' : 'var(--border-strong)'}`,
+              borderRadius: 'var(--radius-sm)',
+              color: attentionFilterActive ? '#c9a86c' : 'var(--text-dim)',
+              fontSize: 11,
+              cursor: 'pointer',
+            }}
+          >
+            <PendingChangesIcon />
+            <span>Needs attention</span>
+          </button>
+          <TagFilterRail
+            tags={tags}
+            selectedIds={tagFilter}
+            onToggle={onToggleTagFilter}
+            onClear={onClearTagFilter}
+            onRename={onRenameTag}
+            onRecolor={onRecolorTag}
+            onDelete={onDeleteTag}
+          />
+        </div>
 
         {showCreate && (
           <div style={{ marginTop: 10, display: 'flex', gap: 6 }}>
@@ -395,10 +431,16 @@ export default function DeckList({
         ) : decks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 16px' }}>
             <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>
-              {filterTags.length > 0 ? 'No decks with these tags' : 'No decks yet'}
+              {deckListFilter === 'attention'
+                ? 'No decks need attention'
+                : filterTags.length > 0
+                  ? 'No decks with these tags'
+                  : 'No decks yet'}
             </p>
             <p style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 6 }}>
-              {filterTags.length > 0
+              {deckListFilter === 'attention'
+                ? 'All owned decks are confirmed, and there are no wishlist decks.'
+                : filterTags.length > 0
                 ? 'Pick a different tag, or show all decks.'
                 : 'Create your first deck to get started'}
             </p>
@@ -426,3 +468,28 @@ const iconBtn: React.CSSProperties = {
   placeItems: 'center',
   padding: 0,
 };
+
+function PendingChangesIcon({ title }: { title?: string }) {
+  return (
+    <span
+      title={title}
+      aria-label={title}
+      aria-hidden={title ? undefined : true}
+      role={title ? 'img' : undefined}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 13,
+        height: 13,
+        flexShrink: 0,
+        color: '#c9a86c',
+      }}
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+        <circle cx="6" cy="6" r="4.2" stroke="currentColor" strokeWidth="1.1" />
+        <path d="M6 3.55V6l1.7 1.05" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+      </svg>
+    </span>
+  );
+}
