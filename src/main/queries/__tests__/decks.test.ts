@@ -81,6 +81,27 @@ describe('getDecks', () => {
     expect(found?.owned).toBe(true);
   });
 
+  it('marks owned decks with unconfirmed changes but not wishlist decks', () => {
+    const wishlist = createDeck(db, { name: 'Wishlist' });
+    const owned = createDeck(db, { name: 'Owned' });
+    const cardId = insertTestCard(db);
+
+    addCardToDeck(db, wishlist.id, cardId);
+    addCardToDeck(db, owned.id, cardId);
+    claimDeckFromCollection(db, owned.id);
+
+    expect(getDecks(db).find((d) => d.id === wishlist.id)?.has_unconfirmed_changes).toBe(false);
+    expect(getDecks(db).find((d) => d.id === owned.id)?.has_unconfirmed_changes).toBe(false);
+
+    addCardToDeck(db, owned.id, cardId);
+
+    expect(getDecks(db).find((d) => d.id === wishlist.id)?.has_unconfirmed_changes).toBe(false);
+    expect(getDecks(db).find((d) => d.id === owned.id)?.has_unconfirmed_changes).toBe(true);
+
+    confirmDeckChanges(db, owned.id);
+    expect(getDecks(db).find((d) => d.id === owned.id)?.has_unconfirmed_changes).toBe(false);
+  });
+
   it('aggregates main-board color identity in WUBRG order', () => {
     const deck = createDeck(db, { name: 'Colors' });
     const red = insertTestCard(db, { color_identity: ['R'] });

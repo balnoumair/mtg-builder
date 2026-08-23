@@ -102,15 +102,23 @@ export function getDecks(db: Database.Database): Deck[] {
   const setGroups = getDeckSetGroups(db);
   const tagsByDeck = getTagsByDeck(db);
   const rows = db.prepare(`
-    SELECT d.*, COALESCE(SUM(dc.quantity), 0) as card_count
+    SELECT d.*,
+           COALESCE(SUM(dc.quantity), 0) as card_count,
+           CASE WHEN d.owned = 1 AND EXISTS (
+             SELECT 1
+             FROM deck_cards pending
+             WHERE pending.deck_id = d.id
+               AND COALESCE(pending.quantity, 0) != COALESCE(pending.owned_quantity, 0)
+           ) THEN 1 ELSE 0 END as has_unconfirmed_changes
     FROM decks d
     LEFT JOIN deck_cards dc ON dc.deck_id = d.id AND dc.board = 'main'
     GROUP BY d.id
     ORDER BY d.updated_at DESC
-  `).all() as (Omit<Deck, 'owned'> & { owned: number })[];
+  `).all() as (Omit<Deck, 'owned'> & { owned: number; has_unconfirmed_changes: number })[];
   return rows.map((r) => ({
     ...r,
     owned: !!r.owned,
+    has_unconfirmed_changes: !!r.has_unconfirmed_changes,
     color_identity: colorIdentities.get(r.id) ?? [],
     set_group: setGroups.get(r.id) ?? MIXED_DECK_SET_GROUP,
     tags: tagsByDeck.get(r.id) ?? [],

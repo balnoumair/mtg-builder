@@ -52,6 +52,8 @@ export interface Deck {
   created_at: string;
   updated_at: string;
   card_count?: number;
+  /** True when an owned deck differs from its last confirmed card quantities. */
+  has_unconfirmed_changes?: boolean;
   color_identity?: string[];
   set_group?: DeckSetGroup;
   tags?: Tag[];
