@@ -6,6 +6,9 @@ import type {
   ImportProgress,
   SheetPushPlan,
   SheetSyncSettings,
+  DrivePullResult,
+  DrivePushResult,
+  DriveSyncSettings,
 } from './shared/types';
 
 const api: ElectronAPI = {
@@ -51,6 +54,12 @@ const api: ElectronAPI = {
   updateSheetSyncSettings: (updates: Partial<SheetSyncSettings>) =>
     ipcRenderer.invoke('sheet:updateSettings', updates),
   pickServiceAccountKey: () => ipcRenderer.invoke('sheet:pickKey'),
+  getDriveSyncSettings: (): Promise<DriveSyncSettings> => ipcRenderer.invoke('drive:getSettings'),
+  updateDriveSyncSettings: (updates: { backupFileId?: string }): Promise<DriveSyncSettings> =>
+    ipcRenderer.invoke('drive:updateSettings', updates),
+  pushBackupToDrive: (filterSetsByUuid?: Record<string, string[]>): Promise<DrivePushResult> =>
+    ipcRenderer.invoke('drive:pushBackup', filterSetsByUuid ?? {}),
+  pullBackupFromDrive: (): Promise<DrivePullResult> => ipcRenderer.invoke('drive:pullBackup'),
   pullSheet: () => ipcRenderer.invoke('sheet:pull'),
   getExternalDecks: () => ipcRenderer.invoke('sheet:externalDecks'),
   getSheetBlockLabels: () => ipcRenderer.invoke('sheet:blockLabels'),

@@ -4,6 +4,7 @@ import {
   applyDeckSetsFiltersFromBackup,
   collectDeckSetsFiltersForBackup,
 } from '../lib/deckFilterStorage';
+import DriveBackupSection from './DriveBackupSection';
 import SheetSyncSection from './SheetSyncSection';
 
 interface Props {
@@ -303,6 +304,7 @@ export default function ImportScreen({
                 {backupStatus}
               </p>
             )}
+            <DriveBackupSection onImported={onBackupImported} />
             <SheetSyncSection onPulled={onSheetPulled} />
           </div>
         )}
