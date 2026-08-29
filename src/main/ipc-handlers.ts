@@ -20,6 +20,7 @@ import {
 } from './sheet-sync/pull';
 import { planPush, executePush, assignBlockMapping } from './sheet-sync/push';
 import { copyServiceAccountKey } from './sheet-sync/googleAuth';
+import { parseDriveFileId, pullBackupFromDrive, pushBackupToDrive } from './drive-sync';
 import type { CardFilters, Deck, SheetPushPlan, SheetSyncSettings } from '../shared/types';
 
 export function registerIpcHandlers(): void {
@@ -253,6 +254,49 @@ export function registerIpcHandlers(): void {
       settingsQueries.setSetting(db, 'sheetSync.serviceAccountKeyPath', localKeyPath);
     }
     return settingsQueries.getSheetSyncSettings(db);
+  });
+
+  ipcMain.handle('drive:getSettings', () => {
+    return settingsQueries.getDriveSyncSettings(getDb());
+  });
+
+  ipcMain.handle('drive:updateSettings', (_event, updates: { backupFileId?: string }) => {
+    const db = getDb();
+    if (updates.backupFileId !== undefined) {
+      settingsQueries.setSetting(
+        db,
+        'driveSync.backupFileId',
+        parseDriveFileId(updates.backupFileId),
+      );
+    }
+    return settingsQueries.getDriveSyncSettings(db);
+  });
+
+  ipcMain.handle('drive:pushBackup', async (_event, filterSetsByUuid: Record<string, string[]> = {}) => {
+    try {
+      return await pushBackupToDrive(getDb(), filterSetsByUuid);
+    } catch (err) {
+      return {
+        pushed: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
+
+  ipcMain.handle('drive:pullBackup', async () => {
+    try {
+      return await pullBackupFromDrive(getDb());
+    } catch (err) {
+      return {
+        decksImported: 0,
+        decksUpdated: 0,
+        collectionCards: 0,
+        tagsImported: 0,
+        missing: [],
+        filterSets: [],
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
   });
 
   ipcMain.handle('sheet:pull', async () => {

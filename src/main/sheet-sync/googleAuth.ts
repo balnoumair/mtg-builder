@@ -7,7 +7,15 @@ import { createSign } from 'node:crypto';
 // dependency tree clean — native-module packaging here is already delicate.
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+// The same service-account token is used for both the playgroup spreadsheet
+// and the explicitly shared backup file in Drive. The file itself remains
+// permission-limited to the service account; the Drive scope is needed because
+// the user supplies an existing file id rather than selecting it through the
+// Google Picker.
+const SCOPE = [
+  'https://www.googleapis.com/auth/spreadsheets',
+  'https://www.googleapis.com/auth/drive',
+].join(' ');
 const LOCAL_KEY_FILENAME = 'mtg-builder-google-service-account.json';
 
 interface ServiceAccountKey {

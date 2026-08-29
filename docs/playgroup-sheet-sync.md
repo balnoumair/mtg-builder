@@ -43,6 +43,30 @@ already lists Bryan).
 - **Push my decks…** — shows a preview of every row it would add, change, or
   clear. Nothing is written until you press **Write N rows**.
 
+## Drive backup
+
+The Import/Export screen also supports a simple one-file backup transfer. It
+uses the same service-account key as the sheet connection and never merges
+backups: **Push to Drive** replaces the configured JSON file, and **Pull from
+Drive** imports that snapshot into the local app.
+
+### One-time setup
+
+1. In the same Google Cloud project, enable **Google Drive API**.
+2. Use the existing local **Backup** button to create a JSON backup, then
+   upload it to your normal Google Drive.
+3. Share that uploaded file with the service-account `client_email` as
+   **Editor**. Viewer access is enough for pulling, but pushing needs Editor.
+4. In the app's **Drive backup** section, paste the file's full Google Drive
+   link (or its id) into **Backup file**. The app stores only the id.
+
+On another device, configure the same service-account key and paste the same
+Drive file link. Sync the Scryfall card database before pulling so the backup's
+card identities can be resolved locally.
+
+The service-account credential JSON is not part of the backup and should never
+be uploaded as the backup file.
+
 ## Safety properties worth knowing
 
 - Only rows whose Jugador is your configured name are ever written, plus new
