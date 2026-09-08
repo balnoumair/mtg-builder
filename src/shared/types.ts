@@ -169,6 +169,26 @@ export interface ImportBackupResult {
   error?: string;
 }
 
+export interface DriveSyncSettings {
+  backupFileId: string;
+  lastPushedAt: string;
+  lastPulledAt: string;
+}
+
+export interface DrivePushResult {
+  pushed: boolean;
+  fileId?: string;
+  fileName?: string;
+  modifiedTime?: string;
+  error?: string;
+}
+
+export interface DrivePullResult extends ImportBackupResult {
+  fileId?: string;
+  fileName?: string;
+  modifiedTime?: string;
+}
+
 /** A deck belonging to another player, mirrored from the playgroup sheet. */
 export interface ExternalDeck {
   id: number;
@@ -270,6 +290,10 @@ export interface ElectronAPI {
   getSheetSyncSettings(): Promise<SheetSyncSettings>;
   updateSheetSyncSettings(updates: Partial<SheetSyncSettings>): Promise<SheetSyncSettings>;
   pickServiceAccountKey(): Promise<SheetSyncSettings>;
+  getDriveSyncSettings(): Promise<DriveSyncSettings>;
+  updateDriveSyncSettings(updates: { backupFileId?: string }): Promise<DriveSyncSettings>;
+  pushBackupToDrive(filterSetsByUuid?: Record<string, string[]>): Promise<DrivePushResult>;
+  pullBackupFromDrive(): Promise<DrivePullResult>;
   pullSheet(): Promise<SheetPullResult>;
   getExternalDecks(): Promise<ExternalDeck[]>;
   getSheetBlockLabels(): Promise<string[]>;

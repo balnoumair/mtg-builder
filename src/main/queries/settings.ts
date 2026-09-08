@@ -7,6 +7,9 @@ export const SETTINGS_DEFAULTS = {
   'sheetSync.serviceAccountKeyPath': '',
   'sheetSync.lastPulledAt': '',
   'sheetSync.lastPushedAt': '',
+  'driveSync.backupFileId': '',
+  'driveSync.lastPushedAt': '',
+  'driveSync.lastPulledAt': '',
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS_DEFAULTS;
@@ -31,5 +34,14 @@ export function getSheetSyncSettings(db: Database.Database) {
     spreadsheetId: getSetting(db, 'sheetSync.spreadsheetId'),
     serviceAccountKeyPath: getSetting(db, 'sheetSync.serviceAccountKeyPath'),
     lastPulledAt: getSetting(db, 'sheetSync.lastPulledAt'),
+    lastPushedAt: getSetting(db, 'sheetSync.lastPushedAt'),
+  };
+}
+
+export function getDriveSyncSettings(db: Database.Database) {
+  return {
+    backupFileId: getSetting(db, 'driveSync.backupFileId'),
+    lastPushedAt: getSetting(db, 'driveSync.lastPushedAt'),
+    lastPulledAt: getSetting(db, 'driveSync.lastPulledAt'),
   };
 }
