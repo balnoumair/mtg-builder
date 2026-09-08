@@ -66,6 +66,19 @@ describe('getCollection', () => {
     expect(result.cards[0].card.name).toBe('Lightning Bolt');
   });
 
+  it('filters by type line with a t: query prefix', () => {
+    const c1 = insertTestCard(db, { name: 'Typed Card', type_line: 'Creature — Alpha' });
+    const c2 = insertTestCard(db, { name: 'Texted Card', oracle_text: 'Alpha creatures.' });
+    addToCollection(db, c1);
+    addToCollection(db, c2);
+
+    const typed = getCollection(db, { query: 't:alpha' });
+    expect(typed.cards.map((c) => c.card.name)).toEqual(['Typed Card']);
+
+    const bare = getCollection(db, { query: 'alpha' });
+    expect(bare.cards.map((c) => c.card.name)).toEqual(['Texted Card']);
+  });
+
   it('filters by rarity', () => {
     const c1 = insertTestCard(db, { rarity: 'rare' });
     const c2 = insertTestCard(db, { rarity: 'common' });

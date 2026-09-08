@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { Card, CardFilters, CardSearchResult, CardSet } from '../../shared/types';
+import { buildSearchConditions } from './searchQuery';
 
 const VALID_LAYOUTS = new Set([
   'normal', 'split', 'flip', 'transform', 'modal_dfc', 'meld',
@@ -22,8 +23,9 @@ export function searchCards(db: Database.Database, filters: CardFilters): CardSe
   const params: Record<string, unknown> = {};
 
   if (filters.query) {
-    conditions.push("(name LIKE '%' || @query || '%' OR oracle_text LIKE '%' || @query || '%')");
-    params.query = filters.query;
+    const search = buildSearchConditions(filters.query);
+    conditions.push(...search.conditions);
+    Object.assign(params, search.params);
   }
 
   if (filters.colors && filters.colors.length > 0) {

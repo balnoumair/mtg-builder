@@ -108,7 +108,8 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
             type="text"
             value={filters.query || ''}
             onChange={(e) => updateFilters({ query: e.target.value || undefined })}
-            placeholder="Filter collection…"
+            placeholder="Filter collection… (t:human)"
+            title="Bare words search name and rules text. Prefixes: t: type, o: rules text, n: name. Quote phrases: t:&quot;human soldier&quot;"
             style={{
               flex: 1,
               minWidth: 0,

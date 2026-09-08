@@ -34,6 +34,50 @@ describe('searchCards', () => {
     expect(result.cards[0].name).toBe('Bolt');
   });
 
+  describe('query prefixes', () => {
+    beforeEach(() => {
+      insertTestCard(db, {
+        name: 'Typed Card',
+        type_line: 'Creature — Alpha Beta',
+        oracle_text: 'no keyword here',
+      });
+      insertTestCard(db, {
+        name: 'Texted Card',
+        type_line: 'Instant',
+        oracle_text: 'Alpha creatures you control get +1/+1.',
+      });
+    });
+
+    it('t: matches the type line, which a bare word does not', () => {
+      expect(searchCards(db, { query: 'alpha' }).cards.map((c) => c.name)).toEqual(['Texted Card']);
+      expect(searchCards(db, { query: 't:alpha' }).cards.map((c) => c.name)).toEqual(['Typed Card']);
+    });
+
+    it('o: restricts a term to oracle text', () => {
+      const result = searchCards(db, { query: 'o:alpha' });
+      expect(result.cards.map((c) => c.name)).toEqual(['Texted Card']);
+    });
+
+    it('n: restricts a term to the name', () => {
+      const result = searchCards(db, { query: 'n:typed' });
+      expect(result.cards.map((c) => c.name)).toEqual(['Typed Card']);
+    });
+
+    it('ANDs multiple terms together', () => {
+      expect(searchCards(db, { query: 't:creature o:keyword' }).total).toBe(1);
+      expect(searchCards(db, { query: 't:creature o:absent' }).total).toBe(0);
+    });
+
+    it('matches a quoted phrase as a whole', () => {
+      expect(searchCards(db, { query: 't:"alpha beta"' }).total).toBe(1);
+      expect(searchCards(db, { query: 't:"beta alpha"' }).total).toBe(0);
+    });
+
+    it('keeps the pre-existing behaviour for bare words', () => {
+      expect(searchCards(db, { query: 'card' }).total).toBe(2);
+    });
+  });
+
   describe('color filters', () => {
     beforeEach(() => {
       insertTestCard(db, { name: 'Red Card', color_identity: ['R'] });
