@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { Card, CardFilters, CollectionCard, CollectionStats } from '../../shared/types';
+import { buildSearchConditions } from './searchQuery';
 
 export function rowToCard(row: Record<string, unknown>): Card {
   return {
@@ -28,8 +29,9 @@ export function getCollection(
   const params: Record<string, unknown> = {};
 
   if (filters.query) {
-    conditions.push("(c.name LIKE '%' || @query || '%' OR c.oracle_text LIKE '%' || @query || '%')");
-    params.query = filters.query;
+    const search = buildSearchConditions(filters.query, 'c.');
+    conditions.push(...search.conditions);
+    Object.assign(params, search.params);
   }
 
   if (filters.colors && filters.colors.length > 0) {
