@@ -5,6 +5,7 @@ import { copyText } from '../lib/clipboard';
 import { useCardDetail } from '../hooks/useCards';
 import CardDetail from './CardDetail';
 import ManaSymbols from './ManaSymbols';
+import FilterDropdown from './FilterDropdown';
 
 interface Props {
   active: boolean;
@@ -17,6 +18,7 @@ export default function WantsView({ active, collectionVersion }: Props) {
   const [items, setItems] = useState<WantItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [excludeBasicLands, setExcludeBasicLands] = useState(true);
+  const [hiddenDecks, setHiddenDecks] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const { card, open, showCard, close } = useCardDetail();
 
@@ -33,9 +35,28 @@ export default function WantsView({ active, collectionVersion }: Props) {
     };
   }, [active, collectionVersion]);
 
+  const decks = useMemo(() => {
+    const options = new Map<string, { value: string; label: string; count: number }>();
+    for (const item of items) {
+      for (const source of item.sources) {
+        const value = String(source.deck_id);
+        const option = options.get(value) ?? { value, label: source.deck_name, count: 0 };
+        option.count += source.need;
+        options.set(value, option);
+      }
+    }
+    return [...options.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [items]);
+
+  const selectedItems = useMemo(() => items.map((item) => {
+    const sources = item.sources.filter((source) => !hiddenDecks.includes(String(source.deck_id)));
+    const needed = sources.reduce((sum, source) => sum + source.need, 0);
+    return { ...item, sources, needed, to_buy: Math.max(0, needed - item.owned) };
+  }).filter((item) => item.to_buy > 0), [items, hiddenDecks]);
+
   const visible = useMemo(
-    () => (excludeBasicLands ? items.filter((i) => !BASIC_LAND_NAMES.has(i.name)) : items),
-    [items, excludeBasicLands],
+    () => (excludeBasicLands ? selectedItems.filter((i) => !BASIC_LAND_NAMES.has(i.name)) : selectedItems),
+    [selectedItems, excludeBasicLands],
   );
 
   const totalCopies = useMemo(
@@ -48,6 +69,8 @@ export default function WantsView({ active, collectionVersion }: Props) {
     [visible],
   );
 
+  useEffect(() => { setCopied(false); }, [exportText]);
+
   const handleCopy = async () => {
     await copyText(exportText);
     setCopied(true);
@@ -55,7 +78,7 @@ export default function WantsView({ active, collectionVersion }: Props) {
   };
 
   const detailOwned = card ? (items.find((i) => i.name === card.name)?.owned ?? 0) : 0;
-  const hiddenBasics = items.length - (excludeBasicLands ? visible.length : items.length);
+  const hiddenBasics = selectedItems.length - visible.length;
 
   return (
     <div
@@ -77,7 +100,7 @@ export default function WantsView({ active, collectionVersion }: Props) {
           borderBottom: '1px solid var(--border)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <h1
             style={{
               margin: 0,
@@ -106,6 +129,13 @@ export default function WantsView({ active, collectionVersion }: Props) {
             </span>
           </div>
           <div style={{ flex: 1 }} />
+          <FilterDropdown
+            label="Decks"
+            options={decks}
+            hidden={hiddenDecks.filter((id) => decks.some((deck) => deck.value === id))}
+            onHiddenChange={setHiddenDecks}
+            emptyHint="No decks with wants"
+          />
           <label
             style={{
               display: 'inline-flex',
@@ -165,7 +195,7 @@ export default function WantsView({ active, collectionVersion }: Props) {
               textAlign: 'center',
             }}
           >
-            <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>Nothing to buy</p>
+            <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>{hiddenDecks.length > 0 ? 'Nothing to buy for the selected decks' : 'Nothing to buy'}</p>
             <p style={{ color: 'var(--text-mute)', fontSize: 11, margin: 0, maxWidth: 380 }}>
               Cards you still need for wishlist decks and unconfirmed deck additions show up here
               once they're missing from My Cards.

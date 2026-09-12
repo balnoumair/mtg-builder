@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseSearchQuery, buildSearchConditions } from '../searchQuery';
 
 describe('parseSearchQuery', () => {
-  it('treats a bare word as a name-or-oracle term', () => {
+  it('treats a bare word as a name, oracle, or type term', () => {
     expect(parseSearchQuery('alpha')).toEqual([{ field: 'any', value: 'alpha' }]);
   });
 
@@ -77,16 +77,18 @@ describe('buildSearchConditions', () => {
     expect(conditions[0]).not.toContain('name');
   });
 
-  it('checks name and oracle for a bare term', () => {
+  it('checks name, oracle, and type for a bare term', () => {
     const { conditions } = buildSearchConditions('alpha');
     expect(conditions[0]).toContain('name');
     expect(conditions[0]).toContain('oracle_text');
+    expect(conditions[0]).toContain('type_line');
   });
 
   it('applies a table alias to every column', () => {
     const { conditions } = buildSearchConditions('alpha t:beta', 'c.');
     expect(conditions[0]).toContain('c.name');
     expect(conditions[0]).toContain('c.oracle_text');
+    expect(conditions[0]).toContain('c.type_line');
     expect(conditions[1]).toContain('c.type_line');
   });
 

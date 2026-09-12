@@ -76,7 +76,7 @@ describe('getCollection', () => {
     expect(typed.cards.map((c) => c.card.name)).toEqual(['Typed Card']);
 
     const bare = getCollection(db, { query: 'alpha' });
-    expect(bare.cards.map((c) => c.card.name)).toEqual(['Texted Card']);
+    expect(bare.cards.map((c) => c.card.name)).toEqual(['Texted Card', 'Typed Card']);
   });
 
   it('filters by rarity', () => {
@@ -158,9 +158,9 @@ describe('updateCollectionQuantity', () => {
 });
 
 describe('removeFromCollection', () => {
-  it('removes the card from the collection', () => {
+  it('removes all copies of the card from the collection', () => {
     const cardId = insertTestCard(db);
-    addToCollection(db, cardId);
+    addToCollection(db, cardId, 4);
     removeFromCollection(db, cardId);
     const row = db.prepare('SELECT * FROM collection WHERE card_id = ?').get(cardId);
     expect(row).toBeUndefined();

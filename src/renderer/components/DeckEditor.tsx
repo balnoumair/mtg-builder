@@ -9,6 +9,8 @@ import { getCardTypeCategory, TYPE_ORDER, CMC_GROUP_ORDER, getCmcGroup, getManaM
 import { getMaxCopies, PLAYSET_SIZE } from '../../shared/deckLimits';
 import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
+import { previewOnModifiedClick } from '../lib/cardClick';
+import { cardHoverBar, cardHoverButton as hoverBtn, cardRowButton as miniBtn } from '../lib/cardControls';
 import CardImage from './CardImage';
 import CardDetail from './CardDetail';
 import DeckStats from './DeckStats';
@@ -424,8 +426,8 @@ export default function DeckEditor({
                     <input
                       value={filters.query || ''}
                       onChange={(e) => updateFilters({ query: e.target.value || undefined })}
-                      placeholder="Search cards to add… (t:human)"
-                      title="Bare words search name and rules text. Prefixes: t: type, o: rules text, n: name. Quote phrases: t:&quot;human soldier&quot;"
+                      placeholder="Search cards to add… (name, text, or type)"
+                      title="Words search name, rules text, and type. Prefixes: t: type, o: rules text, n: name. Quote phrases: t:&quot;human soldier&quot;"
                       style={{
                         flex: 1,
                         minWidth: 0,
@@ -820,6 +822,7 @@ export default function DeckEditor({
                       <div
                         key={dc.id}
                         className="group"
+                        onClickCapture={(e) => previewOnModifiedClick(e, dc.card ? () => handleSearchCardClick(dc.card!) : undefined)}
                         onClick={() => {
                           if (!dc.card) return;
                           setSelectedCardId(dc.card_id);
@@ -1023,6 +1026,7 @@ export default function DeckEditor({
                     <div
                       key={dc.id}
                       className="group"
+                      onClickCapture={(e) => previewOnModifiedClick(e, dc.card ? () => handleSearchCardClick(dc.card!) : undefined)}
                       onClick={() => {
                         if (!dc.card) return;
                         setSelectedCardId(dc.card_id);
@@ -1150,6 +1154,7 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
 
   return (
     <div
+      onClickCapture={(e) => previewOnModifiedClick(e, onClick)}
       onClick={onClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -1254,18 +1259,7 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
       )}
 
       {hover && (
-        <div
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            padding: 6,
-            display: 'flex',
-            gap: 4,
-            background: 'linear-gradient(180deg, transparent, rgba(0,0,0,0.7) 50%)',
-          }}
-        >
+        <div style={cardHoverBar}>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -1334,33 +1328,4 @@ const chipBtn: React.CSSProperties = {
   fontSize: 11,
   cursor: 'pointer',
   flexShrink: 0,
-};
-
-const miniBtn: React.CSSProperties = {
-  width: 18,
-  height: 18,
-  borderRadius: 'var(--radius-sm)',
-  background: 'transparent',
-  border: '1px solid var(--border-strong)',
-  color: 'var(--text-dim)',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 11,
-  cursor: 'pointer',
-  lineHeight: 1,
-  padding: 0,
-};
-
-const hoverBtn: React.CSSProperties = {
-  width: 22,
-  height: 22,
-  borderRadius: 'var(--radius-sm)',
-  background: 'rgba(0,0,0,0.55)',
-  border: '1px solid rgba(255,255,255,0.14)',
-  color: 'var(--text)',
-  fontFamily: 'var(--font-mono)',
-  fontSize: 12,
-  cursor: 'pointer',
-  lineHeight: 1,
-  padding: 0,
-  backdropFilter: 'blur(6px)',
 };
