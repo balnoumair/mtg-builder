@@ -1,15 +1,14 @@
 /**
- * Free-text card search: bare words match name or rules text, and a `field:`
+ * Free-text card search: bare words match name, rules text, or type, and a `field:`
  * prefix narrows a term to one column.
  *
- *   dragon              name or oracle text contains "dragon"
+ *   dragon              name, oracle text, or type contains "dragon"
  *   t:human             type line contains "human"
  *   o:sacrifice         oracle text contains "sacrifice"
  *   n:bolt t:instant    name contains "bolt" AND type line contains "instant"
  *   t:"human soldier"   type line contains the phrase
  *
- * Terms are ANDed. Type is deliberately not part of a bare word: "creature"
- * or "instant" would otherwise match most of the catalog.
+ * Terms are ANDed. Prefixes optionally narrow a term to one field.
  */
 
 export type SearchField = 'name' | 'oracle' | 'type' | 'any';
@@ -33,7 +32,7 @@ const FIELD_COLUMNS: Record<SearchField, string[]> = {
   name: ['name'],
   oracle: ['oracle_text'],
   type: ['type_line'],
-  any: ['name', 'oracle_text'],
+  any: ['name', 'oracle_text', 'type_line'],
 };
 
 interface RawToken {

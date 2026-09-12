@@ -48,8 +48,8 @@ describe('searchCards', () => {
       });
     });
 
-    it('t: matches the type line, which a bare word does not', () => {
-      expect(searchCards(db, { query: 'alpha' }).cards.map((c) => c.name)).toEqual(['Texted Card']);
+    it('bare words include type matches while t: narrows to type', () => {
+      expect(searchCards(db, { query: 'alpha' }).cards.map((c) => c.name)).toEqual(['Texted Card', 'Typed Card']);
       expect(searchCards(db, { query: 't:alpha' }).cards.map((c) => c.name)).toEqual(['Typed Card']);
     });
 

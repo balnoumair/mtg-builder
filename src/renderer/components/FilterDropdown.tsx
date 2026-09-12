@@ -141,6 +141,7 @@ export default function FilterDropdown({
                   >
                     <input
                       type="checkbox"
+                      aria-label={opt.label}
                       checked={!isHidden}
                       onChange={() => toggle(opt.value)}
                       title={isHidden ? 'Show this' : 'Hide this'}

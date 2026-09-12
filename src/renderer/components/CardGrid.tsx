@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import type { Card } from '../../shared/types';
 import CardImage from './CardImage';
+import { previewOnModifiedClick } from '../lib/cardClick';
+import { cardHoverBar, cardHoverButton, cardRowButton } from '../lib/cardControls';
 import ManaSymbols, { ColorIdentity } from './ManaSymbols';
 import { getManaMeta } from '../lib/mana';
 import CardSizeControl from './CardSizeControl';
@@ -14,6 +17,7 @@ interface Props {
   onViewCard?: (card: Card) => void;
   onAddToDeck?: (card: Card) => void;
   onAddPlayset?: (card: Card) => void;
+  onRemoveFromCollection?: (card: Card) => void;
   /** Card names exempted from the copy limit in the target deck. */
   unlimitedNames?: Set<string>;
   ownedQuantities?: Record<string, number>;
@@ -37,6 +41,7 @@ export default function CardGrid({
   onViewCard,
   onAddToDeck,
   onAddPlayset,
+  onRemoveFromCollection,
   unlimitedNames,
   ownedQuantities,
   deckQuantities,
@@ -107,6 +112,8 @@ export default function CardGrid({
           return (
             <div
               key={card.id}
+              className="group"
+              onClickCapture={(e) => previewOnModifiedClick(e, onViewCard ? () => onViewCard(card) : undefined)}
               onClick={() => onCardClick(card)}
               onDoubleClick={
                 onViewCard
@@ -229,6 +236,9 @@ export default function CardGrid({
                   </button>
                 )
               )}
+              {onRemoveFromCollection && qty > 0 && (
+                <RemoveCollectionButton card={card} quantity={qty} onRemove={() => onRemoveFromCollection(card)} />
+              )}
               {qty > 0 && (
                 <span
                   style={{
@@ -283,6 +293,7 @@ export default function CardGrid({
               onView={onViewCard ? () => onViewCard(card) : undefined}
               onAdd={!onViewCard && onAddToDeck ? () => onAddToDeck(card) : undefined}
               onAddPlayset={onAddPlayset && !atMax ? () => onAddPlayset(card) : undefined}
+              onRemove={onRemoveFromCollection ? () => onRemoveFromCollection(card) : undefined}
             />
           );
         })}
@@ -301,16 +312,25 @@ interface TileProps {
   onView?: () => void;
   onAdd?: () => void;
   onAddPlayset?: () => void;
+  onRemove?: () => void;
 }
 
-function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onView, onAdd, onAddPlayset }: TileProps) {
+function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onView, onAdd, onAddPlayset, onRemove }: TileProps) {
+  const [hover, setHover] = useState(false);
   const hasImage = !!card.image_uri_normal;
   const tint = card.color_identity?.[0] ? getManaMeta(card.color_identity[0]) : null;
   const rarityShort = RARITY_SHORT[card.rarity];
+  const removeControl = hover && onRemove && owned > 0 ? (
+    <div style={cardHoverBar}>
+      <div style={{ flex: 1 }} />
+      <RemoveCollectionButton card={card} quantity={owned} onRemove={onRemove} tile />
+    </div>
+  ) : null;
 
   if (hasImage) {
     return (
       <div
+        onClickCapture={(e) => previewOnModifiedClick(e, onView)}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
         className="group"
@@ -324,9 +344,11 @@ function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onVie
           aspectRatio: '488 / 680',
         }}
         onMouseEnter={(e) => {
+          setHover(true);
           if (!selected) e.currentTarget.style.borderColor = 'var(--border-strong)';
         }}
         onMouseLeave={(e) => {
+          setHover(false);
           if (!selected) e.currentTarget.style.borderColor = 'var(--border)';
         }}
       >
@@ -371,6 +393,7 @@ function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onVie
             ×{owned}
           </span>
         )}
+        {removeControl}
         {onView && (
           <button
             onClick={(e) => {
@@ -465,8 +488,10 @@ function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onVie
   // Imageless fallback: use the design's text-rich tile
   return (
     <div
+      onClickCapture={(e) => previewOnModifiedClick(e, onView)}
       onClick={onClick}
       style={{
+        position: 'relative',
         background: 'var(--bg-panel)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--radius-tile)',
@@ -477,9 +502,11 @@ function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onVie
         transition: 'border-color 120ms',
       }}
       onMouseEnter={(e) => {
+        setHover(true);
         e.currentTarget.style.borderColor = 'var(--border-strong)';
       }}
       onMouseLeave={(e) => {
+        setHover(false);
         e.currentTarget.style.borderColor = 'var(--border)';
       }}
     >
@@ -605,7 +632,26 @@ function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onVie
         <span>CMC {card.cmc ?? 0}</span>
         {owned > 0 && <span style={{ color: 'var(--text-dim)' }}>×{owned}</span>}
       </div>
+      {removeControl}
     </div>
+  );
+}
+
+function RemoveCollectionButton({ card, quantity, onRemove, tile = false }: { card: Card; quantity: number; onRemove: () => void; tile?: boolean }) {
+  const label = `Remove all ${quantity} copies of ${card.name} from My Cards`;
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onRemove();
+      }}
+      aria-label={label}
+      title={label}
+      className={tile ? undefined : 'opacity-0 group-hover:opacity-100 focus:opacity-100'}
+      style={{ ...(tile ? cardHoverButton : cardRowButton), color: 'var(--danger)' }}
+    >
+      ✕
+    </button>
   );
 }
 
