@@ -13,7 +13,6 @@ interface Props {
   cards: Card[];
   loading: boolean;
   onCardClick: (card: Card) => void;
-  onCardDoubleClick?: (card: Card) => void;
   onViewCard?: (card: Card) => void;
   onAddToDeck?: (card: Card) => void;
   onAddPlayset?: (card: Card) => void;
@@ -37,7 +36,6 @@ export default function CardGrid({
   cards,
   loading,
   onCardClick,
-  onCardDoubleClick,
   onViewCard,
   onAddToDeck,
   onAddPlayset,
@@ -115,13 +113,6 @@ export default function CardGrid({
               className="group"
               onClickCapture={(e) => previewOnModifiedClick(e, onViewCard ? () => onViewCard(card) : undefined)}
               onClick={() => onCardClick(card)}
-              onDoubleClick={
-                onViewCard
-                  ? () => onViewCard(card)
-                  : onCardDoubleClick
-                    ? () => onCardDoubleClick(card)
-                    : undefined
-              }
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -283,13 +274,6 @@ export default function CardGrid({
               inDeck={inDeck}
               selected={selectedId === card.id}
               onClick={() => onCardClick(card)}
-              onDoubleClick={
-                onViewCard
-                  ? () => onViewCard(card)
-                  : onCardDoubleClick
-                    ? () => onCardDoubleClick(card)
-                    : undefined
-              }
               onView={onViewCard ? () => onViewCard(card) : undefined}
               onAdd={!onViewCard && onAddToDeck ? () => onAddToDeck(card) : undefined}
               onAddPlayset={onAddPlayset && !atMax ? () => onAddPlayset(card) : undefined}
@@ -308,14 +292,13 @@ interface TileProps {
   inDeck: number;
   selected: boolean;
   onClick: () => void;
-  onDoubleClick?: () => void;
   onView?: () => void;
   onAdd?: () => void;
   onAddPlayset?: () => void;
   onRemove?: () => void;
 }
 
-function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onView, onAdd, onAddPlayset, onRemove }: TileProps) {
+function CardTile({ card, owned, inDeck, selected, onClick, onView, onAdd, onAddPlayset, onRemove }: TileProps) {
   const [hover, setHover] = useState(false);
   const hasImage = !!card.image_uri_normal;
   const tint = card.color_identity?.[0] ? getManaMeta(card.color_identity[0]) : null;
@@ -332,7 +315,6 @@ function CardTile({ card, owned, inDeck, selected, onClick, onDoubleClick, onVie
       <div
         onClickCapture={(e) => previewOnModifiedClick(e, onView)}
         onClick={onClick}
-        onDoubleClick={onDoubleClick}
         className="group"
         style={{
           position: 'relative',

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import CardGrid from '../CardGrid';
 import type { Card } from '../../../shared/types';
 
@@ -16,7 +17,8 @@ const variants = [
 ];
 
 describe.each(variants)('$label card actions', ({ view, card: displayedCard }) => {
-  it.each(['ctrlKey', 'metaKey'])('%s previews without adding a copy', (modifier) => {
+  it.each(['ctrlKey', 'metaKey'])('%s previews while repeated plain clicks only add copies', async (modifier) => {
+    const user = userEvent.setup();
     const add = vi.fn();
     const preview = vi.fn();
     render(<CardGrid cards={[displayedCard]} loading={false} view={view}
@@ -26,8 +28,12 @@ describe.each(variants)('$label card actions', ({ view, card: displayedCard }) =
     fireEvent.click(target, { [modifier]: true });
     expect(preview).toHaveBeenCalledWith(displayedCard);
     expect(add).not.toHaveBeenCalled();
-    fireEvent.click(target);
+    preview.mockClear();
+    await user.dblClick(target);
+    await user.click(target);
+    expect(add).toHaveBeenCalledTimes(3);
     expect(add).toHaveBeenCalledWith(displayedCard);
+    expect(preview).not.toHaveBeenCalled();
   });
 
   it('removes every owned copy without triggering the card click action', () => {
