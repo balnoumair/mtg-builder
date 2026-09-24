@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
+import type { AppBackup, BackupApplyMode, BackupPreview } from '../../shared/backup';
 import type { ImportProgress } from '../../shared/types';
 import {
   applyDeckSetsFiltersFromBackup,
   collectDeckSetsFiltersForBackup,
+  clearDeckSetsFilters,
 } from '../lib/deckFilterStorage';
 import DriveBackupSection from './DriveBackupSection';
 import SheetSyncSection from './SheetSyncSection';
+import BackupPreviewView from './BackupPreview';
 
 interface Props {
   onComplete: () => void;
@@ -31,6 +34,9 @@ export default function ImportScreen({
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  const [backupPreview, setBackupPreview] = useState<BackupPreview | null>(null);
+  const [pendingBackup, setPendingBackup] = useState<AppBackup | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
 
   const handleBackup = async () => {
     const decks = await window.electronAPI.getDecks();
@@ -41,41 +47,63 @@ export default function ImportScreen({
   };
 
   const handleImportBackup = async () => {
-    const result = await window.electronAPI.importBackup();
+    setBackupStatus(null);
+    const result = await window.electronAPI.previewBackupImport();
     if (result.error) {
       setBackupStatus(`Import failed: ${result.error}`);
       return;
     }
     if (result.canceled) return;
-    if (result.filterSets?.length) {
-      const decks = await window.electronAPI.getDecks();
-      applyDeckSetsFiltersFromBackup(result.filterSets, decks);
+    if (!result.preview || !result.backup) {
+      setBackupStatus('Import preview failed: the backup did not contain usable data.');
+      return;
     }
-    onBackupImported?.();
-    const parts: string[] = [];
-    if (result.decksImported > 0) {
-      parts.push(`${result.decksImported} new deck${result.decksImported === 1 ? '' : 's'}`);
+    setBackupPreview(result.preview);
+    setPendingBackup(result.backup);
+  };
+
+  const applyBackup = async (mode: BackupApplyMode) => {
+    if (!pendingBackup) return;
+    setBackupBusy(true);
+    setBackupStatus(null);
+    try {
+      const localDecks = mode === 'replace' ? await window.electronAPI.getDecks() : [];
+      const result = await window.electronAPI.applyBackupImport(pendingBackup, mode);
+      if (result.error) {
+        setBackupStatus(`Import failed: ${result.error}`);
+        return;
+      }
+      if (mode === 'replace') clearDeckSetsFilters(localDecks);
+      if (result.filterSets?.length) {
+        const decks = await window.electronAPI.getDecks();
+        applyDeckSetsFiltersFromBackup(result.filterSets, decks);
+      }
+      onBackupImported?.();
+      const parts: string[] = [];
+      if (result.decksImported > 0) {
+        parts.push(`${result.decksImported} new deck${result.decksImported === 1 ? '' : 's'}`);
+      }
+      if (result.decksUpdated > 0) {
+        parts.push(`${result.decksUpdated} deck${result.decksUpdated === 1 ? '' : 's'} updated`);
+      }
+      if (result.decksImported === 0 && result.decksUpdated === 0) parts.push('0 decks');
+      parts.push(`${result.collectionCards} collection card${result.collectionCards === 1 ? '' : 's'}`);
+      if (result.tagsImported > 0) parts.push(`${result.tagsImported} new tag${result.tagsImported === 1 ? '' : 's'}`);
+      const summary = parts.join(', ');
+      setBackupStatus(
+        result.missing.length === 0
+          ? `${mode === 'replace' ? 'Replaced local data' : 'Imported'} — ${summary}`
+          : `${mode === 'replace' ? 'Replaced local data' : 'Imported'} — ${summary}; not in database: ${result.missing
+              .map((m) => `${m.quantity}× ${m.card}`)
+              .join(', ')}`,
+      );
+      setBackupPreview(null);
+      setPendingBackup(null);
+    } catch (err) {
+      setBackupStatus(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBackupBusy(false);
     }
-    if (result.decksUpdated > 0) {
-      parts.push(`${result.decksUpdated} deck${result.decksUpdated === 1 ? '' : 's'} updated`);
-    }
-    if (result.decksImported === 0 && result.decksUpdated === 0) {
-      parts.push('0 decks');
-    }
-    parts.push(
-      `${result.collectionCards} collection card${result.collectionCards === 1 ? '' : 's'}`,
-    );
-    if (result.tagsImported > 0) {
-      parts.push(`${result.tagsImported} new tag${result.tagsImported === 1 ? '' : 's'}`);
-    }
-    const summary = parts.join(', ');
-    setBackupStatus(
-      result.missing.length === 0
-        ? `Imported ${summary}`
-        : `Imported ${summary} — not in database: ${result.missing
-            .map((m) => `${m.quantity}× ${m.card}`)
-            .join(', ')}`
-    );
   };
 
   useEffect(() => {
@@ -303,6 +331,18 @@ export default function ImportScreen({
               >
                 {backupStatus}
               </p>
+            )}
+            {backupPreview && pendingBackup && (
+              <BackupPreviewView
+                preview={backupPreview}
+                sourceLabel="Local backup file"
+                busy={backupBusy}
+                onCancel={() => {
+                  setBackupPreview(null);
+                  setPendingBackup(null);
+                }}
+                onConfirm={(mode) => void applyBackup(mode)}
+              />
             )}
             <DriveBackupSection onImported={onBackupImported} />
             <SheetSyncSection onPulled={onSheetPulled} />

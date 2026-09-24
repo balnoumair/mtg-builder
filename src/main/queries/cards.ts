@@ -28,24 +28,41 @@ export function searchCards(db: Database.Database, filters: CardFilters): CardSe
     Object.assign(params, search.params);
   }
 
-  if (filters.colors && filters.colors.length > 0) {
+  const colorCategoryChecks: string[] = [];
+  if (filters.colorCategories?.includes('multicolor')) {
+    colorCategoryChecks.push('json_array_length(color_identity) > 1');
+  }
+  if (filters.colorCategories?.includes('colorless')) {
+    colorCategoryChecks.push('json_array_length(color_identity) = 0');
+  }
+
+  if ((filters.colors && filters.colors.length > 0) || colorCategoryChecks.length > 0) {
     const mode = filters.colorMode || 'include';
+    const selectedColors = filters.colors ?? [];
     if (mode === 'include') {
-      const colorChecks = filters.colors.map(c => `color_identity LIKE '%"${c}"%'`);
-      conditions.push(`(${colorChecks.join(' OR ')})`);
+      const colorChecks = selectedColors.map(c => `color_identity LIKE '%"${c}"%'`);
+      conditions.push(`(${[...colorChecks, ...colorCategoryChecks].join(' OR ')})`);
     } else if (mode === 'exact') {
-      for (let i = 0; i < filters.colors.length; i++) {
-        conditions.push(`color_identity LIKE '%"${filters.colors[i]}"%'`);
+      for (const color of selectedColors) {
+        conditions.push(`color_identity LIKE '%"${color}"%'`);
       }
-      conditions.push(`json_array_length(color_identity) = ${filters.colors.length}`);
+      if (selectedColors.length) {
+        conditions.push(`json_array_length(color_identity) = ${selectedColors.length}`);
+      }
     } else if (mode === 'at_most') {
-      const colorChecks = filters.colors.map(c => `color_identity LIKE '%"${c}"%'`);
-      conditions.push(`(json_array_length(color_identity) = 0 OR (${colorChecks.join(' OR ')}))`);
-      for (const c of ['W', 'U', 'B', 'R', 'G']) {
-        if (!filters.colors.includes(c)) {
-          conditions.push(`color_identity NOT LIKE '%"${c}"%'`);
+      if (selectedColors.length) {
+        const colorChecks = selectedColors.map(c => `color_identity LIKE '%"${c}"%'`);
+        conditions.push(`(json_array_length(color_identity) = 0 OR (${colorChecks.join(' OR ')}))`);
+        for (const c of ['W', 'U', 'B', 'R', 'G']) {
+          if (!selectedColors.includes(c)) {
+            conditions.push(`color_identity NOT LIKE '%"${c}"%'`);
+          }
         }
       }
+    }
+
+    if (mode !== 'include' && colorCategoryChecks.length > 0) {
+      conditions.push(`(${colorCategoryChecks.join(' OR ')})`);
     }
   }
 
@@ -65,6 +82,19 @@ export function searchCards(db: Database.Database, filters: CardFilters): CardSe
     const setPlaceholders = filters.sets.map((_, i) => `@set${i}`);
     conditions.push(`set_code IN (${setPlaceholders.join(',')})`);
     filters.sets.forEach((s, i) => { params[`set${i}`] = s; });
+  }
+
+  if (filters.manaValues && filters.manaValues.length > 0) {
+    const manaValueChecks: string[] = [];
+    filters.manaValues.forEach((value, i) => {
+      if (value === '7+') {
+        manaValueChecks.push('cmc >= 7');
+      } else {
+        manaValueChecks.push(`cmc = @manaValue${i}`);
+        params[`manaValue${i}`] = value;
+      }
+    });
+    conditions.push(`(${manaValueChecks.join(' OR ')})`);
   }
 
   if (filters.cmcMin !== undefined) {

@@ -1,5 +1,10 @@
 import type { DeckSetGroup } from './deckSetGroup';
 import type { TagColor } from './tagColors';
+import type {
+  AppBackup,
+  BackupApplyMode,
+  BackupPreview,
+} from './backup';
 
 export interface Tag {
   id: number;
@@ -75,10 +80,14 @@ export interface DeckCard {
 export interface CardFilters {
   query?: string;
   colors?: string[];
+  colorCategories?: ('multicolor' | 'colorless')[];
   colorMode?: 'include' | 'exact' | 'at_most';
   types?: string[];
   rarity?: string[];
   sets?: string[];
+  /** Exact mana values to include; '7+' represents seven or more. */
+  manaValues?: (number | '7+')[];
+  /** Legacy range fields kept for older saved filter state. */
   cmcMin?: number;
   cmcMax?: number;
   format?: string;
@@ -169,6 +178,17 @@ export interface ImportBackupResult {
   error?: string;
 }
 
+export interface BackupPreviewResult {
+  preview?: BackupPreview;
+  backup?: AppBackup;
+  filePath?: string;
+  fileId?: string;
+  fileName?: string;
+  modifiedTime?: string;
+  canceled?: boolean;
+  error?: string;
+}
+
 export interface DriveSyncSettings {
   backupFileId: string;
   lastPushedAt: string;
@@ -189,6 +209,46 @@ export interface DrivePullResult extends ImportBackupResult {
   modifiedTime?: string;
 }
 
+export interface SheetPullRow {
+  player: string;
+  block_label: string;
+  colors: string;
+  name: string;
+  row_index: number;
+}
+
+export interface SheetPullDeckChange extends SheetPullRow {
+  previous?: SheetPullRow;
+}
+
+export interface SheetPullPreview {
+  added: SheetPullDeckChange[];
+  updated: SheetPullDeckChange[];
+  removed: SheetPullDeckChange[];
+  rows: SheetPullRow[];
+  ediciones: string[][];
+  players: string[];
+  blockLabels: number;
+}
+
+export interface SheetPullPreviewResult {
+  preview?: SheetPullPreview;
+  error?: string;
+}
+
+export interface DriveBackupApplyPayload {
+  backup: AppBackup;
+  mode: BackupApplyMode;
+  fileId: string;
+  fileName?: string;
+  modifiedTime?: string;
+}
+
+export interface SheetPullApplyPayload {
+  rows: SheetPullRow[];
+  ediciones: string[][];
+}
+
 /** A deck belonging to another player, mirrored from the playgroup sheet. */
 export interface ExternalDeck {
   id: number;
@@ -201,6 +261,8 @@ export interface ExternalDeck {
   colors: string[];
   name: string;
   block_position: number;
+  /** Newest release date covered by this block, used for Decks-view ordering. */
+  set_sort_key: string;
   synced_at: string;
 }
 
@@ -269,6 +331,8 @@ export interface ElectronAPI {
   setDeckTags(deckId: number, tagIds: number[]): Promise<void>;
   exportBackup(filterSetsByUuid?: Record<string, string[]>): Promise<ExportBackupResult>;
   importBackup(): Promise<ImportBackupResult>;
+  previewBackupImport(): Promise<BackupPreviewResult>;
+  applyBackupImport(backup: AppBackup, mode: BackupApplyMode): Promise<ImportBackupResult>;
   createDeck(deck: { name: string; format?: string }): Promise<Deck>;
   updateDeck(id: number, updates: Partial<Deck>): Promise<Deck>;
   deleteDeck(id: number): Promise<void>;
@@ -294,7 +358,11 @@ export interface ElectronAPI {
   updateDriveSyncSettings(updates: { backupFileId?: string }): Promise<DriveSyncSettings>;
   pushBackupToDrive(filterSetsByUuid?: Record<string, string[]>): Promise<DrivePushResult>;
   pullBackupFromDrive(): Promise<DrivePullResult>;
+  previewBackupFromDrive(): Promise<BackupPreviewResult>;
+  applyBackupFromDrive(payload: DriveBackupApplyPayload): Promise<DrivePullResult>;
   pullSheet(): Promise<SheetPullResult>;
+  previewSheetPull(): Promise<SheetPullPreviewResult>;
+  applySheetPull(payload: SheetPullApplyPayload): Promise<SheetPullResult>;
   getExternalDecks(): Promise<ExternalDeck[]>;
   getSheetBlockLabels(): Promise<string[]>;
   getSheetBlockMappings(): Promise<SheetBlockMapping[]>;

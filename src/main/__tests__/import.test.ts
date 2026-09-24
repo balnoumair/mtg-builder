@@ -98,6 +98,8 @@ describe('importCardsFromFile filters', () => {
     await importCards(db, [
       bulkCard({ name: 'Beginner Only', booster: false, promo_types: ['beginnerbox', 'startercollection'] }),
       bulkCard({ name: 'Extension Only', booster: false, promo_types: ['setextension'] }),
+      bulkCard({ name: 'Themepack Only', booster: false, promo_types: ['themepack'] }),
+      bulkCard({ name: 'Bundle Only', booster: false, promo_types: ['bundle'] }),
     ]);
     expect(cardNames(db)).toEqual([]);
   });

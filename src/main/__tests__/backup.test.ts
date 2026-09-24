@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
-import { exportBackup, importBackup, BACKUP_KIND, BACKUP_VERSION } from '../backup';
+import { exportBackup, importBackup, previewBackup, BACKUP_KIND, BACKUP_VERSION } from '../backup';
 import { createTestDb, insertTestCard } from '../queries/__tests__/helpers';
 
 let db: Database.Database;
@@ -100,6 +100,107 @@ describe('exportBackup', () => {
 });
 
 describe('importBackup', () => {
+  it('preserves zero-quantity pending-removal rows from owned decks', () => {
+    insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Pending Card', set_code: 'khm' });
+    const uuid = randomUUID();
+
+    const summary = importBackup(db, emptyBackup({
+      decks: [{
+        uuid,
+        name: 'Owned deck',
+        format: '',
+        description: '',
+        owned: 1,
+        cover: null,
+        cards: [{
+          name: 'Pending Card',
+          oracle_id: 'o-1',
+          set_code: 'khm',
+          board: 'main',
+          quantity: 0,
+          owned_quantity: 4,
+          ignore_copy_limit: 0,
+        }],
+      }],
+    }));
+
+    expect(summary.missing).toEqual([]);
+    expect(db.prepare('SELECT quantity, owned_quantity FROM deck_cards').all()).toEqual([
+      { quantity: 0, owned_quantity: 4 },
+    ]);
+  });
+
+  it('previews additions and overwrites without changing local data', () => {
+    insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Alpha', set_code: 'aaa' });
+    const existingUuid = randomUUID();
+    createDeck('Local old name', { uuid: existingUuid });
+    createDeck('Keep only locally', { uuid: randomUUID() });
+    addToCollection('p-1', 2);
+
+    const preview = previewBackup(db, emptyBackup({
+      decks: [
+        {
+          uuid: existingUuid,
+          name: 'Backup name',
+          format: '',
+          description: '',
+          owned: 0,
+          cover: null,
+          cards: [],
+        },
+        {
+          uuid: randomUUID(),
+          name: 'New deck',
+          format: '',
+          description: '',
+          owned: 0,
+          cover: null,
+          cards: [],
+        },
+      ],
+      collection: [{ name: 'Alpha', oracle_id: 'o-1', set_code: 'aaa', quantity: 5, added_at: null }],
+    }));
+
+    expect(preview.decks.overwrite.map((deck) => deck.existingName)).toEqual(['Local old name']);
+    expect(preview.decks.add.map((deck) => deck.name)).toEqual(['New deck']);
+    expect(preview.decks.remove).toEqual(['Keep only locally']);
+    expect(preview.collection.overwrite).toEqual([{ name: 'Alpha', quantity: 5 }]);
+    expect(db.prepare('SELECT COUNT(*) n FROM decks').get()).toEqual({ n: 2 });
+    expect(db.prepare('SELECT quantity FROM collection').get()).toEqual({ quantity: 2 });
+  });
+
+  it('replace mode clears only JSON-backed data and keeps the card catalog and external cache', () => {
+    insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Alpha', set_code: 'aaa' });
+    insertTestCard(db, { id: 'p-2', oracle_id: 'o-2', name: 'Beta', set_code: 'bbb' });
+    createDeck('Local only', { uuid: randomUUID() });
+    addToCollection('p-1', 2);
+    db.prepare('INSERT INTO external_decks (player, block_label, colors, name, row_index) VALUES (?, ?, ?, ?, ?)')
+      .run('Toni', 'Bloomburrow', 'G', 'Keep remote cache', 4);
+    db.prepare('INSERT INTO tags (uuid, name, color) VALUES (?, ?, ?)').run(randomUUID(), 'Local tag', 'slate');
+
+    const backupUuid = randomUUID();
+    importBackup(db, emptyBackup({
+      decks: [{
+        uuid: backupUuid,
+        name: 'Restored',
+        format: '',
+        description: '',
+        owned: 0,
+        cover: null,
+        cards: [],
+      }],
+      collection: [{ name: 'Beta', oracle_id: 'o-2', set_code: 'bbb', quantity: 4, added_at: null }],
+    }), 'replace');
+
+    expect(db.prepare('SELECT name FROM decks').all()).toEqual([{ name: 'Restored' }]);
+    expect(db.prepare('SELECT card_id, quantity FROM collection').all()).toEqual([
+      { card_id: 'p-2', quantity: 4 },
+    ]);
+    expect(db.prepare('SELECT COUNT(*) n FROM tags').get()).toEqual({ n: 0 });
+    expect(db.prepare('SELECT COUNT(*) n FROM cards').get()).toEqual({ n: 2 });
+    expect(db.prepare('SELECT name FROM external_decks').all()).toEqual([{ name: 'Keep remote cache' }]);
+  });
+
   it('round-trips a deck onto a fresh database and preserves its uuid', () => {
     insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Alpha', set_code: 'aaa' });
     insertTestCard(db, { id: 'p-2', oracle_id: 'o-2', name: 'Beta', set_code: 'bbb' });
@@ -413,7 +514,7 @@ describe('tags', () => {
 
   it('omits the tag fields entirely when nothing is tagged', () => {
     createDeck('Plain');
-    const backup = exportBackup(db) as Record<string, unknown>;
+    const backup = exportBackup(db) as unknown as Record<string, unknown>;
 
     expect(backup.tags).toBeUndefined();
     expect(backup.decks as unknown[]).toHaveLength(1);

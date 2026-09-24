@@ -53,3 +53,16 @@ export function applyDeckSetsFiltersFromBackup(
     saveDeckSetsFilter(id, entry.sets.length ? entry.sets : undefined);
   }
 }
+
+/** Remove filters for a set of local decks before a backup replaces them. */
+export function clearDeckSetsFilters(
+  decks: Array<{ id: number }>,
+): void {
+  for (const deck of decks) {
+    try {
+      localStorage.removeItem(storageKey(deck.id));
+    } catch {
+      // ignore quota / private mode
+    }
+  }
+}

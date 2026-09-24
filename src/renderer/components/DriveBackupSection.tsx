@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
+import type { AppBackup, BackupApplyMode, BackupPreview } from '../../shared/backup';
 import type { DriveSyncSettings } from '../../shared/types';
 import {
   applyDeckSetsFiltersFromBackup,
   collectDeckSetsFiltersForBackup,
+  clearDeckSetsFilters,
 } from '../lib/deckFilterStorage';
+import BackupPreviewView from './BackupPreview';
 
 interface Props {
   onImported?: () => void;
@@ -13,9 +16,16 @@ interface Props {
 export default function DriveBackupSection({ onImported }: Props) {
   const [settings, setSettings] = useState<DriveSyncSettings | null>(null);
   const [fileDraft, setFileDraft] = useState('');
-  const [busy, setBusy] = useState<'push' | 'pull' | null>(null);
+  const [busy, setBusy] = useState<'push' | 'pull' | 'apply' | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [backupPreview, setBackupPreview] = useState<BackupPreview | null>(null);
+  const [pendingBackup, setPendingBackup] = useState<AppBackup | null>(null);
+  const [pendingFile, setPendingFile] = useState<{
+    fileId: string;
+    fileName?: string;
+    modifiedTime?: string;
+  } | null>(null);
 
   useEffect(() => {
     window.electronAPI.getDriveSyncSettings().then((s) => {
@@ -64,11 +74,46 @@ export default function DriveBackupSection({ onImported }: Props) {
     setStatus(null);
     setError(null);
     try {
-      const result = await window.electronAPI.pullBackupFromDrive();
+      const result = await window.electronAPI.previewBackupFromDrive();
       if (result.error) {
         setError(result.error);
         return;
       }
+      if (!result.preview || !result.backup || !result.fileId) {
+        setError('Drive preview failed: the backup did not contain usable data.');
+        return;
+      }
+      setBackupPreview(result.preview);
+      setPendingBackup(result.backup);
+      setPendingFile({
+        fileId: result.fileId,
+        fileName: result.fileName,
+        modifiedTime: result.modifiedTime,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const applyPull = async (mode: BackupApplyMode) => {
+    if (!pendingBackup || !pendingFile) return;
+    setBusy('apply');
+    setStatus(null);
+    setError(null);
+    try {
+      const localDecks = mode === 'replace' ? await window.electronAPI.getDecks() : [];
+      const result = await window.electronAPI.applyBackupFromDrive({
+        backup: pendingBackup,
+        mode,
+        ...pendingFile,
+      });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      if (mode === 'replace') clearDeckSetsFilters(localDecks);
       if (result.filterSets?.length) {
         const decks = await window.electronAPI.getDecks();
         applyDeckSetsFiltersFromBackup(result.filterSets, decks);
@@ -76,27 +121,24 @@ export default function DriveBackupSection({ onImported }: Props) {
       onImported?.();
 
       const parts: string[] = [];
-      if (result.decksImported > 0) {
-        parts.push(`${result.decksImported} new deck${result.decksImported === 1 ? '' : 's'}`);
-      }
-      if (result.decksUpdated > 0) {
-        parts.push(`${result.decksUpdated} deck${result.decksUpdated === 1 ? '' : 's'} updated`);
-      }
+      if (result.decksImported > 0) parts.push(`${result.decksImported} new deck${result.decksImported === 1 ? '' : 's'}`);
+      if (result.decksUpdated > 0) parts.push(`${result.decksUpdated} deck${result.decksUpdated === 1 ? '' : 's'} updated`);
       if (result.decksImported === 0 && result.decksUpdated === 0) parts.push('0 decks');
       parts.push(`${result.collectionCards} collection card${result.collectionCards === 1 ? '' : 's'}`);
-      if (result.tagsImported > 0) {
-        parts.push(`${result.tagsImported} new tag${result.tagsImported === 1 ? '' : 's'}`);
-      }
+      if (result.tagsImported > 0) parts.push(`${result.tagsImported} new tag${result.tagsImported === 1 ? '' : 's'}`);
 
       const summary = parts.join(', ');
       setStatus(
         result.missing.length === 0
-          ? `Pulled backup — ${summary}.`
-          : `Pulled backup — ${summary}; missing from database: ${result.missing
+          ? `${mode === 'replace' ? 'Replaced local data' : 'Pulled backup'} — ${summary}.`
+          : `${mode === 'replace' ? 'Replaced local data' : 'Pulled backup'} — ${summary}; missing from database: ${result.missing
               .map((m) => `${m.quantity}× ${m.card}`)
               .join(', ')}`,
       );
       setSettings(await window.electronAPI.getDriveSyncSettings());
+      setBackupPreview(null);
+      setPendingBackup(null);
+      setPendingFile(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -206,6 +248,20 @@ export default function DriveBackupSection({ onImported }: Props) {
         <p style={{ ...hint, fontFamily: 'var(--font-mono)', fontSize: 9 }}>
           Uses the service-account key configured in the Playgroup sheet section below.
         </p>
+
+        {backupPreview && pendingBackup && pendingFile && (
+          <BackupPreviewView
+            preview={backupPreview}
+            sourceLabel="Drive backup"
+            busy={busy === 'apply'}
+            onCancel={() => {
+              setBackupPreview(null);
+              setPendingBackup(null);
+              setPendingFile(null);
+            }}
+            onConfirm={(mode) => void applyPull(mode)}
+          />
+        )}
 
         {(status || error) && (
           <p

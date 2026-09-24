@@ -598,22 +598,22 @@ function CardTile({ card, owned, inDeck, selected, onClick, onView, onAdd, onAdd
       >
         {card.oracle_text || '—'}
       </div>
-      <div
-        style={{
-          padding: '6px 10px',
-          borderTop: '1px solid var(--border)',
-          background: 'var(--bg-panel)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'var(--text-mute)',
-        }}
-      >
-        <span>CMC {card.cmc ?? 0}</span>
-        {owned > 0 && <span style={{ color: 'var(--text-dim)' }}>×{owned}</span>}
-      </div>
+      {owned > 0 && (
+        <div
+          style={{
+            padding: '6px 10px',
+            borderTop: '1px solid var(--border)',
+            background: 'var(--bg-panel)',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--text-dim)',
+          }}
+        >
+          ×{owned}
+        </div>
+      )}
       {removeControl}
     </div>
   );

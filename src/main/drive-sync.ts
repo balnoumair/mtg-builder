@@ -1,7 +1,8 @@
 import type Database from 'better-sqlite3';
-import { exportBackup, importBackup } from './backup';
+import { exportBackup, importBackup, previewBackup } from './backup';
 import { getAccessToken } from './sheet-sync/googleAuth';
 import { getDriveSyncSettings, getSheetSyncSettings, setSetting } from './queries/settings';
+import type { AppBackup, BackupApplyMode, BackupPreview } from '../shared/backup';
 import type { DrivePullResult, DrivePushResult } from '../shared/types';
 
 const DRIVE_FILES_API = 'https://www.googleapis.com/drive/v3/files';
@@ -149,7 +150,13 @@ export async function pushBackupToDrive(
   };
 }
 
-export async function pullBackupFromDrive(db: Database.Database): Promise<DrivePullResult> {
+export async function previewBackupFromDrive(db: Database.Database): Promise<{
+  backup: AppBackup;
+  preview: BackupPreview;
+  fileId: string;
+  fileName?: string;
+  modifiedTime?: string;
+}> {
   const fileId = requireBackupFileId(db);
   const token = await getAccessToken(requireServiceAccountKey(db));
   const file = await getBackupFile(token, fileId);
@@ -158,14 +165,43 @@ export async function pullBackupFromDrive(db: Database.Database): Promise<DriveP
     `${DRIVE_FILES_API}/${encodeURIComponent(file.id)}?alt=media&supportsAllDrives=true`,
     { headers: { Accept: 'application/json' } },
   );
-  const summary = importBackup(db, parsed);
-  setSetting(db, 'driveSync.backupFileId', file.id);
-  setSetting(db, 'driveSync.lastPulledAt', new Date().toISOString());
+  // previewBackup validates the remote JSON and performs only read queries.
+  const preview = previewBackup(db, parsed);
+  const backup = parsed as AppBackup;
 
   return {
-    ...summary,
+    backup,
+    preview,
     fileId: file.id,
     fileName: file.name,
     modifiedTime: file.modifiedTime,
   };
+}
+
+export function applyBackupFromDrive(
+  db: Database.Database,
+  input: {
+    backup: AppBackup;
+    mode: BackupApplyMode;
+    fileId: string;
+    fileName?: string;
+    modifiedTime?: string;
+  },
+): DrivePullResult {
+  const summary = importBackup(db, input.backup, input.mode);
+  setSetting(db, 'driveSync.backupFileId', input.fileId);
+  setSetting(db, 'driveSync.lastPulledAt', new Date().toISOString());
+
+  return {
+    ...summary,
+    fileId: input.fileId,
+    fileName: input.fileName,
+    modifiedTime: input.modifiedTime,
+  };
+}
+
+/** Backwards-compatible one-step pull for callers that do not need a preview. */
+export async function pullBackupFromDrive(db: Database.Database): Promise<DrivePullResult> {
+  const fetched = await previewBackupFromDrive(db);
+  return applyBackupFromDrive(db, { ...fetched, mode: 'merge' });
 }

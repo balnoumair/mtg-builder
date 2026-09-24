@@ -23,27 +23,49 @@ describe('CardFilters', () => {
     expect(second.onUpdate).toHaveBeenCalledWith({ colors: undefined });
   });
 
-  it('handles exact CMC and 7+ CMC toggle behavior', async () => {
+  it('filters multicolor and colorless cards as color categories', async () => {
     const user = userEvent.setup();
+    const filters = renderCardFilters();
 
-    const exact = renderCardFilters();
-    await user.click(screen.getByTitle('CMC 3'));
-    expect(exact.onUpdate).toHaveBeenCalledWith({ cmcMin: 3, cmcMax: 3 });
-
-    cleanup();
-    const exactActive = renderCardFilters({ cmcMin: 3, cmcMax: 3 });
-    await user.click(screen.getByTitle('CMC 3'));
-    expect(exactActive.onUpdate).toHaveBeenCalledWith({ cmcMin: undefined, cmcMax: undefined });
+    await user.click(screen.getByTitle('Multicolor'));
+    expect(filters.onUpdate).toHaveBeenCalledWith({ colorCategories: ['multicolor'] });
 
     cleanup();
-    const sevenPlus = renderCardFilters();
-    await user.click(screen.getByTitle('CMC 7 or more'));
-    expect(sevenPlus.onUpdate).toHaveBeenCalledWith({ cmcMin: 7, cmcMax: undefined });
+    const colorless = renderCardFilters({ colorCategories: ['multicolor'] });
+    await user.click(screen.getByTitle('Colorless'));
+    expect(colorless.onUpdate).toHaveBeenCalledWith({
+      colorCategories: ['multicolor', 'colorless'],
+    });
+  });
+
+  it('allows selecting multiple mana values and toggling them independently', async () => {
+    const user = userEvent.setup();
+    const filters = renderCardFilters();
+
+    await user.click(screen.getByTitle('Mana value 3'));
+    expect(filters.onUpdate).toHaveBeenCalledWith({
+      manaValues: [3],
+      cmcMin: undefined,
+      cmcMax: undefined,
+    });
 
     cleanup();
-    const sevenPlusActive = renderCardFilters({ cmcMin: 7 });
-    await user.click(screen.getByTitle('CMC 7 or more'));
-    expect(sevenPlusActive.onUpdate).toHaveBeenCalledWith({ cmcMin: undefined, cmcMax: undefined });
+    const multiple = renderCardFilters({ manaValues: [3] });
+    await user.click(screen.getByTitle('Mana value 5'));
+    expect(multiple.onUpdate).toHaveBeenCalledWith({
+      manaValues: [3, 5],
+      cmcMin: undefined,
+      cmcMax: undefined,
+    });
+
+    cleanup();
+    const remove = renderCardFilters({ manaValues: [3, 5] });
+    await user.click(screen.getByTitle('Mana value 3'));
+    expect(remove.onUpdate).toHaveBeenCalledWith({
+      manaValues: [5],
+      cmcMin: undefined,
+      cmcMax: undefined,
+    });
   });
 
   it('emits type updates as a single-element selection', async () => {
@@ -99,9 +121,11 @@ describe('CardFilters', () => {
     expect(active.onUpdate).toHaveBeenCalledWith({
       query: undefined,
       colors: undefined,
+      colorCategories: undefined,
       types: undefined,
       rarity: undefined,
       sets: undefined,
+      manaValues: undefined,
       cmcMin: undefined,
       cmcMax: undefined,
     });

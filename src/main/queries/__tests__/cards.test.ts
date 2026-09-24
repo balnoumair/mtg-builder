@@ -119,6 +119,26 @@ describe('searchCards', () => {
       expect(names).not.toContain('Red-Blue Card');
       expect(names).not.toContain('Blue Card');
     });
+
+    it('filters multicolor and colorless categories', () => {
+      const multicolor = searchCards(db, { colorCategories: ['multicolor'] });
+      expect(multicolor.cards.map((card) => card.name)).toEqual(['Red-Blue Card']);
+
+      const both = searchCards(db, { colorCategories: ['multicolor', 'colorless'] });
+      expect(both.cards.map((card) => card.name)).toEqual(['Colorless Card', 'Red-Blue Card']);
+    });
+
+    it('combines regular colors and color categories as alternatives', () => {
+      const result = searchCards(db, {
+        colors: ['R'],
+        colorCategories: ['colorless'],
+      });
+      const names = result.cards.map((card) => card.name);
+      expect(names).toContain('Red Card');
+      expect(names).toContain('Red-Blue Card');
+      expect(names).toContain('Colorless Card');
+      expect(names).not.toContain('Blue Card');
+    });
   });
 
   it('filters by rarity', () => {
@@ -144,6 +164,16 @@ describe('searchCards', () => {
     const result = searchCards(db, { cmcMin: 2, cmcMax: 5 });
     expect(result.total).toBe(1);
     expect(result.cards[0].name).toBe('Mid');
+  });
+
+  it('filters by multiple exact mana values and seven-plus', () => {
+    insertTestCard(db, { name: 'One', cmc: 1 });
+    insertTestCard(db, { name: 'Three', cmc: 3 });
+    insertTestCard(db, { name: 'Seven', cmc: 7 });
+    insertTestCard(db, { name: 'Eight', cmc: 8 });
+    insertTestCard(db, { name: 'Five', cmc: 5 });
+    const result = searchCards(db, { manaValues: [1, 3, '7+'] });
+    expect(result.cards.map((card) => card.name)).toEqual(['Eight', 'One', 'Seven', 'Three']);
   });
 
   it('filters by format legality', () => {
