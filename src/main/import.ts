@@ -20,6 +20,7 @@ const STANDARD_SET_TYPES = new Set(['core', 'expansion']);
 const PRODUCT_ONLY_PROMO_TYPES = new Set([
   'beginnerbox',
   'setextension',
+  'startercollection',
   'themepack',
   'bundle',
 ]);
