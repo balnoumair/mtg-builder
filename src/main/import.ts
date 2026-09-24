@@ -17,7 +17,13 @@ const STANDARD_SET_TYPES = new Set(['core', 'expansion']);
 // Beginner Box, Starter Collection set extension) rather than in the set's
 // boosters. `booster: true` overrides these tags: main-set prints can carry
 // them when the same print is also bundled in the side product.
-const PRODUCT_ONLY_PROMO_TYPES = new Set(['beginnerbox', 'setextension']);
+const PRODUCT_ONLY_PROMO_TYPES = new Set([
+  'beginnerbox',
+  'setextension',
+  'startercollection',
+  'themepack',
+  'bundle',
+]);
 
 // Scryfall rejects requests without a real User-Agent and Accept header (HTTP 400).
 // https://scryfall.com/docs/api — "Required Headers"

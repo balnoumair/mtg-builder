@@ -10,6 +10,15 @@ export interface ExternalDeckRow {
   row_index: number;
 }
 
+/** Raw cached rows used to compare a sheet pull without enriching or writing. */
+export function getExternalDeckRows(db: Database.Database): ExternalDeckRow[] {
+  return db.prepare(`
+    SELECT player, block_label, colors, name, row_index
+    FROM external_decks
+    ORDER BY row_index
+  `).all() as ExternalDeckRow[];
+}
+
 /** Pull semantics: the sheet is the source of truth, so replace everything. */
 export function replaceExternalDecks(db: Database.Database, rows: ExternalDeckRow[]): void {
   const txn = db.transaction(() => {
@@ -41,7 +50,7 @@ export function getExternalDecks(db: Database.Database): ExternalDeck[] {
            COALESCE(b.set_codes, '[]') as set_codes
     FROM external_decks e
     LEFT JOIN sheet_blocks b ON b.label = e.block_label
-  `).all() as (Omit<ExternalDeck, 'colors' | 'set_label'> & {
+  `).all() as (Omit<ExternalDeck, 'colors' | 'set_label' | 'set_sort_key'> & {
     colors: string;
     set_codes: string;
     row_index: number;
@@ -64,6 +73,7 @@ export function getExternalDecks(db: Database.Database): ExternalDeck[] {
         ...r,
         colors: r.colors.split(''),
         set_label: englishBlockLabel(r.block_label, codes, sets),
+        set_sort_key: sortKeyFor(codes),
       } as ExternalDeck,
       rowIndex: row_index,
       sortKey: sortKeyFor(codes),

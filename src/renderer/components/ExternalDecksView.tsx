@@ -4,6 +4,7 @@ import DeckRowColorIdentity from './DeckRowColorIdentity';
 import DeckSetGroupLabel from './DeckSetGroupLabel';
 import FilterDropdown, { type FilterOption } from './FilterDropdown';
 import PillLabel from './PillLabel';
+import ViewToggle from './ViewToggle';
 
 interface Props {
   active: boolean;
@@ -18,6 +19,12 @@ const PLAYER_PILL = {
   color: '#9fcfee',
   border: 'rgba(95, 159, 207, 0.35)',
   background: 'rgba(95, 159, 207, 0.1)',
+};
+
+const SET_PILL = {
+  color: '#c9a86c',
+  border: 'rgba(201, 168, 108, 0.35)',
+  background: 'rgba(201, 168, 108, 0.1)',
 };
 
 function loadHidden(key: string): string[] {
@@ -53,6 +60,7 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
   const [loading, setLoading] = useState(true);
   const [hiddenPlayers, setHiddenPlayers] = useState<string[]>(() => loadHidden(HIDDEN_PLAYERS_KEY));
   const [hiddenSets, setHiddenSets] = useState<string[]>(() => loadHidden(HIDDEN_SETS_KEY));
+  const [viewMode, setViewMode] = useState<'player' | 'set'>('player');
 
   useEffect(() => {
     if (!active) return;
@@ -87,7 +95,7 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
 
   // Query order is player, then the sheet's own block order, so plain
   // insertion order reproduces it.
-  const sections = useMemo(() => {
+  const playerSections = useMemo(() => {
     const byPlayer = new Map<string, Map<string, ExternalDeck[]>>();
     for (const deck of visible) {
       if (!byPlayer.has(deck.player)) byPlayer.set(deck.player, new Map());
@@ -104,6 +112,50 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
       }))
       .sort((a, b) => b.total - a.total || a.player.localeCompare(b.player));
   }, [visible]);
+
+  const setSections = useMemo(() => {
+    const bySet = new Map<string, ExternalDeck[]>();
+    for (const deck of visible) {
+      const block = blockOf(deck);
+      if (!bySet.has(block)) bySet.set(block, []);
+      bySet.get(block)!.push(deck);
+    }
+
+    return [...bySet.entries()]
+      .map(([label, setDecks]) => {
+        const byName = new Map<string, ExternalDeck[]>();
+        for (const deck of setDecks) {
+          const variantKey = `${deck.name}\u0000${deck.colors.join('')}`;
+          if (!byName.has(variantKey)) byName.set(variantKey, []);
+          byName.get(variantKey)!.push(deck);
+        }
+        return {
+          label,
+          total: setDecks.length,
+          sortKey: setDecks.reduce((latest, deck) => {
+            const candidate = deck.set_sort_key ?? '';
+            return candidate > latest ? candidate : latest;
+          }, ''),
+          groups: [...byName.entries()]
+            .map(([variantKey, nameDecks]) => ({
+              name: nameDecks[0].name,
+              variantKey,
+              decks: [...nameDecks].sort((a, b) => a.player.localeCompare(b.player)),
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name) || a.variantKey.localeCompare(b.variantKey)),
+        };
+      })
+      .sort((a, b) => {
+        if (a.sortKey !== b.sortKey) {
+          if (!a.sortKey) return 1;
+          if (!b.sortKey) return -1;
+          return b.sortKey.localeCompare(a.sortKey);
+        }
+        return a.label.localeCompare(b.label);
+      });
+  }, [visible]);
+
+  const sections = viewMode === 'player' ? playerSections : setSections;
 
   const lastSynced = decks[0]?.synced_at;
   const filtered = visible.length !== decks.length;
@@ -139,6 +191,14 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
           </span>
           <div style={{ flex: 1 }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ViewToggle
+              value={viewMode}
+              onChange={setViewMode}
+              options={[
+                { value: 'player', label: 'player' },
+                { value: 'set', label: 'set' },
+              ]}
+            />
             <FilterDropdown
               label="Players"
               options={playerOptions}
@@ -189,8 +249,8 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
               Re-enable a player or a set to see decks again.
             </p>
           </div>
-        ) : (
-          sections.map((section) => (
+        ) : viewMode === 'player' ? (
+          playerSections.map((section) => (
             <section key={section.player} style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 0 8px' }}>
                 <PillLabel style={PLAYER_PILL}>{section.player}</PillLabel>
@@ -246,6 +306,71 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
                   </div>
                 </div>
               ))}
+            </section>
+          ))
+        ) : (
+          setSections.map((section) => (
+            <section key={section.label} style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 0 8px' }}>
+                <PillLabel style={SET_PILL}>{section.label}</PillLabel>
+                <span
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-faint)' }}
+                >
+                  {section.total}
+                </span>
+              </div>
+              <div
+                style={{
+                  background: 'var(--bg-panel)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)',
+                  overflow: 'hidden',
+                }}
+              >
+                {section.groups.map((group, groupIndex) => (
+                  <div
+                    key={group.variantKey}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      minHeight: 44,
+                      padding: '6px 14px',
+                      borderTop: groupIndex ? '1px solid var(--border)' : 'none',
+                    }}
+                    title={`${section.label} · ${group.decks.map((deck) => deck.player).join(', ')}`}
+                  >
+                    <DeckRowColorIdentity colors={group.decks[0].colors} />
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {group.name}
+                    </span>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        flexWrap: 'wrap',
+                        gap: 5,
+                      }}
+                    >
+                      {group.decks.map((deck) => (
+                        <PillLabel key={deck.id} style={PLAYER_PILL} compact>
+                          {deck.player}
+                        </PillLabel>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </section>
           ))
         )}

@@ -11,6 +11,7 @@ export const MANA_COLORS: Record<string, ManaColorMeta> = {
   R: { hex: '#e7a294', ring: '#c5654a', name: 'Red' },
   G: { hex: '#a8c79c', ring: '#5d8c63', name: 'Green' },
   C: { hex: '#bdb7af', ring: '#7e7870', name: 'Colorless' },
+  M: { hex: '#c9a86c', ring: '#a97d2f', name: 'Multicolor' },
   X: { hex: '#bdb7af', ring: '#7e7870', name: 'X' },
 };
 

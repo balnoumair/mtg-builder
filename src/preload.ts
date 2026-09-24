@@ -9,7 +9,12 @@ import type {
   DrivePullResult,
   DrivePushResult,
   DriveSyncSettings,
+  BackupPreviewResult,
+  DriveBackupApplyPayload,
+  SheetPullApplyPayload,
+  SheetPullPreviewResult,
 } from './shared/types';
+import type { AppBackup, BackupApplyMode } from './shared/backup';
 
 const api: ElectronAPI = {
   getDbStatus: () => ipcRenderer.invoke('db:status'),
@@ -32,6 +37,9 @@ const api: ElectronAPI = {
   exportBackup: (filterSetsByUuid?: Record<string, string[]>) =>
     ipcRenderer.invoke('backup:export', filterSetsByUuid ?? {}),
   importBackup: () => ipcRenderer.invoke('backup:import'),
+  previewBackupImport: (): Promise<BackupPreviewResult> => ipcRenderer.invoke('backup:preview'),
+  applyBackupImport: (backup: AppBackup, mode: BackupApplyMode) =>
+    ipcRenderer.invoke('backup:apply', backup, mode),
   createDeck: (deck: { name: string; format?: string }) => ipcRenderer.invoke('decks:create', deck),
   updateDeck: (id: number, updates: Partial<Deck>) => ipcRenderer.invoke('decks:update', id, updates),
   deleteDeck: (id: number) => ipcRenderer.invoke('decks:delete', id),
@@ -60,7 +68,12 @@ const api: ElectronAPI = {
   pushBackupToDrive: (filterSetsByUuid?: Record<string, string[]>): Promise<DrivePushResult> =>
     ipcRenderer.invoke('drive:pushBackup', filterSetsByUuid ?? {}),
   pullBackupFromDrive: (): Promise<DrivePullResult> => ipcRenderer.invoke('drive:pullBackup'),
+  previewBackupFromDrive: (): Promise<BackupPreviewResult> => ipcRenderer.invoke('drive:previewPull'),
+  applyBackupFromDrive: (payload: DriveBackupApplyPayload): Promise<DrivePullResult> =>
+    ipcRenderer.invoke('drive:applyPull', payload),
   pullSheet: () => ipcRenderer.invoke('sheet:pull'),
+  previewSheetPull: (): Promise<SheetPullPreviewResult> => ipcRenderer.invoke('sheet:previewPull'),
+  applySheetPull: (payload: SheetPullApplyPayload) => ipcRenderer.invoke('sheet:applyPull', payload),
   getExternalDecks: () => ipcRenderer.invoke('sheet:externalDecks'),
   getSheetBlockLabels: () => ipcRenderer.invoke('sheet:blockLabels'),
   getSheetBlockMappings: () => ipcRenderer.invoke('sheet:blockMappings'),

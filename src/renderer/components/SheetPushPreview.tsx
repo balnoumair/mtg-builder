@@ -23,13 +23,7 @@ function Shell({
   if (variant === 'inline') {
     return (
       <div
-        style={{
-          background: 'var(--bg-panel)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          padding: 18,
-          textAlign: 'left',
-        }}
+        style={reviewPanel}
       >
         {children}
       </div>
@@ -51,16 +45,12 @@ function Shell({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
+          ...reviewPanel,
           width: '100%',
           maxWidth: 560,
           maxHeight: '80vh',
           margin: '0 24px',
-          padding: 20,
-          background: 'var(--bg-panel)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
           overflowY: 'auto',
-          textAlign: 'left',
         }}
       >
         {children}
@@ -185,18 +175,26 @@ export default function SheetPushPreview({
 
   return (
     <Shell variant={variant} pushing={pushing} onClose={onClose}>
-        <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600 }}>
-          Push to sheet — pick what to write
-        </h2>
-        <p style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 6, marginBottom: 14 }}>
-          Writing as <strong style={{ color: 'var(--text-dim)' }}>{plan.playerName}</strong>. Only
-          ticked rows are written; {plan.matched.length} already match.
+        <div style={reviewEyebrow}>Shared sheet write review</div>
+        <h2 style={reviewTitle}>Push my decks</h2>
+        <p style={reviewCopy}>
+          Review the rows that will be written to the shared sheet. Nothing is sent until you select rows and confirm.
+          Writing as <strong>{plan.playerName}</strong>.
         </p>
 
+        <div style={summaryGrid}>
+          <SummaryCell label="New rows" value={plan.appends.length} color="var(--accent)" />
+          <SummaryCell label="Changed" value={plan.updates.length} color="var(--accent)" />
+          <SummaryCell label="To clear" value={plan.clears.length} color="var(--danger)" />
+          <SummaryCell label="Already match" value={plan.matched.length} color="var(--text)" />
+        </div>
+
         {allKeys.length > 0 && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <div style={selectionBar}>
+            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{selectedCount} row(s) selected</span>
+            <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setSelected(new Set(allKeys))} style={smallBtn}>
-              Select all ({allKeys.length})
+              Select all changes
             </button>
             <button
               onClick={() => setSelected(new Set())}
@@ -205,6 +203,7 @@ export default function SheetPushPreview({
             >
               Select none
             </button>
+            </div>
           </div>
         )}
 
@@ -215,43 +214,26 @@ export default function SheetPushPreview({
           const allOn = keys.every((k) => selected.has(k));
 
           return (
-            <div key={kind} style={{ marginBottom: 14 }}>
+            <section key={kind} style={changeGroup}>
               <button
                 onClick={() => toggleSection(kind)}
                 title={allOn ? 'Untick this group' : 'Tick this group'}
-                style={{
-                  display: 'block',
-                  padding: 0,
-                  marginBottom: 5,
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 10,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  color: tone,
-                  fontFamily: 'var(--font-ui)',
-                }}
+                style={sectionToggle}
               >
-                {title} ({changes.length})
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <strong style={{ color: tone }}>{title}</strong>
+                  <span style={sectionCount}>{changes.length}</span>
+                </span>
+                <span style={sectionAction}>{allOn ? 'Clear group' : 'Select group'}</span>
               </button>
-              {changes.map((c) => {
+              <div style={changeList}>
+                {changes.map((c) => {
                 const key = keyOf(kind, c);
                 const on = selected.has(key);
                 return (
                   <label
                     key={key}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '3px 4px',
-                      borderRadius: 'var(--radius-sm)',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 10,
-                      color: on ? 'var(--text-dim)' : 'var(--text-faint)',
-                    }}
+                    style={{ ...changeRow, color: on ? 'var(--text)' : 'var(--text-muted)' }}
                   >
                     <input
                       type="checkbox"
@@ -259,8 +241,8 @@ export default function SheetPushPreview({
                       onChange={() => toggle(key)}
                       style={{ accentColor: 'var(--accent)', flexShrink: 0 }}
                     />
-                    <span style={{ color: 'var(--text-mute)', flexShrink: 0 }}>row {c.sheetRow}</span>
-                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span style={{ color: 'var(--text-subtle)', minWidth: 42 }}>row {c.sheetRow}</span>
+                    <span style={rowValue}>
                       {kind === 'update' ? (
                         <>
                           {rowText(c.before)} →{' '}
@@ -278,45 +260,31 @@ export default function SheetPushPreview({
                     </span>
                   </label>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            </section>
           );
         })}
 
         {plan.matched.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
+          <section style={secondaryGroup}>
             <div
-              style={{
-                fontSize: 10,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: 'var(--text-mute)',
-                marginBottom: 4,
-              }}
+              style={sectionHeadingMuted}
             >
-              Already in the sheet ({plan.matched.length})
+              Already in the sheet — optionally remove <span style={sectionCount}>{plan.matched.length}</span>
             </div>
-            <p style={{ fontSize: 10, color: 'var(--text-mute)', margin: '0 0 6px' }}>
+            <p style={sectionDescription}>
               These match your decks, so nothing is written. Tick one to take it back out of the
               sheet — the deck stays in the app.
             </p>
-            {plan.matched.map((c) => {
+            <div style={changeList}>
+              {plan.matched.map((c) => {
               const key = keyOf('matched', c);
               const on = selected.has(key);
               return (
                 <label
                   key={key}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '3px 4px',
-                    borderRadius: 'var(--radius-sm)',
-                    cursor: 'pointer',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    color: on ? 'var(--danger)' : 'var(--text-faint)',
-                  }}
+                  style={{ ...changeRow, color: on ? 'var(--danger)' : 'var(--text-muted)' }}
                 >
                   <input
                     type="checkbox"
@@ -325,37 +293,23 @@ export default function SheetPushPreview({
                     title="Remove this row from the sheet"
                     style={{ accentColor: 'var(--danger)', flexShrink: 0 }}
                   />
-                  <span style={{ color: 'var(--text-mute)', flexShrink: 0 }}>row {c.sheetRow}</span>
-                  <span
-                    style={{
-                      minWidth: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      textDecoration: on ? 'line-through' : 'none',
-                    }}
-                  >
+                  <span style={{ color: 'var(--text-subtle)', minWidth: 42 }}>row {c.sheetRow}</span>
+                  <span style={{ ...rowValue, textDecoration: on ? 'line-through' : 'none' }}>
                     {rowText(c.before)}
                   </span>
                 </label>
               );
-            })}
-          </div>
+              })}
+            </div>
+          </section>
         )}
 
         {plan.unmapped.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div
-              style={{
-                fontSize: 10,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                color: 'var(--danger)',
-                marginBottom: 4,
-              }}
-            >
+          <section style={warningPanel}>
+            <div style={{ color: 'var(--warning)', fontSize: 12, fontWeight: 600, marginBottom: 7 }}>
               No matching block ({plan.unmapped.length})
             </div>
-            <p style={{ fontSize: 10, color: 'var(--text-mute)', margin: '0 0 6px' }}>
+            <p style={sectionDescription}>
               These decks aren&rsquo;t pushed. Pick the sheet block they belong to, then re-run the
               preview.
             </p>
@@ -365,23 +319,10 @@ export default function SheetPushPreview({
                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}
               >
                 <span
-                  style={{
-                    fontSize: 11,
-                    flex: 1,
-                    minWidth: 0,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
+                  style={unmappedName}
                 >
                   {u.deckName}
-                  <span
-                    style={{
-                      color: 'var(--text-mute)',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 9,
-                    }}
-                  >
+                  <span style={{ color: 'var(--text-subtle)', fontFamily: 'var(--font-mono)', fontSize: 9 }}>
                     {' '}
                     {u.setCodes.join(', ') || 'no sets'}
                   </span>
@@ -389,15 +330,7 @@ export default function SheetPushPreview({
                 <select
                   value={assignments[u.deckId] ?? ''}
                   onChange={(e) => void handleAssign(u.deckId, u.setCodes, e.target.value)}
-                  style={{
-                    maxWidth: 200,
-                    padding: '3px 6px',
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--border-input)',
-                    borderRadius: 'var(--radius-sm)',
-                    color: 'var(--text)',
-                    fontSize: 10,
-                  }}
+                  style={selectStyle}
                 >
                   <option value="">Choose block…</option>
                   {labels.map((label) => (
@@ -408,11 +341,11 @@ export default function SheetPushPreview({
                 </select>
               </div>
             ))}
-          </div>
+          </section>
         )}
 
         {(plan.duplicates.length > 0 || plan.warnings.length > 0) && (
-          <div style={{ marginBottom: 12, fontSize: 10, color: 'var(--danger)' }}>
+          <div style={warningText}>
             {plan.duplicates.map((d) => (
               <div key={d}>Duplicate row skipped: {d}</div>
             ))}
@@ -423,41 +356,26 @@ export default function SheetPushPreview({
         )}
 
         {allKeys.length === 0 && plan.matched.length === 0 && (
-          <p style={{ fontSize: 11, color: 'var(--text-mute)' }}>
+          <p style={emptyText}>
             Nothing to write — the sheet already matches your decks.
           </p>
         )}
 
         {error && (
-          <div
-            style={{
-              margin: '10px 0',
-              padding: '8px 10px',
-              borderRadius: 'var(--radius-sm)',
-              background: 'rgba(201,123,114,0.08)',
-              border: '1px solid rgba(201,123,114,0.3)',
-              color: 'var(--danger)',
-              fontSize: 11,
-            }}
-          >
+          <div style={errorBox}>
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+        <div style={actionRow}>
+          <span style={actionHint}>Only selected rows are written.</span>
           <button onClick={onClose} disabled={pushing} style={ghostBtn}>
             {variant === 'inline' ? 'Discard plan' : 'Cancel'}
           </button>
           <button
             onClick={() => void handleConfirm()}
             disabled={pushing || selectedCount === 0}
-            style={{
-              ...ghostBtn,
-              background: 'var(--accent-soft)',
-              color: 'var(--accent)',
-              border: '1px solid var(--accent-line)',
-              opacity: pushing || selectedCount === 0 ? 0.6 : 1,
-            }}
+            style={{ ...primaryBtn, opacity: pushing || selectedCount === 0 ? 0.6 : 1 }}
           >
             {pushing
               ? 'Writing…'
@@ -467,6 +385,212 @@ export default function SheetPushPreview({
     </Shell>
   );
 }
+
+function SummaryCell({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div style={summaryCell}>
+      <div style={{ ...summaryValue, color }}>{value}</div>
+      <div style={summaryLabel}>{label}</div>
+    </div>
+  );
+}
+
+const reviewPanel: React.CSSProperties = {
+  background: 'linear-gradient(135deg, rgba(116, 173, 142, 0.07), var(--bg-panel) 42%)',
+  border: '1px solid rgba(116, 173, 142, 0.38)',
+  borderRadius: 10,
+  padding: 18,
+  textAlign: 'left',
+};
+
+const reviewEyebrow: React.CSSProperties = {
+  color: 'var(--accent)',
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase',
+  marginBottom: 8,
+};
+
+const reviewTitle: React.CSSProperties = { margin: '0 0 8px', fontSize: 19 };
+
+const reviewCopy: React.CSSProperties = {
+  margin: '0 0 14px',
+  color: 'var(--text-muted)',
+  fontSize: 13,
+  lineHeight: 1.5,
+};
+
+const summaryGrid: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  overflow: 'hidden',
+  marginBottom: 14,
+};
+
+const summaryCell: React.CSSProperties = {
+  background: 'rgba(0, 0, 0, 0.12)',
+  padding: '9px 11px',
+  borderRight: '1px solid var(--border)',
+};
+
+const summaryValue: React.CSSProperties = { fontSize: 20, fontWeight: 700, lineHeight: 1.1 };
+const summaryLabel: React.CSSProperties = { color: 'var(--text-muted)', fontSize: 11, marginTop: 4 };
+
+const selectionBar: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 10,
+  flexWrap: 'wrap',
+  padding: '8px 10px',
+  marginBottom: 14,
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  background: 'rgba(0, 0, 0, 0.1)',
+};
+
+const changeGroup: React.CSSProperties = { marginBottom: 14, paddingTop: 2 };
+
+const secondaryGroup: React.CSSProperties = {
+  marginTop: 18,
+  paddingTop: 14,
+  borderTop: '1px solid var(--border)',
+};
+
+const sectionToggle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 10,
+  width: '100%',
+  border: 0,
+  background: 'transparent',
+  padding: 0,
+  cursor: 'pointer',
+  textAlign: 'left',
+};
+
+const sectionHeadingMuted: React.CSSProperties = {
+  color: 'var(--text-muted)',
+  fontSize: 12,
+  fontWeight: 600,
+  marginBottom: 7,
+};
+
+const sectionCount: React.CSSProperties = { color: 'var(--text-subtle)', fontSize: 12, fontWeight: 500 };
+const sectionAction: React.CSSProperties = { color: 'var(--text-subtle)', fontSize: 11 };
+
+const sectionDescription: React.CSSProperties = {
+  margin: '0 0 8px',
+  color: 'var(--text-muted)',
+  fontSize: 11,
+  lineHeight: 1.45,
+};
+
+const changeList: React.CSSProperties = {
+  maxHeight: 220,
+  overflowY: 'auto',
+  marginTop: 7,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 4,
+};
+
+const changeRow: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 8,
+  flex: '0 0 auto',
+  padding: '5px 6px',
+  borderRadius: 4,
+  border: '1px solid var(--border)',
+  background: 'var(--bg-input)',
+  fontSize: 12,
+  cursor: 'pointer',
+};
+
+const rowValue: React.CSSProperties = {
+  minWidth: 0,
+  flex: 1,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};
+
+const warningPanel: React.CSSProperties = {
+  marginTop: 18,
+  padding: 10,
+  border: '1px solid var(--warning)',
+  borderRadius: 6,
+  background: 'rgba(214, 161, 72, 0.05)',
+};
+
+const warningText: React.CSSProperties = {
+  margin: '14px 0 0',
+  color: 'var(--warning)',
+  fontSize: 12,
+  lineHeight: 1.45,
+};
+
+const emptyText: React.CSSProperties = {
+  margin: '14px 0 0',
+  color: 'var(--text-muted)',
+  fontSize: 13,
+};
+
+const errorBox: React.CSSProperties = {
+  margin: '10px 0',
+  padding: '8px 10px',
+  borderRadius: 'var(--radius-sm)',
+  background: 'rgba(201,123,114,0.08)',
+  border: '1px solid rgba(201,123,114,0.3)',
+  color: 'var(--danger)',
+  fontSize: 11,
+};
+
+const unmappedName: React.CSSProperties = {
+  fontSize: 11,
+  flex: 1,
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};
+
+const selectStyle: React.CSSProperties = {
+  maxWidth: 200,
+  padding: '3px 6px',
+  background: 'var(--bg-input)',
+  border: '1px solid var(--border-input)',
+  borderRadius: 'var(--radius-sm)',
+  color: 'var(--text)',
+  fontSize: 10,
+};
+
+const actionRow: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'flex-end',
+  gap: 8,
+  flexWrap: 'wrap',
+  marginTop: 18,
+};
+
+const actionHint: React.CSSProperties = { marginRight: 'auto', color: 'var(--text-subtle)', fontSize: 11 };
+
+const primaryBtn: React.CSSProperties = {
+  padding: '6px 12px',
+  background: 'var(--accent-soft)',
+  color: 'var(--accent)',
+  border: '1px solid var(--accent-line)',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: 12,
+  cursor: 'pointer',
+  fontFamily: 'var(--font-ui)',
+};
 
 const ghostBtn: React.CSSProperties = {
   padding: '6px 12px',

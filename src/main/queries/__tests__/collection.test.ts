@@ -89,6 +89,30 @@ describe('getCollection', () => {
     expect(result.cards[0].card.rarity).toBe('rare');
   });
 
+  it('filters by multiple mana values', () => {
+    const one = insertTestCard(db, { name: 'One', cmc: 1 });
+    const three = insertTestCard(db, { name: 'Three', cmc: 3 });
+    const five = insertTestCard(db, { name: 'Five', cmc: 5 });
+    addToCollection(db, one);
+    addToCollection(db, three);
+    addToCollection(db, five);
+
+    const result = getCollection(db, { manaValues: [1, 5] });
+    expect(result.cards.map((entry) => entry.card.name)).toEqual(['Five', 'One']);
+  });
+
+  it('filters by multicolor and colorless categories', () => {
+    const multicolor = insertTestCard(db, { name: 'Gold', color_identity: ['R', 'U'] });
+    const colorless = insertTestCard(db, { name: 'Silver', color_identity: [] });
+    const red = insertTestCard(db, { name: 'Red', color_identity: ['R'] });
+    addToCollection(db, multicolor);
+    addToCollection(db, colorless);
+    addToCollection(db, red);
+
+    const result = getCollection(db, { colorCategories: ['multicolor', 'colorless'] });
+    expect(result.cards.map((entry) => entry.card.name)).toEqual(['Gold', 'Silver']);
+  });
+
   it('paginates results', () => {
     const ids = [
       insertTestCard(db, { name: 'Alpha' }),

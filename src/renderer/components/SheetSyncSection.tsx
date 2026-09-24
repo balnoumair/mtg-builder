@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import type { SheetPushPlan, SheetSyncSettings } from '../../shared/types';
+import type { SheetPullPreview, SheetPushPlan, SheetSyncSettings } from '../../shared/types';
 import SheetMappings from './SheetMappings';
 import SheetPushPreview from './SheetPushPreview';
+import SheetPullPreviewView from './SheetPullPreview';
 
 interface Props {
   onPulled?: () => void;
@@ -16,10 +17,11 @@ export default function SheetSyncSection({ onPulled }: Props) {
   const [settings, setSettings] = useState<SheetSyncSettings | null>(null);
   const [playerDraft, setPlayerDraft] = useState('');
   const [sheetDraft, setSheetDraft] = useState('');
-  const [busy, setBusy] = useState<'pull' | 'plan' | null>(null);
+  const [busy, setBusy] = useState<'pull' | 'apply' | 'plan' | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [plan, setPlan] = useState<SheetPushPlan | null>(null);
+  const [pullPreview, setPullPreview] = useState<SheetPullPreview | null>(null);
   const [showMappings, setShowMappings] = useState(false);
 
   useEffect(() => {
@@ -53,7 +55,26 @@ export default function SheetSyncSection({ onPulled }: Props) {
     setBusy('pull');
     setStatus(null);
     setError(null);
-    const result = await window.electronAPI.pullSheet();
+    const result = await window.electronAPI.previewSheetPull();
+    if (result.error) {
+      setError(result.error);
+    } else if (result.preview) {
+      setPullPreview(result.preview);
+    } else {
+      setError('Pull preview failed: the sheet did not contain usable data.');
+    }
+    setBusy(null);
+  };
+
+  const applyPull = async () => {
+    if (!pullPreview) return;
+    setBusy('apply');
+    setStatus(null);
+    setError(null);
+    const result = await window.electronAPI.applySheetPull({
+      rows: pullPreview.rows,
+      ediciones: pullPreview.ediciones,
+    });
     if (result.error) {
       setError(result.error);
     } else {
@@ -61,6 +82,7 @@ export default function SheetSyncSection({ onPulled }: Props) {
         `Pulled ${result.imported} deck${result.imported === 1 ? '' : 's'} from ${result.players.join(', ') || 'nobody'}.`,
       );
       setSettings(await window.electronAPI.getSheetSyncSettings());
+      setPullPreview(null);
       onPulled?.();
     }
     setBusy(null);
@@ -193,11 +215,20 @@ export default function SheetSyncSection({ onPulled }: Props) {
           <p style={hint}>
             {!hasSheet
               ? 'Add the spreadsheet above first.'
-              : !hasKey
-                ? 'Set the service-account key below first. Viewer access is enough for pulling.'
-                : "Replaces the local copy of everyone else's decks and ignores sheet filters."}
+                : !hasKey
+                  ? 'Set the service-account key below first. Viewer access is enough for pulling.'
+                : "Previews changes, then replaces only this device's cached copy of everyone else's decks."}
           </p>
         </Card>
+
+        {pullPreview && (
+          <SheetPullPreviewView
+            preview={pullPreview}
+            busy={busy === 'apply'}
+            onCancel={() => setPullPreview(null)}
+            onConfirm={() => void applyPull()}
+          />
+        )}
 
         <Card title="Push my decks">
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

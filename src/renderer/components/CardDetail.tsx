@@ -390,7 +390,6 @@ export default function CardDetail({
           >
             {[
               { l: 'Cost', v: <ManaSymbols cost={card.mana_cost} size={11} /> },
-              { l: 'CMC', v: String(card.cmc ?? '—') },
               { l: 'Rarity', v: rarity || '—' },
               { l: 'Owned', v: String(owned) },
             ].map((s, i) => (

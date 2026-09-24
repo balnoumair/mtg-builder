@@ -3,12 +3,13 @@ import { parseManaCost, getManaMeta } from '../lib/mana';
 interface ManaProps {
   symbol: string;
   size?: number;
+  showLabel?: boolean;
 }
 
-export function Mana({ symbol, size = 12 }: ManaProps) {
+export function Mana({ symbol, size = 12, showLabel = true }: ManaProps) {
   const isNumeric = /^\d+$/.test(symbol);
   const meta = getManaMeta(isNumeric ? 'C' : symbol);
-  const label = isNumeric ? symbol : (symbol === 'C' ? '' : symbol.charAt(0));
+  const label = showLabel ? (isNumeric ? symbol : (symbol === 'C' ? '' : symbol.charAt(0))) : '';
   return (
     <span
       style={{

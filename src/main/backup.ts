@@ -2,6 +2,15 @@ import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { createTag } from './queries/tags';
 import { isTagColor } from '../shared/tagColors';
+import type {
+  AppBackup,
+  BackupApplyMode,
+  BackupCollectionCard,
+  BackupDeck,
+  BackupDeckCard,
+  BackupPreview,
+  BackupTag,
+} from '../shared/backup';
 
 // Backups identify cards by oracle_id + name + set_code, never by print id:
 // print ids change when prints are re-collapsed or Scryfall data shifts, so a
@@ -18,58 +27,6 @@ import { isTagColor } from '../shared/tagColors';
 
 export const BACKUP_KIND = 'mtg-builder-backup';
 export const BACKUP_VERSION = 1;
-
-interface BackupDeckCard {
-  name: string;
-  oracle_id: string;
-  set_code: string;
-  board: string;
-  quantity: number;
-  owned_quantity: number | null;
-  ignore_copy_limit: number;
-}
-
-interface BackupDeck {
-  /** Stable deck identity; absent on backups written before uuids existed. */
-  uuid?: string;
-  name: string;
-  format: string;
-  description: string;
-  owned: number;
-  cover: { oracle_id: string; set_code: string } | null;
-  /**
-   * Edition filter chips for this deck's card search. Omitted when empty.
-   * Restored to localStorage on import (matched by uuid).
-   */
-  filter_sets?: string[];
-  /** Tag uuids referencing the top-level `tags` list. Omitted when the deck has none. */
-  tags?: string[];
-  cards: BackupDeckCard[];
-}
-
-interface BackupTag {
-  uuid: string;
-  name: string;
-  color: string;
-}
-
-interface BackupCollectionCard {
-  name: string;
-  oracle_id: string;
-  set_code: string;
-  quantity: number;
-  added_at: string | null;
-}
-
-export interface AppBackup {
-  kind: typeof BACKUP_KIND;
-  version: number;
-  exported_at: string;
-  /** Absent on backups written before tags existed. */
-  tags?: BackupTag[];
-  decks: BackupDeck[];
-  collection: BackupCollectionCard[];
-}
 
 export interface BackupImportSummary {
   /** Decks newly inserted (no matching local uuid). */
@@ -175,7 +132,11 @@ function isCardIdentity(value: unknown): value is { name: string; oracle_id: str
 function isBackupDeckCard(value: unknown): value is BackupDeckCard {
   const c = value as BackupDeckCard;
   return (
-    isCardIdentity(value) &&
+    !!c && typeof c === 'object' &&
+    typeof c.name === 'string' &&
+    typeof c.oracle_id === 'string' &&
+    typeof c.set_code === 'string' &&
+    Number.isInteger(c.quantity) && c.quantity >= 0 &&
     (c.board === 'main' || c.board === 'sideboard') &&
     (c.owned_quantity === null || Number.isInteger(c.owned_quantity))
   );
@@ -245,15 +206,12 @@ function validateBackup(parsed: unknown): AppBackup {
   return backup;
 }
 
-// Imports decks by uuid: insert when new, replace local contents when the uuid
-// already exists. Legacy decks without a uuid always insert as new. Collection
-// quantities are overwritten by the backup. Cards resolve to the print of the
-// same card in the recorded set when possible, falling back to the card's kept
-// print, then to a name match. Cards not in the database are skipped and reported.
-export function importBackup(db: Database.Database, parsed: unknown): BackupImportSummary {
-  const backup = validateBackup(parsed);
+function cardKey(card: { name: string; oracle_id: string; set_code: string }): string {
+  return `${card.oracle_id}\u0000${card.set_code}\u0000${card.name}`;
+}
 
-  const resolveCard = db.prepare(`
+function createCardResolver(db: Database.Database) {
+  return db.prepare(`
     SELECT COALESCE(
       (SELECT id FROM cards WHERE oracle_id = @oracle_id AND set_code = @set_code
          ORDER BY CAST(collector_number AS INTEGER) ASC, collector_number ASC LIMIT 1),
@@ -263,6 +221,122 @@ export function importBackup(db: Database.Database, parsed: unknown): BackupImpo
          ORDER BY released_at DESC, CAST(collector_number AS INTEGER) ASC LIMIT 1)
     ) AS id
   `);
+}
+
+/**
+ * Validates a backup and describes its effect without changing the database.
+ * The result is deliberately explicit so the UI can show the destructive
+ * replace option before the user chooses it.
+ */
+export function previewBackup(db: Database.Database, parsed: unknown): BackupPreview {
+  const backup = validateBackup(parsed);
+  const localDecks = db.prepare('SELECT uuid, name FROM decks ORDER BY name').all() as Array<{
+    uuid: string | null;
+    name: string;
+  }>;
+  const localDeckByUuid = new Map(
+    localDecks.filter((deck) => deck.uuid).map((deck) => [deck.uuid as string, deck]),
+  );
+  const backupDeckUuids = new Set(
+    backup.decks.filter((deck) => deck.uuid).map((deck) => deck.uuid as string),
+  );
+
+  const resolveCard = createCardResolver(db);
+  const missing: BackupPreview['missing'] = [];
+  const inspectCard = (
+    card: { name: string; oracle_id: string; set_code: string; quantity: number },
+    deck: string | null,
+  ) => {
+    const resolved = resolveCard.get(card) as { id: string | null };
+    if (!resolved.id) missing.push({ deck, card: card.name, quantity: card.quantity });
+  };
+
+  const add = backup.decks
+    .filter((deck) => !deck.uuid || !localDeckByUuid.has(deck.uuid))
+    .map((deck) => ({
+      name: deck.name,
+      ...(deck.uuid ? { uuid: deck.uuid } : {}),
+      action: 'add' as const,
+      cardCount: deck.cards.length,
+    }));
+  const overwrite = backup.decks
+    .filter((deck) => !!deck.uuid && localDeckByUuid.has(deck.uuid))
+    .map((deck) => ({
+      name: deck.name,
+      uuid: deck.uuid,
+      action: 'overwrite' as const,
+      existingName: localDeckByUuid.get(deck.uuid!)!.name,
+      cardCount: deck.cards.length,
+    }));
+  for (const deck of backup.decks) {
+    for (const card of deck.cards) inspectCard(card, deck.name);
+  }
+  for (const card of backup.collection) inspectCard(card, null);
+
+  const localCollection = db.prepare(`
+    SELECT c.name, c.oracle_id, c.set_code
+    FROM collection col JOIN cards c ON c.id = col.card_id
+  `).all() as Array<{ name: string; oracle_id: string; set_code: string }>;
+  const localCollectionKeys = new Set(localCollection.map(cardKey));
+  const backupCollectionKeys = new Set(backup.collection.map(cardKey));
+
+  const localTags = db.prepare('SELECT uuid, name FROM tags ORDER BY name COLLATE NOCASE').all() as Array<{
+    uuid: string | null;
+    name: string;
+  }>;
+  const localTagByUuid = new Map(localTags.filter((tag) => tag.uuid).map((tag) => [tag.uuid as string, tag]));
+  const localTagNames = new Map(localTags.map((tag) => [tag.name.toLocaleLowerCase(), tag]));
+  const backupTags = backup.tags ?? [];
+  const matchedTagUuids = new Set<string>();
+  const addedTags: string[] = [];
+  for (const tag of backupTags) {
+    const matched = localTagByUuid.get(tag.uuid) ?? localTagNames.get(tag.name.toLocaleLowerCase());
+    if (matched) {
+      if (matched.uuid) matchedTagUuids.add(matched.uuid);
+    } else {
+      addedTags.push(tag.name);
+    }
+  }
+  const removedTags = localTags
+    .filter((tag) => !tag.uuid || !matchedTagUuids.has(tag.uuid))
+    .map((tag) => tag.name);
+
+  return {
+    exportedAt: backup.exported_at,
+    decks: {
+      add,
+      overwrite,
+      remove: localDecks
+        .filter((deck) => !deck.uuid || !backupDeckUuids.has(deck.uuid))
+        .map((deck) => deck.name),
+    },
+    collection: {
+      add: backup.collection
+        .filter((card) => !localCollectionKeys.has(cardKey(card)))
+        .map((card) => ({ name: card.name, quantity: card.quantity })),
+      overwrite: backup.collection
+        .filter((card) => localCollectionKeys.has(cardKey(card)))
+        .map((card) => ({ name: card.name, quantity: card.quantity })),
+      remove: localCollection.filter((card) => !backupCollectionKeys.has(cardKey(card))).length,
+    },
+    tags: { add: addedTags, remove: removedTags },
+    missing,
+  };
+}
+
+// Imports decks by uuid: insert when new, replace local contents when the uuid
+// already exists. Legacy decks without a uuid always insert as new. Collection
+// quantities are overwritten by the backup. Cards resolve to the print of the
+// same card in the recorded set when possible, falling back to the card's kept
+// print, then to a name match. Cards not in the database are skipped and reported.
+export function importBackup(
+  db: Database.Database,
+  parsed: unknown,
+  mode: BackupApplyMode = 'merge',
+): BackupImportSummary {
+  const backup = validateBackup(parsed);
+
+  const resolveCard = createCardResolver(db);
   const findDeckByUuid = db.prepare('SELECT id FROM decks WHERE uuid = ?');
   const insertDeck = db.prepare(
     'INSERT INTO decks (uuid, name, format, description, owned) VALUES (@uuid, @name, @format, @description, @owned)'
@@ -310,6 +384,15 @@ export function importBackup(db: Database.Database, parsed: unknown): BackupImpo
   let tagsImported = 0;
 
   const run = db.transaction(() => {
+    if (mode === 'replace') {
+      // Replace only data represented by the backup JSON. The Scryfall card
+      // catalog, app settings, and external/player decks are intentionally
+      // outside this transaction's cleanup scope.
+      db.prepare('DELETE FROM decks').run();
+      db.prepare('DELETE FROM collection').run();
+      db.prepare('DELETE FROM tags').run();
+    }
+
     // Resolve every backed-up tag to a local id first, so decks can reference
     // them by uuid. A tag matches on uuid, then on name — importing onto a
     // machine where the same tag was typed by hand reuses it instead of

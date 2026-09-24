@@ -1,7 +1,11 @@
 import type Database from 'better-sqlite3';
 import { SHEET_BLOCK_SETS, emojiToColors, type SheetBlock } from './blockMap';
-import type { SheetBlockMapping } from '../../shared/types';
-import { replaceExternalDecks, type ExternalDeckRow } from '../queries/externalDecks';
+import type { SheetBlockMapping, SheetPullPreview, SheetPullRow } from '../../shared/types';
+import {
+  getExternalDeckRows,
+  replaceExternalDecks,
+  type ExternalDeckRow,
+} from '../queries/externalDecks';
 import { getAccessToken } from './googleAuth';
 import { getSheetSyncSettings, setSetting } from '../queries/settings';
 
@@ -195,7 +199,37 @@ export interface PullResult {
   blockLabels: number;
 }
 
-export async function pullFromSheet(db: Database.Database): Promise<PullResult> {
+function sameSheetRow(a: ExternalDeckRow, b: ExternalDeckRow): boolean {
+  return a.player === b.player &&
+    a.block_label === b.block_label &&
+    a.colors === b.colors &&
+    a.name === b.name &&
+    a.row_index === b.row_index;
+}
+
+function previewRows(
+  current: ExternalDeckRow[],
+  incoming: ExternalDeckRow[],
+): Pick<SheetPullPreview, 'added' | 'updated' | 'removed'> {
+  const currentByRow = new Map(current.map((row) => [row.row_index, row]));
+  const incomingByRow = new Map(incoming.map((row) => [row.row_index, row]));
+  const added: SheetPullPreview['added'] = [];
+  const updated: SheetPullPreview['updated'] = [];
+  const removed: SheetPullPreview['removed'] = [];
+
+  for (const row of incoming) {
+    const previous = currentByRow.get(row.row_index);
+    if (!previous) added.push(row);
+    else if (!sameSheetRow(previous, row)) updated.push({ ...row, previous });
+  }
+  for (const row of current) {
+    if (!incomingByRow.has(row.row_index)) removed.push(row);
+  }
+
+  return { added, updated, removed };
+}
+
+export async function previewSheetPull(db: Database.Database): Promise<SheetPullPreview> {
   const { playerName: configuredPlayer, spreadsheetId: configuredSheet, serviceAccountKeyPath } =
     getSheetSyncSettings(db);
   const spreadsheetId = requireSpreadsheetId(configuredSheet);
@@ -208,8 +242,6 @@ export async function pullFromSheet(db: Database.Database): Promise<PullResult> 
   ]);
   assertMazosHeader(mazos);
 
-  refreshSheetBlocks(db, ediciones);
-
   const others = parseMazosRows(mazos).filter(
     (r) => r.player.toLowerCase() !== playerName,
   );
@@ -220,12 +252,37 @@ export async function pullFromSheet(db: Database.Database): Promise<PullResult> 
     name: r.deckName,
     row_index: r.sheetRow,
   }));
-  replaceExternalDecks(db, rows);
+
+  // The preview must not mutate the cached decks or the pull timestamp. The
+  // EDICIONES tab is needed for the eventual local apply, so it travels with
+  // the preview payload. It is intentionally never sent back to Google.
+  const current = getExternalDeckRows(db);
+  const changes = previewRows(current, rows);
+  return {
+    ...changes,
+    rows: rows as SheetPullRow[],
+    ediciones,
+    players: [...new Set(rows.map((r) => r.player))],
+    blockLabels: ediciones.length > 0 ? ediciones.length - 1 : 0,
+  };
+}
+
+export function applySheetPull(
+  db: Database.Database,
+  input: { rows: SheetPullRow[]; ediciones: string[][] },
+): PullResult {
+  refreshSheetBlocks(db, input.ediciones);
+  replaceExternalDecks(db, input.rows);
   setSetting(db, 'sheetSync.lastPulledAt', new Date().toISOString());
 
   return {
-    imported: rows.length,
-    players: [...new Set(rows.map((r) => r.player))],
+    imported: input.rows.length,
+    players: [...new Set(input.rows.map((r) => r.player))],
     blockLabels: getSheetBlocks(db).length,
   };
+}
+
+export async function pullFromSheet(db: Database.Database): Promise<PullResult> {
+  const preview = await previewSheetPull(db);
+  return applySheetPull(db, preview);
 }

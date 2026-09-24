@@ -6,7 +6,11 @@ import { getManaMeta } from '../lib/mana';
 import { useSets } from '../hooks/useSets';
 
 const COLOR_KEYS = ['W', 'U', 'B', 'R', 'G'] as const;
-const CMC_VALUES: (number | '7+')[] = [0, 1, 2, 3, 4, 5, 6, '7+'];
+const COLOR_CATEGORY_FILTERS = [
+  { value: 'multicolor' as const, symbol: 'M', title: 'Multicolor', color: '#c9a86c' },
+  { value: 'colorless' as const, symbol: 'C', title: 'Colorless', color: '#bdb7af' },
+];
+const MANA_VALUE_VALUES: (number | '7+')[] = [0, 1, 2, 3, 4, 5, 6, '7+'];
 const TYPES = ['All', 'Creature', 'Instant', 'Sorcery', 'Enchantment', 'Artifact', 'Planeswalker', 'Land'];
 
 interface Props {
@@ -209,14 +213,10 @@ export default function CardFilters({ filters, onUpdate }: Props) {
   }, [setMenuOpen]);
 
   const activeColors = filters.colors ?? [];
+  const activeColorCategories = filters.colorCategories ?? [];
   const activeType = filters.types && filters.types.length === 1 ? filters.types[0] : 'All';
   const activeSets = filters.sets ?? [];
-
-  const activeCmc: number | '7+' | null = (() => {
-    if (filters.cmcMin === 7 && filters.cmcMax === undefined) return '7+';
-    if (filters.cmcMin !== undefined && filters.cmcMin === filters.cmcMax) return filters.cmcMin;
-    return null;
-  })();
+  const activeManaValues = filters.manaValues ?? [];
 
   const toggleColor = (code: string) => {
     const next = activeColors.includes(code)
@@ -225,18 +225,26 @@ export default function CardFilters({ filters, onUpdate }: Props) {
     onUpdate({ colors: next.length > 0 ? next : undefined });
   };
 
+  const toggleColorCategory = (category: 'multicolor' | 'colorless') => {
+    const next = activeColorCategories.includes(category)
+      ? activeColorCategories.filter((value) => value !== category)
+      : [...activeColorCategories, category];
+    onUpdate({ colorCategories: next.length > 0 ? next : undefined });
+  };
+
   const setType = (t: string) => {
     onUpdate({ types: t === 'All' ? undefined : [t] });
   };
 
-  const toggleCmc = (v: number | '7+') => {
-    if (v === '7+') {
-      if (activeCmc === '7+') onUpdate({ cmcMin: undefined, cmcMax: undefined });
-      else onUpdate({ cmcMin: 7, cmcMax: undefined });
-    } else {
-      if (activeCmc === v) onUpdate({ cmcMin: undefined, cmcMax: undefined });
-      else onUpdate({ cmcMin: v, cmcMax: v });
-    }
+  const toggleManaValue = (value: number | '7+') => {
+    const next = activeManaValues.includes(value)
+      ? activeManaValues.filter((v) => v !== value)
+      : [...activeManaValues, value];
+    onUpdate({
+      manaValues: next.length > 0 ? next : undefined,
+      cmcMin: undefined,
+      cmcMax: undefined,
+    });
   };
 
   const toggleSet = (code: string) => {
@@ -265,8 +273,11 @@ export default function CardFilters({ filters, onUpdate }: Props) {
 
   const hasFilters =
     activeColors.length > 0 ||
+    activeColorCategories.length > 0 ||
     activeType !== 'All' ||
-    activeCmc !== null ||
+    activeManaValues.length > 0 ||
+    filters.cmcMin !== undefined ||
+    filters.cmcMax !== undefined ||
     activeSets.length > 0 ||
     !!(filters.query && filters.query.length > 0);
 
@@ -274,9 +285,11 @@ export default function CardFilters({ filters, onUpdate }: Props) {
     onUpdate({
       query: undefined,
       colors: undefined,
+      colorCategories: undefined,
       types: undefined,
       rarity: undefined,
       sets: undefined,
+      manaValues: undefined,
       cmcMin: undefined,
       cmcMax: undefined,
     });
@@ -284,7 +297,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {/* Row 1: Color · Cost · Edition */}
+      {/* Row 1: Color · Mana value · Edition */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <FilterGroup label="Color">
           <div style={{ display: 'flex', gap: 3 }}>
@@ -296,6 +309,8 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                   type="button"
                   onClick={() => toggleColor(c)}
                   title={getManaMeta(c).name}
+                  aria-label={getManaMeta(c).name}
+                  aria-pressed={active}
                   style={{
                     width: 22,
                     height: 22,
@@ -308,25 +323,56 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                     padding: 0,
                   }}
                 >
-                  <Mana symbol={c} size={12} />
+                  <Mana symbol={c} size={12} showLabel={false} />
+                </button>
+              );
+            })}
+            <span
+              aria-hidden
+              style={{ height: 18, borderLeft: '1px solid var(--border)', margin: '0 2px' }}
+            />
+            {COLOR_CATEGORY_FILTERS.map((category) => {
+              const active = activeColorCategories.includes(category.value);
+              return (
+                <button
+                  key={category.value}
+                  type="button"
+                  onClick={() => toggleColorCategory(category.value)}
+                  title={category.title}
+                  aria-label={category.title}
+                  aria-pressed={active}
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 'var(--radius-sm)',
+                    background: active ? `${category.color}24` : 'transparent',
+                    border: `1px solid ${active ? category.color : 'var(--border)'}`,
+                    cursor: 'pointer',
+                    display: 'grid',
+                    placeItems: 'center',
+                    padding: 0,
+                  }}
+                >
+                  <Mana symbol={category.symbol} size={12} showLabel={false} />
                 </button>
               );
             })}
           </div>
         </FilterGroup>
 
-        <FilterGroup label="Cost">
+        <FilterGroup label="Mana value">
           <div style={{ display: 'flex', gap: 2 }}>
-            {CMC_VALUES.map((v) => {
-              const active = activeCmc === v;
-              const label = v === '7+' ? '7+' : String(v);
-              const title = v === '7+' ? 'CMC 7 or more' : `CMC ${v}`;
+            {MANA_VALUE_VALUES.map((value) => {
+              const active = activeManaValues.includes(value);
+              const label = value === '7+' ? '7+' : String(value);
+              const title = value === '7+' ? 'Mana value 7 or more' : `Mana value ${value}`;
               return (
                 <button
                   key={label}
                   type="button"
-                  onClick={() => toggleCmc(v)}
+                  onClick={() => toggleManaValue(value)}
                   title={title}
+                  aria-pressed={active}
                   style={{
                     minWidth: 22,
                     height: 22,

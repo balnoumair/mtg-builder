@@ -2,7 +2,7 @@ import { app, ipcMain, BrowserWindow, dialog } from 'electron';
 import fs from 'node:fs';
 import { getDb } from './database';
 import { syncCards } from './import';
-import { exportBackup, importBackup } from './backup';
+import { exportBackup, importBackup, previewBackup } from './backup';
 import * as cardQueries from './queries/cards';
 import * as deckQueries from './queries/decks';
 import * as collectionQueries from './queries/collection';
@@ -17,11 +17,30 @@ import {
   setSheetBlockCodes,
   resetSheetBlockCodes,
   parseSpreadsheetId,
+  previewSheetPull,
+  applySheetPull,
 } from './sheet-sync/pull';
 import { planPush, executePush, assignBlockMapping } from './sheet-sync/push';
 import { copyServiceAccountKey } from './sheet-sync/googleAuth';
-import { parseDriveFileId, pullBackupFromDrive, pushBackupToDrive } from './drive-sync';
-import type { CardFilters, Deck, SheetPushPlan, SheetSyncSettings } from '../shared/types';
+import {
+  applyBackupFromDrive,
+  parseDriveFileId,
+  previewBackupFromDrive,
+  pullBackupFromDrive,
+  pushBackupToDrive,
+} from './drive-sync';
+import type {
+  AppBackup,
+  BackupApplyMode,
+} from '../shared/backup';
+import type {
+  CardFilters,
+  Deck,
+  DriveBackupApplyPayload,
+  SheetPullApplyPayload,
+  SheetPushPlan,
+  SheetSyncSettings,
+} from '../shared/types';
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('db:status', () => {
@@ -120,6 +139,42 @@ export function registerIpcHandlers(): void {
       };
     }
   });
+
+  ipcMain.handle('backup:preview', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return { canceled: true };
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      filters: [{ name: 'mtg-builder backup', extensions: ['json'] }],
+      properties: ['openFile'],
+    });
+    if (canceled || !filePaths[0]) return { canceled: true };
+    try {
+      const filePath = filePaths[0];
+      const backup = JSON.parse(fs.readFileSync(filePath, 'utf8')) as AppBackup;
+      return { preview: previewBackup(getDb(), backup), backup, filePath };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle(
+    'backup:apply',
+    (_event, backup: AppBackup, mode: BackupApplyMode) => {
+      try {
+        return importBackup(getDb(), backup, mode);
+      } catch (err) {
+        return {
+          decksImported: 0,
+          decksUpdated: 0,
+          collectionCards: 0,
+          tagsImported: 0,
+          missing: [],
+          filterSets: [],
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+  );
 
   ipcMain.handle('tags:list', () => {
     return tagQueries.getTags(getDb());
@@ -299,9 +354,54 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.handle('drive:previewPull', async () => {
+    try {
+      return await previewBackupFromDrive(getDb());
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('drive:applyPull', (_event, payload: DriveBackupApplyPayload) => {
+    try {
+      return applyBackupFromDrive(getDb(), payload);
+    } catch (err) {
+      return {
+        decksImported: 0,
+        decksUpdated: 0,
+        collectionCards: 0,
+        tagsImported: 0,
+        missing: [],
+        filterSets: [],
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
+
   ipcMain.handle('sheet:pull', async () => {
     try {
       return await pullFromSheet(getDb());
+    } catch (err) {
+      return {
+        imported: 0,
+        players: [],
+        blockLabels: 0,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
+
+  ipcMain.handle('sheet:previewPull', async () => {
+    try {
+      return { preview: await previewSheetPull(getDb()) };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle('sheet:applyPull', (_event, payload: SheetPullApplyPayload) => {
+    try {
+      return applySheetPull(getDb(), payload);
     } catch (err) {
       return {
         imported: 0,
