@@ -137,7 +137,8 @@ export function createTestDb(): Database.Database {
       label TEXT PRIMARY KEY,
       position REAL NOT NULL DEFAULT 0,
       set_codes TEXT NOT NULL DEFAULT '[]',
-      manual INTEGER NOT NULL DEFAULT 0
+      manual INTEGER NOT NULL DEFAULT 0,
+      sheet_status TEXT NOT NULL DEFAULT 'ediciones'
     );
   `);
 

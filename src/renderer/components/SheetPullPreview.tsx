@@ -8,7 +8,9 @@ interface Props {
 }
 
 export default function SheetPullPreview({ preview, busy, onCancel, onConfirm }: Props) {
-  const totalChanges = preview.added.length + preview.updated.length + preview.removed.length;
+  const { labels } = preview;
+  const totalChanges = preview.added.length + preview.updated.length + preview.removed.length +
+    labels.added.length + labels.removed.length;
 
   return (
     <section style={panel} aria-label="Playgroup sheet pull preview">
@@ -29,6 +31,26 @@ export default function SheetPullPreview({ preview, busy, onCancel, onConfirm }:
       <ChangeGroup title="New in sheet" items={preview.added.map(formatRow)} tone="add" empty="No new decks" />
       <ChangeGroup title="Changed in sheet" items={preview.updated.map((row) => `${formatRow(row)} · was ${formatRow(row.previous!)}`)} tone="update" empty="No changed decks" />
       <ChangeGroup title="Removed from sheet" items={preview.removed.map(formatRow)} tone="remove" empty="No removed decks" />
+      {labels.added.length > 0 && (
+        <ChangeGroup title="New set labels" items={labels.added} tone="add" empty="" />
+      )}
+      {labels.removed.length > 0 && (
+        <ChangeGroup
+          title="Set labels gone from sheet — kept, marked as removed"
+          items={labels.removed}
+          tone="remove"
+          empty=""
+        />
+      )}
+      {labels.unmapped.length > 0 && (
+        <ChangeGroup
+          title="Set labels with no sets — map them under Set mappings"
+          items={labels.unmapped}
+          tone="update"
+          marker="!"
+          empty=""
+        />
+      )}
 
       <div style={actions}>
         <button onClick={onCancel} disabled={busy} style={secondaryBtn}>Cancel</button>
@@ -75,11 +97,13 @@ function ChangeGroup({
   title: heading,
   items,
   tone,
+  marker,
   empty,
 }: {
   title: string;
   items: string[];
   tone: 'add' | 'update' | 'remove';
+  marker?: string;
   empty: string;
 }) {
   const color = tone === 'add' ? 'var(--accent)' : tone === 'update' ? '#d7a45c' : 'var(--danger)';
@@ -91,7 +115,7 @@ function ChangeGroup({
       <div style={itemList}>
         {(items.length ? items : [empty]).map((item) => (
           <span key={item} style={{ ...itemRow, color: items.length ? 'var(--text-dim)' : 'var(--text-faint)' }}>
-            {items.length ? (tone === 'add' ? '+' : tone === 'update' ? '↻' : '−') : '·'} {item}
+            {items.length ? (marker ?? (tone === 'add' ? '+' : tone === 'update' ? '↻' : '−')) : '·'} {item}
           </span>
         ))}
       </div>

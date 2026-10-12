@@ -23,6 +23,8 @@ export default function SheetSyncSection({ onPulled }: Props) {
   const [plan, setPlan] = useState<SheetPushPlan | null>(null);
   const [pullPreview, setPullPreview] = useState<SheetPullPreview | null>(null);
   const [showMappings, setShowMappings] = useState(false);
+  // Bumped after each applied pull so an open mapping list reloads the labels.
+  const [mappingsVersion, setMappingsVersion] = useState(0);
 
   useEffect(() => {
     window.electronAPI.getSheetSyncSettings().then((s) => {
@@ -74,6 +76,7 @@ export default function SheetSyncSection({ onPulled }: Props) {
     const result = await window.electronAPI.applySheetPull({
       rows: pullPreview.rows,
       ediciones: pullPreview.ediciones,
+      mazosLabels: pullPreview.mazosLabels,
     });
     if (result.error) {
       setError(result.error);
@@ -83,6 +86,7 @@ export default function SheetSyncSection({ onPulled }: Props) {
       );
       setSettings(await window.electronAPI.getSheetSyncSettings());
       setPullPreview(null);
+      setMappingsVersion((v) => v + 1);
       onPulled?.();
     }
     setBusy(null);
@@ -272,7 +276,7 @@ export default function SheetSyncSection({ onPulled }: Props) {
         >
           {showMappings ? (
             <div style={{ marginTop: 8 }}>
-              <SheetMappings />
+              <SheetMappings key={mappingsVersion} />
             </div>
           ) : (
             <p style={{ ...hint, marginTop: 0 }}>
