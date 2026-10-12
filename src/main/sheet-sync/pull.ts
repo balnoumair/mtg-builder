@@ -1,6 +1,11 @@
 import type Database from 'better-sqlite3';
 import { SHEET_BLOCK_SETS, emojiToColors, type SheetBlock } from './blockMap';
-import type { SheetBlockMapping, SheetPullPreview, SheetPullRow } from '../../shared/types';
+import type {
+  SheetBlockMapping,
+  SheetPullApplyPayload,
+  SheetPullPreview,
+  SheetPullRow,
+} from '../../shared/types';
 import {
   getExternalDeckRows,
   replaceExternalDecks,
@@ -109,30 +114,66 @@ export function parseMazosRows(rows: string[][]): MazosRow[] {
   return out;
 }
 
+export type SheetLabelStatus = 'ediciones' | 'mazos' | 'removed';
+
+export interface SheetLabel {
+  label: string;
+  position: number;
+  status: Exclude<SheetLabelStatus, 'removed'>;
+}
+
 /**
- * Upserts one sheet_blocks row per EDICIONES label. Manual mappings are the
- * user's corrections and always survive; everything else is reseeded from the
- * dictionary so seed updates propagate.
+ * Every label the sheet currently uses: the EDICIONES vocabulary in its own
+ * order, then labels that MAZOS rows use without EDICIONES listing them (the
+ * group sometimes types a block straight into MAZOS). Those trail the
+ * vocabulary in first-appearance order.
+ */
+export function collectSheetLabels(edicionesRows: string[][], mazosLabels: string[]): SheetLabel[] {
+  const out: SheetLabel[] = [];
+  const seen = new Set<string>();
+  for (let i = 1; i < edicionesRows.length; i++) {
+    const label = (edicionesRows[i][1] ?? '').trim();
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    out.push({ label, position: parseFloat(edicionesRows[i][0] ?? '') || i, status: 'ediciones' });
+  }
+  let next = out.reduce((max, l) => Math.max(max, l.position), 0);
+  for (const raw of mazosLabels) {
+    const label = raw.trim();
+    if (!label || seen.has(label)) continue;
+    seen.add(label);
+    out.push({ label, position: ++next, status: 'mazos' });
+  }
+  return out;
+}
+
+/**
+ * Upserts one sheet_blocks row per label the sheet uses. Manual mappings are
+ * the user's corrections and always survive; everything else is reseeded from
+ * the dictionary so seed updates propagate. Labels the sheet no longer uses
+ * are marked removed rather than deleted, so a manual mapping is still there
+ * if the label comes back.
  */
 export function refreshSheetBlocks(
   db: Database.Database,
   edicionesRows: string[][],
+  mazosLabels: string[] = [],
 ): void {
   const upsert = db.prepare(`
-    INSERT INTO sheet_blocks (label, position, set_codes)
-    VALUES (@label, @position, @set_codes)
+    INSERT INTO sheet_blocks (label, position, set_codes, sheet_status)
+    VALUES (@label, @position, @set_codes, @status)
     ON CONFLICT(label) DO UPDATE SET
       position = @position,
+      sheet_status = @status,
       set_codes = CASE WHEN manual = 1 THEN set_codes ELSE @set_codes END
   `);
   const txn = db.transaction(() => {
-    for (let i = 1; i < edicionesRows.length; i++) {
-      const label = (edicionesRows[i][1] ?? '').trim();
-      if (!label) continue;
-      const position = parseFloat(edicionesRows[i][0] ?? '') || i;
+    db.prepare("UPDATE sheet_blocks SET sheet_status = 'removed'").run();
+    for (const { label, position, status } of collectSheetLabels(edicionesRows, mazosLabels)) {
       upsert.run({
         label,
         position,
+        status,
         set_codes: JSON.stringify(SHEET_BLOCK_SETS[label] ?? []),
       });
     }
@@ -140,9 +181,10 @@ export function refreshSheetBlocks(
   txn();
 }
 
+/** Labels the sheet still uses — removed ones are never push targets. */
 export function getSheetBlocks(db: Database.Database): SheetBlock[] {
   const rows = db.prepare(
-    'SELECT label, position, set_codes FROM sheet_blocks ORDER BY position',
+    "SELECT label, position, set_codes FROM sheet_blocks WHERE sheet_status != 'removed' ORDER BY position",
   ).all() as { label: string; position: number; set_codes: string }[];
   return rows.map((r) => ({
     label: r.label,
@@ -151,18 +193,65 @@ export function getSheetBlocks(db: Database.Database): SheetBlock[] {
   }));
 }
 
-/** Mapping rows for the editor: adds the manual flag and reset availability. */
+/**
+ * Mapping rows for the editor, removed labels included (listed last): adds
+ * the manual flag, reset availability and where the sheet uses the label.
+ */
 export function getSheetBlockMappings(db: Database.Database): SheetBlockMapping[] {
-  const rows = db.prepare(
-    'SELECT label, position, set_codes, manual FROM sheet_blocks ORDER BY position',
-  ).all() as { label: string; position: number; set_codes: string; manual: number }[];
+  const rows = db.prepare(`
+    SELECT label, position, set_codes, manual, sheet_status FROM sheet_blocks
+    ORDER BY sheet_status = 'removed', position
+  `).all() as {
+    label: string;
+    position: number;
+    set_codes: string;
+    manual: number;
+    sheet_status: SheetLabelStatus;
+  }[];
   return rows.map((r) => ({
     label: r.label,
     position: r.position,
     setCodes: JSON.parse(r.set_codes) as string[],
     manual: !!r.manual,
     hasDefault: hasSeededMapping(r.label),
+    sheetStatus: r.sheet_status,
   }));
+}
+
+/**
+ * What applying a pull would do to the label list: labels new to this device
+ * (or back after being removed), labels the sheet dropped, and labels that
+ * would have no sets after the reseed.
+ */
+export function previewLabelChanges(
+  db: Database.Database,
+  sheetLabels: SheetLabel[],
+): SheetPullPreview['labels'] {
+  const existing = new Map(
+    (db.prepare('SELECT label, set_codes, manual, sheet_status FROM sheet_blocks').all() as {
+      label: string;
+      set_codes: string;
+      manual: number;
+      sheet_status: SheetLabelStatus;
+    }[]).map((r) => [r.label, r]),
+  );
+  const inSheet = new Set(sheetLabels.map((l) => l.label));
+
+  const added: string[] = [];
+  const unmapped: string[] = [];
+  for (const { label } of sheetLabels) {
+    const current = existing.get(label);
+    if (!current || current.sheet_status === 'removed') added.push(label);
+    const codes = current?.manual
+      ? (JSON.parse(current.set_codes) as string[])
+      : SHEET_BLOCK_SETS[label] ?? [];
+    if (codes.length === 0) unmapped.push(label);
+  }
+  const removed = [...existing.values()]
+    .filter((r) => r.sheet_status !== 'removed' && !inSheet.has(r.label))
+    .map((r) => r.label);
+
+  return { added, removed, unmapped };
 }
 
 /** Replaces a label's set codes with the user's own list (a manual mapping). */
@@ -242,7 +331,11 @@ export async function previewSheetPull(db: Database.Database): Promise<SheetPull
   ]);
   assertMazosHeader(mazos);
 
-  const others = parseMazosRows(mazos).filter(
+  const parsed = parseMazosRows(mazos);
+  // Every row's label counts, mine included: the vocabulary is the sheet's,
+  // not just the part of it this device caches.
+  const mazosLabels = [...new Set(parsed.map((r) => r.blockLabel).filter(Boolean))];
+  const others = parsed.filter(
     (r) => r.player.toLowerCase() !== playerName,
   );
   const rows: ExternalDeckRow[] = others.map((r) => ({
@@ -258,20 +351,23 @@ export async function previewSheetPull(db: Database.Database): Promise<SheetPull
   // the preview payload. It is intentionally never sent back to Google.
   const current = getExternalDeckRows(db);
   const changes = previewRows(current, rows);
+  const sheetLabels = collectSheetLabels(ediciones, mazosLabels);
   return {
     ...changes,
+    labels: previewLabelChanges(db, sheetLabels),
     rows: rows as SheetPullRow[],
     ediciones,
+    mazosLabels,
     players: [...new Set(rows.map((r) => r.player))],
-    blockLabels: ediciones.length > 0 ? ediciones.length - 1 : 0,
+    blockLabels: sheetLabels.length,
   };
 }
 
 export function applySheetPull(
   db: Database.Database,
-  input: { rows: SheetPullRow[]; ediciones: string[][] },
+  input: SheetPullApplyPayload,
 ): PullResult {
-  refreshSheetBlocks(db, input.ediciones);
+  refreshSheetBlocks(db, input.ediciones, input.mazosLabels);
   replaceExternalDecks(db, input.rows);
   setSetting(db, 'sheetSync.lastPulledAt', new Date().toISOString());
 

@@ -48,7 +48,7 @@ export default function SheetMappings() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return mappings.filter((m) => {
-      if (onlyUnmapped && m.setCodes.length > 0) return false;
+      if (onlyUnmapped && !isUnmapped(m)) return false;
       if (!q) return true;
       return (
         m.label.toLowerCase().includes(q) ||
@@ -61,7 +61,7 @@ export default function SheetMappings() {
     });
   }, [mappings, query, onlyUnmapped, setsByCode]);
 
-  const unmappedCount = mappings.filter((m) => m.setCodes.length === 0).length;
+  const unmappedCount = mappings.filter(isUnmapped).length;
 
   if (loading) return <div style={{ color: 'var(--text-mute)', fontSize: 12 }}>Loading…</div>;
 
@@ -144,8 +144,9 @@ export default function SheetMappings() {
       </div>
 
       <p style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 8, marginBottom: 0 }}>
-        Labels come from the sheet and refresh on every pull. Your edits are kept; unedited labels
-        are re-seeded from the built-in dictionary.
+        Labels come from the sheet's EDICIONES tab plus any label a MAZOS row uses, and refresh on
+        every applied pull. Your edits are kept; unedited labels are re-seeded from the built-in
+        dictionary. Labels gone from the sheet stay listed so their mapping isn't lost.
       </p>
     </div>
   );
@@ -172,6 +173,7 @@ function MappingRow({
 }) {
   const [search, setSearch] = useState('');
   const codes = mapping.setCodes.map((c) => c.toLowerCase());
+  const removed = mapping.sheetStatus === 'removed';
 
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -193,6 +195,7 @@ function MappingRow({
         padding: '8px 12px',
         borderTop: first ? 'none' : '1px solid var(--border)',
         fontSize: 12,
+        opacity: removed && !editing ? 0.6 : 1,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -217,11 +220,23 @@ function MappingRow({
                 edited
               </span>
             )}
+            {mapping.sheetStatus === 'mazos' && (
+              <StatusBadge title="Used by decks in MAZOS but not listed in the EDICIONES tab">
+                MAZOS only
+              </StatusBadge>
+            )}
+            {removed && (
+              <StatusBadge title="No longer in the sheet; kept so its mapping is back if the label returns. Not used for pushes.">
+                not in sheet
+              </StatusBadge>
+            )}
           </div>
 
           {mapping.setCodes.length === 0 ? (
-            <div style={{ fontSize: 10, color: 'var(--danger)', marginTop: 3 }}>
-              No sets mapped — decks from this block cannot be pushed. Add the sets it covers.
+            <div style={{ fontSize: 10, color: removed ? 'var(--text-mute)' : 'var(--danger)', marginTop: 3 }}>
+              {removed
+                ? 'No sets mapped.'
+                : 'No sets mapped — decks from this block cannot be pushed. Add the sets it covers.'}
             </div>
           ) : (
             <div
@@ -367,6 +382,31 @@ function MappingRow({
         </div>
       )}
     </div>
+  );
+}
+
+/** Unmapped labels that matter: a removed label can't be pushed to anyway. */
+function isUnmapped(m: SheetBlockMapping): boolean {
+  return m.setCodes.length === 0 && m.sheetStatus !== 'removed';
+}
+
+function StatusBadge({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <span
+      title={title}
+      style={{
+        fontFamily: 'var(--font-mono)',
+        fontSize: 9,
+        color: 'var(--text-mute)',
+        border: '1px solid var(--border-strong)',
+        borderRadius: 3,
+        padding: '0 4px',
+        flexShrink: 0,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {children}
+    </span>
   );
 }
 

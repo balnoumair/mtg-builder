@@ -225,8 +225,16 @@ export interface SheetPullPreview {
   added: SheetPullDeckChange[];
   updated: SheetPullDeckChange[];
   removed: SheetPullDeckChange[];
+  /** Block-label changes the apply would make to the mapping list. */
+  labels: {
+    added: string[];
+    removed: string[];
+    unmapped: string[];
+  };
   rows: SheetPullRow[];
   ediciones: string[][];
+  /** Every label MAZOS uses, so labels EDICIONES doesn't list still get a mapping row. */
+  mazosLabels: string[];
   players: string[];
   blockLabels: number;
 }
@@ -247,6 +255,7 @@ export interface DriveBackupApplyPayload {
 export interface SheetPullApplyPayload {
   rows: SheetPullRow[];
   ediciones: string[][];
+  mazosLabels: string[];
 }
 
 /** A deck belonging to another player, mirrored from the playgroup sheet. */
@@ -283,6 +292,11 @@ export interface SheetBlockMapping {
   manual: boolean;
   /** Whether a seeded default exists to reset back to. */
   hasDefault: boolean;
+  /**
+   * Where the last pull found the label: the EDICIONES tab, only in MAZOS
+   * rows, or nowhere (kept so the mapping survives if it returns).
+   */
+  sheetStatus: 'ediciones' | 'mazos' | 'removed';
 }
 
 export interface SheetPullResult {

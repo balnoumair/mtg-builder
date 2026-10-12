@@ -80,6 +80,23 @@ be uploaded as the backup file.
 - Decks whose sets don't match any sheet block are listed as unmapped and
   skipped, with a dropdown to assign the right block. That assignment sticks.
 
+## Set mappings
+
+**Set mappings** lists every block label the sheet uses: each EDICIONES row,
+plus any label a MAZOS row uses that EDICIONES doesn't list (tagged
+"MAZOS only"). A built-in dictionary fills in the Scryfall sets for labels it
+knows; anything new shows up unmapped, so a new set can be mapped by hand
+without an app update.
+
+- The list updates when a pull is **applied**. The pull preview lists new
+  labels, labels gone from the sheet, and labels that would have no sets.
+- Your edits survive pulls; unedited labels are re-seeded from the dictionary.
+- A label that disappears from the sheet stays listed as "not in sheet" with
+  its mapping intact, and comes back as-is if the label returns. It is never
+  used for pushes.
+- Mappings live only in this device's local database and are not part of the
+  JSON backup.
+
 ## Limitations
 
 - The sheet stores deck metadata only (player, block, colors, name) — no card

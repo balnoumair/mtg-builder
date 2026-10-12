@@ -4,8 +4,11 @@ import { createTestDb, insertTestSet } from '../../queries/__tests__/helpers';
 import {
   assertMazosHeader,
   fetchSheetValues,
+  getSheetBlockMappings,
   getSheetBlocks,
   parseMazosRows,
+  previewLabelChanges,
+  collectSheetLabels,
   parseSpreadsheetId,
   refreshSheetBlocks,
   requireSpreadsheetId,
@@ -162,6 +165,91 @@ describe('refreshSheetBlocks', () => {
       'Las tierras salvajes de Eldraine',
       'Bloque inventado del grupo',
     ]);
+  });
+});
+
+describe('sheet label lifecycle', () => {
+  const header = ['Nº', 'BLOQUES'];
+
+  it('adds labels only MAZOS uses after the EDICIONES vocabulary', () => {
+    const db = createTestDb();
+    refreshSheetBlocks(db, [header, ['1', 'Listed label'], ['5', 'Other listed label']], [
+      'Listed label',
+      'Typed only in decks',
+    ]);
+
+    const mappings = getSheetBlockMappings(db);
+    expect(mappings.map((m) => [m.label, m.sheetStatus])).toEqual([
+      ['Listed label', 'ediciones'],
+      ['Other listed label', 'ediciones'],
+      ['Typed only in decks', 'mazos'],
+    ]);
+    expect(mappings[2].position).toBe(6);
+    expect(getSheetBlocks(db).map((b) => b.label)).toContain('Typed only in decks');
+  });
+
+  it('keeps a dropped label and its manual mapping, marked removed and out of push matching', () => {
+    const db = createTestDb();
+    refreshSheetBlocks(db, [header, ['1', 'Staying label'], ['2', 'Dropped label']]);
+    db.prepare("UPDATE sheet_blocks SET set_codes = '[\"abc\"]', manual = 1 WHERE label = ?").run(
+      'Dropped label',
+    );
+
+    refreshSheetBlocks(db, [header, ['1', 'Staying label']]);
+
+    const dropped = getSheetBlockMappings(db).find((m) => m.label === 'Dropped label');
+    expect(dropped).toMatchObject({ sheetStatus: 'removed', setCodes: ['abc'], manual: true });
+    expect(getSheetBlocks(db).map((b) => b.label)).toEqual(['Staying label']);
+  });
+
+  it('lists removed labels after the ones still in the sheet', () => {
+    const db = createTestDb();
+    refreshSheetBlocks(db, [header, ['1', 'Early label'], ['2', 'Later label']]);
+    refreshSheetBlocks(db, [header, ['2', 'Later label']]);
+    expect(getSheetBlockMappings(db).map((m) => m.label)).toEqual(['Later label', 'Early label']);
+  });
+
+  it('restores a returning label to the sheet with its mapping intact', () => {
+    const db = createTestDb();
+    refreshSheetBlocks(db, [header, ['1', 'Returning label']]);
+    db.prepare("UPDATE sheet_blocks SET set_codes = '[\"abc\"]', manual = 1 WHERE label = ?").run(
+      'Returning label',
+    );
+    refreshSheetBlocks(db, [header]);
+    refreshSheetBlocks(db, [header, ['3', 'Returning label']]);
+
+    expect(getSheetBlocks(db)).toEqual([{ label: 'Returning label', position: 3, setCodes: ['abc'] }]);
+  });
+});
+
+describe('previewLabelChanges', () => {
+  const header = ['Nº', 'BLOQUES'];
+
+  it('reports new, dropped and unmapped labels without writing anything', () => {
+    const db = createTestDb();
+    refreshSheetBlocks(db, [header, ['1', 'Bloomburrow'], ['2', 'Dropped label'], ['3', 'Hand-mapped label']]);
+    db.prepare("UPDATE sheet_blocks SET set_codes = '[\"abc\"]', manual = 1 WHERE label = ?").run(
+      'Hand-mapped label',
+    );
+
+    const labels = collectSheetLabels(
+      [header, ['1', 'Bloomburrow'], ['3', 'Hand-mapped label'], ['4', 'Brand new label']],
+      ['Typed only in decks'],
+    );
+    expect(previewLabelChanges(db, labels)).toEqual({
+      added: ['Brand new label', 'Typed only in decks'],
+      removed: ['Dropped label'],
+      unmapped: ['Brand new label', 'Typed only in decks'],
+    });
+    expect(getSheetBlockMappings(db).every((m) => m.sheetStatus === 'ediciones')).toBe(true);
+  });
+
+  it('counts a label coming back after removal as new', () => {
+    const db = createTestDb();
+    refreshSheetBlocks(db, [header, ['1', 'Returning label']]);
+    refreshSheetBlocks(db, [header]);
+    const labels = collectSheetLabels([header, ['1', 'Returning label']], []);
+    expect(previewLabelChanges(db, labels).added).toEqual(['Returning label']);
   });
 });
 

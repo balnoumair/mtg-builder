@@ -145,12 +145,16 @@ function initSchema(db: BetterSqlite3.Database): void {
 
     -- Block/edition vocabulary mirrored from the sheet's EDICIONES tab.
     -- set_codes is a JSON array; manual = 1 marks a user-assigned mapping
-    -- that must survive dictionary reseeds.
+    -- that must survive dictionary reseeds. sheet_status records where the
+    -- last pull found the label: 'ediciones', 'mazos' (used by a deck but not
+    -- listed in EDICIONES) or 'removed' (gone from the sheet, kept so its
+    -- mapping isn't lost if it returns).
     CREATE TABLE IF NOT EXISTS sheet_blocks (
       label TEXT PRIMARY KEY,
       position REAL NOT NULL DEFAULT 0,
       set_codes TEXT NOT NULL DEFAULT '[]',
-      manual INTEGER NOT NULL DEFAULT 0
+      manual INTEGER NOT NULL DEFAULT 0,
+      sheet_status TEXT NOT NULL DEFAULT 'ediciones'
     );
   `);
 }
@@ -164,6 +168,11 @@ export function runMigrations(db: BetterSqlite3.Database): void {
     db.exec('ALTER TABLE decks ADD COLUMN uuid TEXT');
   }
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_decks_uuid ON decks(uuid)');
+
+  const sheetBlockCols = db.prepare("PRAGMA table_info(sheet_blocks)").all() as { name: string }[];
+  if (!sheetBlockCols.some(c => c.name === 'sheet_status')) {
+    db.exec("ALTER TABLE sheet_blocks ADD COLUMN sheet_status TEXT NOT NULL DEFAULT 'ediciones'");
+  }
 
   const cardCols = db.prepare("PRAGMA table_info(cards)").all() as { name: string }[];
   if (!cardCols.some(c => c.name === 'block_code')) {
