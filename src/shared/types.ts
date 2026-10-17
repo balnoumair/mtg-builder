@@ -73,6 +73,8 @@ export interface DeckCard {
   owned_quantity: number | null;
   /** When true, the copy limit is not enforced for this card in this deck. */
   ignore_copy_limit: boolean;
+  /** When true, this card name doesn't contribute to the deck's color identity. */
+  ignore_color_identity: boolean;
   board: 'main' | 'sideboard';
   card?: Card;
 }
@@ -355,6 +357,7 @@ export interface ElectronAPI {
   updateCardQuantity(deckId: number, cardId: string, board: string, quantity: number): Promise<void>;
   removeCardFromDeck(deckId: number, cardId: string, board: string): Promise<void>;
   setDeckCardIgnoreLimit(deckId: number, cardId: string, ignore: boolean): Promise<void>;
+  setDeckCardIgnoreColors(deckId: number, cardId: string, ignore: boolean): Promise<void>;
   claimDeckFromCollection(deckId: number): Promise<void>;
   confirmDeckChanges(deckId: number): Promise<void>;
   discardDeckChanges(deckId: number): Promise<void>;

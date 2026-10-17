@@ -81,6 +81,7 @@ export function createTestDb(): Database.Database {
       quantity INTEGER DEFAULT 1,
       owned_quantity INTEGER,
       ignore_copy_limit INTEGER DEFAULT 0,
+      ignore_color_identity INTEGER DEFAULT 0,
       board TEXT DEFAULT 'main',
       UNIQUE(deck_id, card_id, board)
     );

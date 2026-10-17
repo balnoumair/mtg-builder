@@ -228,6 +228,10 @@ export function registerIpcHandlers(): void {
     return deckQueries.setDeckCardIgnoreLimit(getDb(), deckId, cardId, ignore);
   });
 
+  ipcMain.handle('decks:setCardIgnoreColors', (_event, deckId: number, cardId: string, ignore: boolean) => {
+    return deckQueries.setDeckCardIgnoreColors(getDb(), deckId, cardId, ignore);
+  });
+
   ipcMain.handle('decks:claim', (_event, deckId: number) => {
     return deckQueries.claimDeckFromCollection(getDb(), deckId);
   });

@@ -384,7 +384,7 @@ export async function syncCards(
     // the same card in the same set, then any print of that card.
     const deckCards = db.prepare(`
       SELECT dc.deck_id, dc.card_id, c.oracle_id, c.set_code,
-             dc.quantity, dc.owned_quantity, dc.ignore_copy_limit, dc.board
+             dc.quantity, dc.owned_quantity, dc.ignore_copy_limit, dc.ignore_color_identity, dc.board
       FROM deck_cards dc JOIN cards c ON c.id = dc.card_id
     `).all() as Array<{
       deck_id: number;
@@ -394,6 +394,7 @@ export async function syncCards(
       quantity: number;
       owned_quantity: number | null;
       ignore_copy_limit: number;
+      ignore_color_identity: number;
       board: string;
     }>;
     const collectionCards = db.prepare(`
@@ -454,8 +455,8 @@ export async function syncCards(
       )
     `;
     const restoreDeckCard = db.prepare(`
-      INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, board)
-      SELECT @deck_id, target.id, @quantity, @owned_quantity, @ignore_copy_limit, @board
+      INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, ignore_color_identity, board)
+      SELECT @deck_id, target.id, @quantity, @owned_quantity, @ignore_copy_limit, @ignore_color_identity, @board
       FROM (SELECT ${survivorSql} AS id) target
       WHERE target.id IS NOT NULL
       ON CONFLICT(deck_id, card_id, board) DO UPDATE SET
@@ -464,7 +465,8 @@ export async function syncCards(
           WHEN owned_quantity IS NULL AND excluded.owned_quantity IS NULL THEN NULL
           ELSE COALESCE(owned_quantity, 0) + COALESCE(excluded.owned_quantity, 0)
         END,
-        ignore_copy_limit = MAX(ignore_copy_limit, excluded.ignore_copy_limit)
+        ignore_copy_limit = MAX(ignore_copy_limit, excluded.ignore_copy_limit),
+        ignore_color_identity = MAX(ignore_color_identity, excluded.ignore_color_identity)
     `);
     const restoreCollectionCard = db.prepare(`
       INSERT INTO collection (card_id, quantity, added_at)

@@ -64,6 +64,7 @@ export default function DeckEditor({
     updateQuantity,
     removeCard,
     setIgnoreLimit,
+    setIgnoreColors,
     confirmChanges,
     discardChanges,
     refresh: refreshDeckCards,
@@ -253,6 +254,15 @@ export default function DeckEditor({
     return names;
   }, [deckCards]);
 
+  // Card names the user excluded from this deck's color identity.
+  const colorIgnoredNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const dc of deckCards) {
+      if (dc.ignore_color_identity && dc.card) names.add(dc.card.name);
+    }
+    return names;
+  }, [deckCards]);
+
   const canAddMore = useCallback(
     (card: Card | undefined) => {
       if (!card) return false;
@@ -268,6 +278,18 @@ export default function DeckEditor({
       await setIgnoreLimit(dc.card_id, !dc.ignore_copy_limit);
     },
     [setIgnoreLimit],
+  );
+
+  // Only main-board cards with colors feed the deck's color identity.
+  const canIgnoreColors = (dc: DeckCard) => dc.board === 'main' && !!dc.card?.color_identity?.length;
+
+  const handleToggleIgnoreColors = useCallback(
+    async (dc: DeckCard) => {
+      if (!dc.card) return;
+      await setIgnoreColors(dc.card_id, !colorIgnoredNames.has(dc.card.name));
+      onDeckCardsChanged();
+    },
+    [setIgnoreColors, colorIgnoredNames, onDeckCardsChanged],
   );
 
   // Pending edits on an owned deck: quantities that differ from the confirmed baseline.
@@ -808,6 +830,8 @@ export default function DeckEditor({
                             ? () => handleToggleIgnoreLimit(dc)
                             : undefined
                         }
+                        colorsIgnored={!!dc.card && colorIgnoredNames.has(dc.card.name)}
+                        onToggleColors={canIgnoreColors(dc) ? () => handleToggleIgnoreColors(dc) : undefined}
                       />
                     ))}
                   </div>
@@ -880,6 +904,19 @@ export default function DeckEditor({
                             ∞
                           </span>
                         )}
+                        {dc.card && colorIgnoredNames.has(dc.card.name) && (
+                          <span
+                            title="Not counted toward the deck's colors"
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 10,
+                              color: 'var(--accent)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            ⊘
+                          </span>
+                        )}
                         {newCount > 0 && (
                           <span
                             title={`${newCount} added since last confirm — not yet owned`}
@@ -940,7 +977,7 @@ export default function DeckEditor({
                         <div
                           className="opacity-0 group-hover:opacity-100"
                           style={{
-                            width: 82,
+                            width: 102,
                             display: 'flex',
                             gap: 2,
                             flexShrink: 0,
@@ -971,6 +1008,31 @@ export default function DeckEditor({
                               }
                             >
                               ∞
+                            </button>
+                          )}
+                          {canIgnoreColors(dc) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleIgnoreColors(dc);
+                              }}
+                              style={
+                                colorIgnoredNames.has(dc.card!.name)
+                                  ? {
+                                      ...miniBtn,
+                                      background: 'var(--accent-soft)',
+                                      border: '1px solid var(--accent-line)',
+                                      color: 'var(--accent)',
+                                    }
+                                  : miniBtn
+                              }
+                              title={
+                                colorIgnoredNames.has(dc.card!.name)
+                                  ? "Not counted toward the deck's colors — click to count it again"
+                                  : "Don't count this card toward the deck's colors"
+                              }
+                            >
+                              ⊘
                             </button>
                           )}
                           <button
@@ -1144,9 +1206,11 @@ interface TileProps {
   onRemove: () => void;
   onRemoveAll: () => void;
   onToggleLimit?: () => void;
+  colorsIgnored: boolean;
+  onToggleColors?: () => void;
 }
 
-function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, onRemove, onRemoveAll, onToggleLimit }: TileProps) {
+function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, onRemove, onRemoveAll, onToggleLimit, colorsIgnored, onToggleColors }: TileProps) {
   const [hover, setHover] = useState(false);
   const card = deckCard.card;
   if (!card) return null;
@@ -1235,6 +1299,7 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
       >
         ×{deckCard.quantity}
         {deckCard.ignore_copy_limit ? ' ∞' : ''}
+        {colorsIgnored ? ' ⊘' : ''}
       </span>
 
       {newCount > 0 && (
@@ -1299,6 +1364,26 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
               }
             >
               ∞
+            </button>
+          )}
+          {onToggleColors && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleColors();
+              }}
+              style={
+                colorsIgnored
+                  ? { ...hoverBtn, border: '1px solid var(--accent-line)', color: 'var(--accent)' }
+                  : hoverBtn
+              }
+              title={
+                colorsIgnored
+                  ? "Not counted toward the deck's colors — click to count it again"
+                  : "Don't count this card toward the deck's colors"
+              }
+            >
+              ⊘
             </button>
           )}
           <div style={{ flex: 1 }} />
