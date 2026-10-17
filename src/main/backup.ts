@@ -71,7 +71,8 @@ export function exportBackup(
   }>;
 
   const cardsStmt = db.prepare(`
-    SELECT c.name, c.oracle_id, c.set_code, dc.board, dc.quantity, dc.owned_quantity, dc.ignore_copy_limit
+    SELECT c.name, c.oracle_id, c.set_code, dc.board, dc.quantity, dc.owned_quantity, dc.ignore_copy_limit,
+           dc.ignore_color_identity
     FROM deck_cards dc JOIN cards c ON c.id = dc.card_id
     WHERE dc.deck_id = ?
     ORDER BY dc.board, c.name
@@ -111,7 +112,10 @@ export function exportBackup(
           : null,
         ...(filter_sets ? { filter_sets } : {}),
         ...(deckTags.length > 0 ? { tags: deckTags } : {}),
-        cards: cardsStmt.all(deck.id) as BackupDeckCard[],
+        cards: (cardsStmt.all(deck.id) as Required<BackupDeckCard>[]).map(
+          ({ ignore_color_identity, ...card }) =>
+            ignore_color_identity ? { ...card, ignore_color_identity: 1 } : card,
+        ),
       };
     }),
     collection,
@@ -349,15 +353,16 @@ export function importBackup(
   `);
   const clearDeckCards = db.prepare('DELETE FROM deck_cards WHERE deck_id = ?');
   const insertDeckCard = db.prepare(`
-    INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, board)
-    VALUES (@deck_id, @card_id, @quantity, @owned_quantity, @ignore_copy_limit, @board)
+    INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, ignore_color_identity, board)
+    VALUES (@deck_id, @card_id, @quantity, @owned_quantity, @ignore_copy_limit, @ignore_color_identity, @board)
     ON CONFLICT(deck_id, card_id, board) DO UPDATE SET
       quantity = quantity + excluded.quantity,
       owned_quantity = CASE
         WHEN owned_quantity IS NULL AND excluded.owned_quantity IS NULL THEN NULL
         ELSE COALESCE(owned_quantity, 0) + COALESCE(excluded.owned_quantity, 0)
       END,
-      ignore_copy_limit = MAX(ignore_copy_limit, excluded.ignore_copy_limit)
+      ignore_copy_limit = MAX(ignore_copy_limit, excluded.ignore_copy_limit),
+      ignore_color_identity = MAX(ignore_color_identity, excluded.ignore_color_identity)
   `);
   const setCover = db.prepare('UPDATE decks SET cover_card_id = ? WHERE id = ?');
   const upsertCollectionCard = db.prepare(`
@@ -465,6 +470,7 @@ export function importBackup(
           quantity: card.quantity,
           owned_quantity: card.owned_quantity,
           ignore_copy_limit: card.ignore_copy_limit ? 1 : 0,
+          ignore_color_identity: card.ignore_color_identity ? 1 : 0,
           board: card.board,
         });
       }

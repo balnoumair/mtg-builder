@@ -202,6 +202,9 @@ export function runMigrations(db: BetterSqlite3.Database): void {
   if (!deckCardCols.some(c => c.name === 'ignore_copy_limit')) {
     db.exec("ALTER TABLE deck_cards ADD COLUMN ignore_copy_limit INTEGER DEFAULT 0");
   }
+  if (!deckCardCols.some(c => c.name === 'ignore_color_identity')) {
+    db.exec("ALTER TABLE deck_cards ADD COLUMN ignore_color_identity INTEGER DEFAULT 0");
+  }
 }
 
 export function createIndexes(db: BetterSqlite3.Database): void {

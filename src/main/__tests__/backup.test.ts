@@ -29,16 +29,23 @@ function createDeck(
 function addDeckCard(
   deckId: number,
   cardId: string,
-  overrides: Partial<{ quantity: number; owned_quantity: number | null; ignore_copy_limit: number; board: string }> = {},
+  overrides: Partial<{
+    quantity: number;
+    owned_quantity: number | null;
+    ignore_copy_limit: number;
+    ignore_color_identity: number;
+    board: string;
+  }> = {},
 ): void {
   db.prepare(
-    'INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, board) VALUES (?, ?, ?, ?, ?, ?)'
+    'INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, ignore_color_identity, board) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).run(
     deckId,
     cardId,
     overrides.quantity ?? 1,
     overrides.owned_quantity ?? null,
     overrides.ignore_copy_limit ?? 0,
+    overrides.ignore_color_identity ?? 0,
     overrides.board ?? 'main',
   );
 }
@@ -229,6 +236,29 @@ describe('importBackup', () => {
     const cards = db.prepare('SELECT card_id, quantity, owned_quantity, board FROM deck_cards').all();
     expect(cards).toEqual([{ card_id: 'p-1', quantity: 4, owned_quantity: 2, board: 'main' }]);
     expect(db.prepare('SELECT card_id, quantity FROM collection').all()).toEqual([{ card_id: 'p-2', quantity: 3 }]);
+  });
+
+  it('round-trips the ignore-colors flag and omits it on cards without it', () => {
+    insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Alpha', set_code: 'aaa' });
+    insertTestCard(db, { id: 'p-2', oracle_id: 'o-2', name: 'Beta', set_code: 'bbb' });
+    const deckId = createDeck('Flags');
+    addDeckCard(deckId, 'p-1', { ignore_color_identity: 1 });
+    addDeckCard(deckId, 'p-2');
+
+    const backup = exportBackup(db, {});
+    const exported = backup.decks[0].cards;
+    expect(exported.find((c) => c.name === 'Alpha')?.ignore_color_identity).toBe(1);
+    expect(exported.find((c) => c.name === 'Beta')).not.toHaveProperty('ignore_color_identity');
+
+    db.prepare('DELETE FROM deck_cards').run();
+    db.prepare('DELETE FROM decks').run();
+    importBackup(db, backup);
+
+    const rows = db.prepare('SELECT card_id, ignore_color_identity FROM deck_cards ORDER BY card_id').all();
+    expect(rows).toEqual([
+      { card_id: 'p-1', ignore_color_identity: 1 },
+      { card_id: 'p-2', ignore_color_identity: 0 },
+    ]);
   });
 
   it('replaces an existing deck with the backup copy when uuids match', () => {

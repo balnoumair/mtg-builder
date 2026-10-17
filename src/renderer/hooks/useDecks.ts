@@ -81,6 +81,12 @@ export function useDeckCards(deckId: number | null) {
     await refresh();
   }, [deckId, refresh]);
 
+  const setIgnoreColors = useCallback(async (cardId: string, ignore: boolean) => {
+    if (!deckId) return;
+    await window.electronAPI.setDeckCardIgnoreColors(deckId, cardId, ignore);
+    await refresh();
+  }, [deckId, refresh]);
+
   const confirmChanges = useCallback(async () => {
     if (!deckId) return;
     await window.electronAPI.confirmDeckChanges(deckId);
@@ -93,5 +99,5 @@ export function useDeckCards(deckId: number | null) {
     await refresh();
   }, [deckId, refresh]);
 
-  return { cards, loading, addCard, updateQuantity, removeCard, setIgnoreLimit, confirmChanges, discardChanges, refresh };
+  return { cards, loading, addCard, updateQuantity, removeCard, setIgnoreLimit, setIgnoreColors, confirmChanges, discardChanges, refresh };
 }
