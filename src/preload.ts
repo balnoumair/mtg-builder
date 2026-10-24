@@ -48,6 +48,7 @@ const api: ElectronAPI = {
   updateCardQuantity: (deckId: number, cardId: string, board: string, quantity: number) => ipcRenderer.invoke('decks:updateQuantity', deckId, cardId, board, quantity),
   removeCardFromDeck: (deckId: number, cardId: string, board: string) => ipcRenderer.invoke('decks:removeCard', deckId, cardId, board),
   setDeckCardIgnoreLimit: (deckId: number, cardId: string, ignore: boolean) => ipcRenderer.invoke('decks:setCardIgnoreLimit', deckId, cardId, ignore),
+  setDeckCardIgnoreColors: (deckId: number, cardId: string, ignore: boolean) => ipcRenderer.invoke('decks:setCardIgnoreColors', deckId, cardId, ignore),
   claimDeckFromCollection: (deckId: number) => ipcRenderer.invoke('decks:claim', deckId),
   confirmDeckChanges: (deckId: number) => ipcRenderer.invoke('decks:confirmChanges', deckId),
   discardDeckChanges: (deckId: number) => ipcRenderer.invoke('decks:discardChanges', deckId),

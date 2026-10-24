@@ -33,8 +33,8 @@ export function dedupeCardPrints(db: Database.Database): number {
     // Deck entries move onto the surviving print; rows landing on the same
     // (deck, card, board) key merge quantities.
     db.exec(`
-      INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, board)
-      SELECT dc.deck_id, r.new_id, dc.quantity, dc.owned_quantity, dc.ignore_copy_limit, dc.board
+      INSERT INTO deck_cards (deck_id, card_id, quantity, owned_quantity, ignore_copy_limit, ignore_color_identity, board)
+      SELECT dc.deck_id, r.new_id, dc.quantity, dc.owned_quantity, dc.ignore_copy_limit, dc.ignore_color_identity, dc.board
       FROM deck_cards dc JOIN print_remap r ON r.old_id = dc.card_id
       WHERE true
       ON CONFLICT(deck_id, card_id, board) DO UPDATE SET
@@ -43,7 +43,8 @@ export function dedupeCardPrints(db: Database.Database): number {
           WHEN owned_quantity IS NULL AND excluded.owned_quantity IS NULL THEN NULL
           ELSE COALESCE(owned_quantity, 0) + COALESCE(excluded.owned_quantity, 0)
         END,
-        ignore_copy_limit = MAX(ignore_copy_limit, excluded.ignore_copy_limit)
+        ignore_copy_limit = MAX(ignore_copy_limit, excluded.ignore_copy_limit),
+        ignore_color_identity = MAX(ignore_color_identity, excluded.ignore_color_identity)
     `);
     db.exec('DELETE FROM deck_cards WHERE card_id IN (SELECT old_id FROM print_remap)');
 

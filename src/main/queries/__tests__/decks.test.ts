@@ -13,6 +13,7 @@ import {
   confirmDeckChanges,
   discardDeckChanges,
   setDeckCardIgnoreLimit,
+  setDeckCardIgnoreColors,
 } from '../decks';
 import { createTestDb, insertTestCard, insertTestSet } from './helpers';
 
@@ -115,6 +116,55 @@ describe('getDecks', () => {
 
     const found = getDecks(db).find((d) => d.id === deck.id);
     expect(found?.color_identity).toEqual(['U', 'R', 'G']);
+  });
+
+  it('leaves pending removals in an owned deck out of the color identity', () => {
+    const deck = createDeck(db, { name: 'Pending Removal Colors' });
+    const kept = insertTestCard(db, { color_identity: ['U'] });
+    const removed = insertTestCard(db, { color_identity: ['R'] });
+    addCardToDeck(db, deck.id, kept, 'main');
+    addCardToDeck(db, deck.id, removed, 'main');
+    claimDeckFromCollection(db, deck.id);
+
+    removeCardFromDeck(db, deck.id, removed, 'main');
+
+    expect(getDeckCards(db, deck.id).some((c) => c.card_id === removed)).toBe(true);
+    expect(getDecks(db).find((d) => d.id === deck.id)?.color_identity).toEqual(['U']);
+  });
+
+  it('leaves card names flagged to ignore colors out of the color identity, across printings', () => {
+    const deck = createDeck(db, { name: 'Ignored Colors' });
+    const base = insertTestCard(db, { color_identity: ['B'] });
+    const hybrid = insertTestCard(db, { name: 'Hybrid Card', color_identity: ['B', 'G'] });
+    const hybridReprint = insertTestCard(db, { name: 'Hybrid Card', color_identity: ['B', 'G'] });
+    addCardToDeck(db, deck.id, base, 'main');
+    addCardToDeck(db, deck.id, hybrid, 'main');
+    addCardToDeck(db, deck.id, hybridReprint, 'main');
+
+    setDeckCardIgnoreColors(db, deck.id, hybrid, true);
+
+    expect(getDecks(db).find((d) => d.id === deck.id)?.color_identity).toEqual(['B']);
+    const flags = getDeckCards(db, deck.id)
+      .filter((c) => c.card?.name === 'Hybrid Card')
+      .map((c) => c.ignore_color_identity);
+    expect(flags).toEqual([true, true]);
+
+    setDeckCardIgnoreColors(db, deck.id, hybridReprint, false);
+    expect(getDecks(db).find((d) => d.id === deck.id)?.color_identity).toEqual(['B', 'G']);
+  });
+
+  it('scopes the ignore-colors flag to a single deck', () => {
+    const flagged = createDeck(db, { name: 'Flagged' });
+    const other = createDeck(db, { name: 'Other' });
+    const card = insertTestCard(db, { color_identity: ['W'] });
+    addCardToDeck(db, flagged.id, card, 'main');
+    addCardToDeck(db, other.id, card, 'main');
+
+    setDeckCardIgnoreColors(db, flagged.id, card, true);
+
+    const decks = getDecks(db);
+    expect(decks.find((d) => d.id === flagged.id)?.color_identity).toEqual([]);
+    expect(decks.find((d) => d.id === other.id)?.color_identity).toEqual(['W']);
   });
 
   it('returns empty color identity for decks with no main-board cards', () => {

@@ -6,6 +6,8 @@ export interface BackupDeckCard {
   quantity: number;
   owned_quantity: number | null;
   ignore_copy_limit: number;
+  /** Present (as 1) only when the card is excluded from the deck's colors. */
+  ignore_color_identity?: number;
 }
 
 export interface BackupDeck {

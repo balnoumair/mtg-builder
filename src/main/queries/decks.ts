@@ -18,12 +18,23 @@ import { getTagsByDeck } from './tags';
 
 const COLOR_ORDER = ['W', 'U', 'B', 'R', 'G'] as const;
 
+/**
+ * Deck colors come from main-board cards still in the deck: pending removals
+ * (quantity 0 in an owned deck) don't count, and neither does any card name
+ * the user excluded from the color count in that deck.
+ */
 function getDeckColorIdentities(db: Database.Database): Map<number, string[]> {
   const rows = db.prepare(`
     SELECT dc.deck_id, c.color_identity
     FROM deck_cards dc
     JOIN cards c ON c.id = dc.card_id
     WHERE dc.board = 'main'
+      AND dc.quantity > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM deck_cards ig
+        JOIN cards ic ON ic.id = ig.card_id
+        WHERE ig.deck_id = dc.deck_id AND ic.name = c.name AND ig.ignore_color_identity = 1
+      )
   `).all() as { deck_id: number; color_identity: string }[];
 
   const sets = new Map<number, Set<string>>();
@@ -188,6 +199,7 @@ export function getDeckCards(db: Database.Database, deckId: number): DeckCard[] 
       quantity: row.quantity as number,
       owned_quantity: (row.owned_quantity as number | null) ?? null,
       ignore_copy_limit: !!(row.ignore_copy_limit as number),
+      ignore_color_identity: !!(row.ignore_color_identity as number),
       board: row.board as 'main' | 'sideboard',
       card: {
         id: row.card_id as string,
@@ -285,6 +297,24 @@ export function setDeckCardIgnoreLimit(
   db.prepare(
     'UPDATE deck_cards SET ignore_copy_limit = @ignore WHERE deck_id = @deckId AND card_id = @cardId'
   ).run({ deckId, cardId, ignore: ignore ? 1 : 0 });
+}
+
+/**
+ * Excludes a card name from the deck's color identity (e.g. a hybrid card
+ * that would otherwise add a color the deck doesn't really play). Applies to
+ * every printing and board of that name in the deck.
+ */
+export function setDeckCardIgnoreColors(
+  db: Database.Database, deckId: number, cardId: string, ignore: boolean
+): void {
+  db.prepare(`
+    UPDATE deck_cards SET ignore_color_identity = @ignore
+    WHERE deck_id = @deckId
+      AND card_id IN (
+        SELECT c.id FROM cards c
+        WHERE c.name = (SELECT name FROM cards WHERE id = @cardId)
+      )
+  `).run({ deckId, cardId, ignore: ignore ? 1 : 0 });
 }
 
 export function addCardToDeck(
