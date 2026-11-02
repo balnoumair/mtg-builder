@@ -6,6 +6,7 @@ import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
 import ViewToggle from './ViewToggle';
+import { PLAYSET_SIZE } from '../../shared/deckLimits';
 
 interface Props {
   onNavigateToBrowse: () => void;
@@ -21,15 +22,20 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
   const totalPages = Math.ceil(result.total / (filters.pageSize || 60));
   const currentPage = filters.page || 1;
 
-  const ownedQuantities = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const cc of result.cards) map[cc.card_id] = cc.quantity;
-    return map;
+  const { ownedQuantities, inDecksQuantities } = useMemo(() => {
+    const owned: Record<string, number> = {};
+    const inDecks: Record<string, number> = {};
+    for (const cc of result.cards) {
+      owned[cc.card_id] = cc.quantity;
+      inDecks[cc.card_id] = cc.in_decks;
+    }
+    return { ownedQuantities: owned, inDecksQuantities: inDecks };
   }, [result.cards]);
 
   const cards = useMemo(() => result.cards.map((cc) => cc.card), [result.cards]);
 
   const handleAddToCollection = useCallback((c: Card) => addToCollection(c.id), [addToCollection]);
+  const handleAddPlayset = useCallback((c: Card) => addToCollection(c.id, PLAYSET_SIZE), [addToCollection]);
   const detailQty = card ? ownedQuantities[card.id] ?? 0 : 0;
 
   const empty = !loading && result.total === 0 && !filters.query && !filters.colors?.length;
@@ -80,7 +86,10 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
               <span style={{ color: 'var(--text-dim)' }}>{stats.uniqueCards.toLocaleString()}</span> unique
             </span>
             <span>
-              <span style={{ color: 'var(--text-dim)' }}>{stats.totalCopies.toLocaleString()}</span> copies
+              <span style={{ color: 'var(--text-dim)' }}>{stats.totalCopies.toLocaleString()}</span> not in decks
+            </span>
+            <span>
+              <span style={{ color: 'var(--accent)' }}>{stats.inDeckCopies.toLocaleString()}</span> in decks
             </span>
           </div>
           <div style={{ flex: 1 }} />
@@ -165,6 +174,9 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
               loading={loading}
               onCardClick={showCard}
               ownedQuantities={ownedQuantities}
+              inDecksQuantities={inDecksQuantities}
+              onAddPlayset={handleAddPlayset}
+              playsetTarget="collection"
               onRemoveFromCollection={(c) => removeFromCollection(c.id)}
               view={viewMode}
             />

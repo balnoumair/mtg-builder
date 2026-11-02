@@ -103,6 +103,45 @@ describe('CardFilters', () => {
     expect(onUpdate).toHaveBeenCalledWith({ sets: ['bet'] });
   });
 
+  it('pins selected sets in a section above the block list', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSets).mockResolvedValue([
+      { code: 'old', name: 'Older Set', releasedAt: '2010-01-01', blockCode: null, blockName: null },
+      { code: 'new', name: 'Newer Set', releasedAt: '2024-01-01', blockCode: null, blockName: null },
+    ]);
+
+    renderCardFilters({ sets: ['old'] });
+    await user.click(screen.getByRole('button', { name: /^Edition/ }));
+
+    const rows = await screen.findAllByRole('checkbox');
+    expect(rows.map((row) => [row.textContent, row.getAttribute('aria-checked')])).toEqual([
+      ['Older Setold', 'true'],
+      ['Newer Setnew', 'false'],
+      ['Older Setold', 'true'],
+    ]);
+    expect(screen.getByText('Selected')).toBeInTheDocument();
+  });
+
+  it('selects every set in a block, then deselects them once all are selected', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSets).mockResolvedValue([
+      { code: 'aa1', name: 'Block Set One', releasedAt: '2020-01-01', blockCode: 'blk', blockName: 'Test Block' },
+      { code: 'aa2', name: 'Block Set Two', releasedAt: '2020-06-01', blockCode: 'blk', blockName: 'Test Block' },
+      { code: 'solo', name: 'Solo Set', releasedAt: '2022-01-01', blockCode: null, blockName: null },
+    ]);
+
+    const partial = renderCardFilters({ sets: ['solo', 'aa1'] });
+    await user.click(screen.getByRole('button', { name: /^Edition/ }));
+    await user.click(await screen.findByRole('button', { name: 'Select all sets in Test Block' }));
+    expect(partial.onUpdate).toHaveBeenCalledWith({ sets: ['solo', 'aa1', 'aa2'] });
+
+    cleanup();
+    const full = renderCardFilters({ sets: ['aa1', 'aa2'] });
+    await user.click(screen.getByRole('button', { name: /^Edition/ }));
+    await user.click(await screen.findByRole('button', { name: 'Deselect all sets in Test Block' }));
+    expect(full.onUpdate).toHaveBeenCalledWith({ sets: undefined });
+  });
+
   it('shows clear only when filters are active and resets all fields', async () => {
     const user = userEvent.setup();
     renderCardFilters();

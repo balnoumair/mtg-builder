@@ -114,14 +114,21 @@ export interface CardSet {
 
 export interface CollectionCard {
   card_id: string;
+  /** Loose copies, not in any deck; 0 when every copy is in owned decks. */
   quantity: number;
-  added_at: string;
+  /** Confirmed copies held in owned decks. */
+  in_decks: number;
+  /** Null for cards held only in decks. */
+  added_at: string | null;
   card: Card;
 }
 
 export interface CollectionStats {
   uniqueCards: number;
+  /** Loose copies, not in any deck. */
   totalCopies: number;
+  /** Confirmed copies held in owned decks. */
+  inDeckCopies: number;
 }
 
 export interface WantSource {

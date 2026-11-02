@@ -16,11 +16,21 @@ interface Props {
   onViewCard?: (card: Card) => void;
   onAddToDeck?: (card: Card) => void;
   onAddPlayset?: (card: Card) => void;
+  /**
+   * Where the +4 button adds copies. Only decks enforce the copy limit;
+   * the collection takes any number.
+   */
+  playsetTarget?: 'deck' | 'collection';
   onRemoveFromCollection?: (card: Card) => void;
   /** Card names exempted from the copy limit in the target deck. */
   unlimitedNames?: Set<string>;
   ownedQuantities?: Record<string, number>;
   deckQuantities?: Record<string, number>;
+  /**
+   * Copies held in owned decks, for the My Cards view. When present, each card
+   * shows its loose and in-deck counts side by side.
+   */
+  inDecksQuantities?: Record<string, number>;
   selectedId?: string | null;
   view?: 'grid' | 'list';
 }
@@ -39,10 +49,12 @@ export default function CardGrid({
   onViewCard,
   onAddToDeck,
   onAddPlayset,
+  playsetTarget = 'deck',
   onRemoveFromCollection,
   unlimitedNames,
   ownedQuantities,
   deckQuantities,
+  inDecksQuantities,
   selectedId,
   view = 'grid',
 }: Props) {
@@ -104,8 +116,11 @@ export default function CardGrid({
         {cards.map((card, i) => {
           const qty = ownedQuantities?.[card.id] ?? 0;
           const inDeck = deckQuantities?.[card.id] ?? 0;
-          const max = onAddPlayset && !unlimitedNames?.has(card.name) ? getMaxCopies(card) : null;
+          const max = onAddPlayset && playsetTarget === 'deck' && !unlimitedNames?.has(card.name)
+            ? getMaxCopies(card)
+            : null;
           const atMax = max !== null && inDeck >= max;
+          const decked = inDecksQuantities?.[card.id] ?? 0;
           const sel = selectedId === card.id;
           return (
             <div
@@ -130,17 +145,32 @@ export default function CardGrid({
                 if (!sel) e.currentTarget.style.background = 'transparent';
               }}
             >
-              {qty > 0 && (
+              {(qty > 0 || decked > 0) && (
                 <span
                   style={{
                     width: 22,
                     textAlign: 'right',
                     fontFamily: 'var(--font-mono)',
                     fontSize: 11,
-                    color: 'var(--text-dim)',
+                    color: qty > 0 ? 'var(--text-dim)' : 'var(--text-faint)',
                   }}
+                  title={inDecksQuantities ? `${qty} not in a deck` : undefined}
                 >
                   ×{qty}
+                </span>
+              )}
+              {inDecksQuantities && (
+                <span
+                  style={{
+                    width: 64,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    color: 'var(--accent)',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={decked > 0 ? `${decked} in owned decks` : undefined}
+                >
+                  {decked > 0 ? `${decked} in decks` : ''}
                 </span>
               )}
               <ColorIdentity colors={card.color_identity ?? []} size={9} />
@@ -185,7 +215,7 @@ export default function CardGrid({
                     cursor: atMax ? 'default' : 'pointer',
                     opacity: atMax ? 0.4 : 1,
                   }}
-                  title={atMax ? `Copy limit reached (${max})` : `Add playset (${PLAYSET_SIZE} copies)`}
+                  title={atMax ? `Copy limit reached (${max})` : playsetTitle(playsetTarget)}
                 >
                   +{PLAYSET_SIZE}
                 </button>
@@ -264,7 +294,9 @@ export default function CardGrid({
       >
         {cards.map((card) => {
           const inDeck = deckQuantities?.[card.id] ?? 0;
-          const max = onAddPlayset && !unlimitedNames?.has(card.name) ? getMaxCopies(card) : null;
+          const max = onAddPlayset && playsetTarget === 'deck' && !unlimitedNames?.has(card.name)
+            ? getMaxCopies(card)
+            : null;
           const atMax = max !== null && inDeck >= max;
           return (
             <CardTile
@@ -272,11 +304,13 @@ export default function CardGrid({
               card={card}
               owned={ownedQuantities?.[card.id] ?? 0}
               inDeck={inDeck}
+              decked={inDecksQuantities ? inDecksQuantities[card.id] ?? 0 : undefined}
               selected={selectedId === card.id}
               onClick={() => onCardClick(card)}
               onView={onViewCard ? () => onViewCard(card) : undefined}
               onAdd={!onViewCard && onAddToDeck ? () => onAddToDeck(card) : undefined}
               onAddPlayset={onAddPlayset && !atMax ? () => onAddPlayset(card) : undefined}
+              playsetTitle={playsetTitle(playsetTarget)}
               onRemove={onRemoveFromCollection ? () => onRemoveFromCollection(card) : undefined}
             />
           );
@@ -290,15 +324,24 @@ interface TileProps {
   card: Card;
   owned: number;
   inDeck: number;
+  /** Copies in owned decks; undefined outside the My Cards view. */
+  decked?: number;
   selected: boolean;
   onClick: () => void;
   onView?: () => void;
   onAdd?: () => void;
   onAddPlayset?: () => void;
+  playsetTitle: string;
   onRemove?: () => void;
 }
 
-function CardTile({ card, owned, inDeck, selected, onClick, onView, onAdd, onAddPlayset, onRemove }: TileProps) {
+function playsetTitle(target: 'deck' | 'collection'): string {
+  return target === 'collection'
+    ? `Add ${PLAYSET_SIZE} copies to My Cards`
+    : `Add playset (${PLAYSET_SIZE} copies)`;
+}
+
+function CardTile({ card, owned, inDeck, decked, selected, onClick, onView, onAdd, onAddPlayset, playsetTitle, onRemove }: TileProps) {
   const [hover, setHover] = useState(false);
   const hasImage = !!card.image_uri_normal;
   const tint = card.color_identity?.[0] ? getManaMeta(card.color_identity[0]) : null;
@@ -355,8 +398,30 @@ function CardTile({ card, owned, inDeck, selected, onClick, onView, onAdd, onAdd
             ×{inDeck}
           </span>
         )}
-        {owned > 0 && (
+        {!!decked && (
           <span
+            style={{
+              position: 'absolute',
+              top: 8,
+              left: 8,
+              padding: '2px 7px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              background: 'rgba(0,0,0,0.65)',
+              color: 'var(--accent)',
+              border: '1px solid var(--accent-line)',
+              borderRadius: 3,
+              fontVariantNumeric: 'tabular-nums',
+              backdropFilter: 'blur(4px)',
+            }}
+            title={`${decked} in owned decks`}
+          >
+            {decked} in decks
+          </span>
+        )}
+        {(owned > 0 || !!decked) && (
+          <span
+            title={decked !== undefined ? `${owned} not in a deck` : undefined}
             style={{
               position: 'absolute',
               top: 8,
@@ -365,7 +430,7 @@ function CardTile({ card, owned, inDeck, selected, onClick, onView, onAdd, onAdd
               fontFamily: 'var(--font-mono)',
               fontSize: 10,
               background: 'rgba(0,0,0,0.65)',
-              color: 'var(--text)',
+              color: owned > 0 ? 'var(--text)' : 'var(--text-mute)',
               border: '1px solid rgba(255,255,255,0.12)',
               borderRadius: 3,
               fontVariantNumeric: 'tabular-nums',
@@ -458,7 +523,7 @@ function CardTile({ card, owned, inDeck, selected, onClick, onView, onAdd, onAdd
               transition: 'opacity 120ms',
               backdropFilter: 'blur(6px)',
             }}
-            title={`Add playset (${PLAYSET_SIZE} copies)`}
+            title={playsetTitle}
           >
             +{PLAYSET_SIZE}
           </button>
@@ -598,7 +663,7 @@ function CardTile({ card, owned, inDeck, selected, onClick, onView, onAdd, onAdd
       >
         {card.oracle_text || '—'}
       </div>
-      {owned > 0 && (
+      {(owned > 0 || !!decked) && (
         <div
           style={{
             padding: '6px 10px',
@@ -606,12 +671,14 @@ function CardTile({ card, owned, inDeck, selected, onClick, onView, onAdd, onAdd
             background: 'var(--bg-panel)',
             display: 'flex',
             justifyContent: 'flex-end',
+            gap: 10,
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
             color: 'var(--text-dim)',
           }}
         >
-          ×{owned}
+          {!!decked && <span style={{ color: 'var(--accent)' }}>{decked} in decks</span>}
+          <span>×{owned}</span>
         </div>
       )}
       {removeControl}

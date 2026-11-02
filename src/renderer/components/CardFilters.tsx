@@ -146,11 +146,12 @@ function SetRow({
   );
 }
 
-function BlockHeader({ children }: { children: React.ReactNode }) {
+function BlockHeader({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div style={{ padding: '8px 8px 2px' }}>
+    <div style={{ padding: '8px 8px 2px', display: 'flex', alignItems: 'center', gap: 8 }}>
       <span
         style={{
+          flex: 1,
           fontFamily: 'var(--font-mono)',
           fontSize: 9,
           textTransform: 'uppercase',
@@ -161,7 +162,35 @@ function BlockHeader({ children }: { children: React.ReactNode }) {
       >
         {children}
       </span>
+      {action}
     </div>
+  );
+}
+
+function BlockToggle({ allSelected, blockName, onClick }: { allSelected: boolean; blockName: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`${allSelected ? 'Deselect' : 'Select'} all sets in ${blockName}`}
+      style={{
+        padding: 0,
+        background: 'transparent',
+        border: 'none',
+        color: 'var(--text-mute)',
+        fontFamily: 'var(--font-ui)',
+        fontSize: 10,
+        cursor: 'pointer',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.color = 'var(--accent)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.color = 'var(--text-mute)';
+      }}
+    >
+      {allSelected ? 'Deselect all' : 'Select all'}
+    </button>
   );
 }
 
@@ -254,6 +283,16 @@ export default function CardFilters({ filters, onUpdate }: Props) {
     onUpdate({ sets: next.length > 0 ? next : undefined });
   };
 
+  // Selects every set in a block, or clears them all when the block is
+  // already fully selected.
+  const toggleBlock = (codes: string[]) => {
+    const allSelected = codes.every((code) => activeSets.includes(code));
+    const next = allSelected
+      ? activeSets.filter((code) => !codes.includes(code))
+      : [...activeSets, ...codes.filter((code) => !activeSets.includes(code))];
+    onUpdate({ sets: next.length > 0 ? next : undefined });
+  };
+
   const sortedSets = useMemo(
     () => [...sets].sort((a, b) => b.releasedAt.localeCompare(a.releasedAt)),
     [sets],
@@ -265,6 +304,11 @@ export default function CardFilters({ filters, onUpdate }: Props) {
       (x) => !s || x.name.toLowerCase().includes(s) || x.code.toLowerCase().includes(s),
     );
   }, [sortedSets, setSearch]);
+
+  const selectedSets = useMemo(
+    () => sortedSets.filter((s) => activeSets.includes(s.code)),
+    [sortedSets, activeSets],
+  );
 
   const groupedEntries = useMemo(() => {
     if (setSearch) return null;
@@ -490,35 +534,56 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                       No sets found
                     </div>
                   ) : (
-                    groupedEntries.map((entry, idx) => {
-                      if (entry.kind === 'block') {
+                    <>
+                      {selectedSets.length > 0 && (
+                        <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 4, marginBottom: 4 }}>
+                          <BlockHeader>Selected</BlockHeader>
+                          {selectedSets.map((s) => (
+                            <SetRow key={s.code} s={s} checked onToggle={toggleSet} />
+                          ))}
+                        </div>
+                      )}
+                      {groupedEntries.map((entry, idx) => {
+                        if (entry.kind === 'block') {
+                          const codes = entry.group.sets.map((s) => s.code);
+                          return (
+                            <div key={`b-${entry.group.blockCode}`}>
+                              <BlockHeader
+                                action={
+                                  <BlockToggle
+                                    allSelected={codes.every((code) => activeSets.includes(code))}
+                                    blockName={entry.group.blockName}
+                                    onClick={() => toggleBlock(codes)}
+                                  />
+                                }
+                              >
+                                {entry.group.blockName}
+                              </BlockHeader>
+                              {entry.group.sets.map((s) => (
+                                <SetRow
+                                  key={s.code}
+                                  s={s}
+                                  checked={activeSets.includes(s.code)}
+                                  onToggle={toggleSet}
+                                />
+                              ))}
+                            </div>
+                          );
+                        }
+                        const prev = groupedEntries[idx - 1];
+                        const showHeader = !prev || prev.kind !== 'standalone';
                         return (
-                          <div key={`b-${entry.group.blockCode}`}>
-                            <BlockHeader>{entry.group.blockName}</BlockHeader>
-                            {entry.group.sets.map((s) => (
-                              <SetRow
-                                key={s.code}
-                                s={s}
-                                checked={activeSets.includes(s.code)}
-                                onToggle={toggleSet}
-                              />
-                            ))}
+                          <div key={`s-${entry.set.code}`}>
+                            {showHeader && <BlockHeader>Standalone</BlockHeader>}
+                            <SetRow
+                              s={entry.set}
+                              checked={activeSets.includes(entry.set.code)}
+                              onToggle={toggleSet}
+                            />
                           </div>
                         );
-                      }
-                      const prev = groupedEntries[idx - 1];
-                      const showHeader = !prev || prev.kind !== 'standalone';
-                      return (
-                        <div key={`s-${entry.set.code}`}>
-                          {showHeader && <BlockHeader>Standalone</BlockHeader>}
-                          <SetRow
-                            s={entry.set}
-                            checked={activeSets.includes(entry.set.code)}
-                            onToggle={toggleSet}
-                          />
-                        </div>
-                      );
-                    })
+                      })}
+                    </>
                   )
                 ) : filteredSets.length === 0 ? (
                   <div
