@@ -61,6 +61,8 @@ export interface Deck {
   has_unconfirmed_changes?: boolean;
   color_identity?: string[];
   set_group?: DeckSetGroup;
+  /** Edition filter the deck's card search starts with, derived from its cards. */
+  search_sets?: string[];
   tags?: Tag[];
 }
 
@@ -181,8 +183,6 @@ export interface ImportBackupResult {
   tagsImported: number;
   /** Cards from the backup that no longer exist in the local database; deck is null for collection entries. */
   missing: Array<{ deck: string | null; card: string; quantity: number }>;
-  /** Edition filters to restore into localStorage (empty sets = clear). Absent on cancel/error. */
-  filterSets?: Array<{ uuid: string; sets: string[] }>;
   canceled?: boolean;
   error?: string;
 }
@@ -352,7 +352,7 @@ export interface ElectronAPI {
   updateTag(id: number, updates: { name?: string; color?: string }): Promise<Tag>;
   deleteTag(id: number): Promise<void>;
   setDeckTags(deckId: number, tagIds: number[]): Promise<void>;
-  exportBackup(filterSetsByUuid?: Record<string, string[]>): Promise<ExportBackupResult>;
+  exportBackup(): Promise<ExportBackupResult>;
   importBackup(): Promise<ImportBackupResult>;
   previewBackupImport(): Promise<BackupPreviewResult>;
   applyBackupImport(backup: AppBackup, mode: BackupApplyMode): Promise<ImportBackupResult>;
@@ -380,7 +380,7 @@ export interface ElectronAPI {
   pickServiceAccountKey(): Promise<SheetSyncSettings>;
   getDriveSyncSettings(): Promise<DriveSyncSettings>;
   updateDriveSyncSettings(updates: { backupFileId?: string }): Promise<DriveSyncSettings>;
-  pushBackupToDrive(filterSetsByUuid?: Record<string, string[]>): Promise<DrivePushResult>;
+  pushBackupToDrive(): Promise<DrivePushResult>;
   pullBackupFromDrive(): Promise<DrivePullResult>;
   previewBackupFromDrive(): Promise<BackupPreviewResult>;
   applyBackupFromDrive(payload: DriveBackupApplyPayload): Promise<DrivePullResult>;

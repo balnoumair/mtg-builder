@@ -1,5 +1,5 @@
 import { isBasicLand } from './basicLands';
-import { isBlockSet } from './setOrdering';
+import { isBlockSet, type SetCatalogEntry } from './setOrdering';
 
 export interface DeckSetGroup {
   kind: 'block' | 'set' | 'mixed';
@@ -27,13 +27,17 @@ function cardBlockInfo(card: DeckCardSetInfo): { blockCode: string; blockName: s
   return { blockCode: card.block_code!, blockName: card.block_name! };
 }
 
-export function classifyDeckSetGroup(
-  cards: DeckCardSetInfo[],
-  blockSortKeys: Map<string, string>,
-  setReleaseDates: Map<string, string>,
-): DeckSetGroup {
+type DeckSetSource =
+  | { kind: 'block'; blockCode: string; blockName: string; card: DeckCardSetInfo; singleSet: boolean }
+  | { kind: 'set'; card: DeckCardSetInfo };
+
+/**
+ * The one block or set a deck's non-basic cards come from, or null when they
+ * span several (or the deck has none).
+ */
+function resolveDeckSetSource(cards: DeckCardSetInfo[]): DeckSetSource | null {
   const relevant = cards.filter((c) => !isBasicLand(c.name));
-  if (relevant.length === 0) return MIXED_DECK_SET_GROUP;
+  if (relevant.length === 0) return null;
 
   const setCodes = new Set(relevant.map((c) => c.set_code.toLowerCase()));
   const blockInfos = relevant.map(cardBlockInfo);
@@ -44,31 +48,54 @@ export function classifyDeckSetGroup(
   if (setCodes.size === 1) {
     const card = relevant[0];
     const block = cardBlockInfo(card);
-    if (block) {
-      return {
-        kind: 'block',
-        label: block.blockName,
-        sortKey: blockSortKeys.get(block.blockCode) ?? card.released_at,
-      };
-    }
-    return {
-      kind: 'set',
-      label: card.set_name,
-      sortKey: setReleaseDates.get(card.set_code.toLowerCase()) ?? card.released_at,
-    };
+    if (block) return { kind: 'block', ...block, card, singleSet: true };
+    return { kind: 'set', card };
   }
 
   if (uniqueBlocks.size === 1 && blockInfos.every(Boolean)) {
-    const blockCode = [...uniqueBlocks][0];
-    const blockName = blockInfos.find(Boolean)!.blockName;
-    return {
-      kind: 'block',
-      label: blockName,
-      sortKey: blockSortKeys.get(blockCode) ?? '',
-    };
+    return { kind: 'block', ...blockInfos[0]!, card: relevant[0], singleSet: false };
   }
 
-  return MIXED_DECK_SET_GROUP;
+  return null;
+}
+
+export function classifyDeckSetGroup(
+  cards: DeckCardSetInfo[],
+  blockSortKeys: Map<string, string>,
+  setReleaseDates: Map<string, string>,
+): DeckSetGroup {
+  const source = resolveDeckSetSource(cards);
+  if (!source) return MIXED_DECK_SET_GROUP;
+
+  if (source.kind === 'block') {
+    return {
+      kind: 'block',
+      label: source.blockName,
+      sortKey: blockSortKeys.get(source.blockCode) ?? (source.singleSet ? source.card.released_at : ''),
+    };
+  }
+  return {
+    kind: 'set',
+    label: source.card.set_name,
+    sortKey: setReleaseDates.get(source.card.set_code.toLowerCase()) ?? source.card.released_at,
+  };
+}
+
+/**
+ * Edition filter a deck's card search starts with: every set in the deck's
+ * block, or its one standalone set. Mixed and empty decks get no filter.
+ */
+export function deckSearchSetCodes(cards: DeckCardSetInfo[], catalog: SetCatalogEntry[]): string[] {
+  const source = resolveDeckSetSource(cards);
+  if (!source) return [];
+  if (source.kind === 'set') return [source.card.set_code];
+
+  const blockSets = catalog
+    .filter((s) => isBlockSet(s) && s.blockCode === source.blockCode)
+    .map((s) => s.code);
+  return blockSets.length > 0
+    ? blockSets
+    : [...new Set(cards.filter((c) => !isBasicLand(c.name)).map((c) => c.set_code))];
 }
 
 export interface DeckWithSetGroup {

@@ -11,13 +11,12 @@ export const DEFAULT_CARD_FILTERS: CardFilters = {
 
 interface Options {
   getInitialFilters?: () => Partial<CardFilters>;
-  onSetsChange?: (sets: CardFilters['sets']) => void;
   resetKey?: number | string;
   enabled?: boolean;
 }
 
 export function useInfiniteCardSearch(options: Options = {}) {
-  const { getInitialFilters, onSetsChange, resetKey, enabled = true } = options;
+  const { getInitialFilters, resetKey, enabled = true } = options;
 
   const [filters, setFilters] = useState<CardFilters>(() => ({
     ...DEFAULT_CARD_FILTERS,
@@ -74,10 +73,6 @@ export function useInfiniteCardSearch(options: Options = {}) {
     setLoading(true);
     setFilters({ ...DEFAULT_CARD_FILTERS, ...getInitialFilters?.() });
   }, [resetKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    onSetsChange?.(filters.sets);
-  }, [filters.sets, onSetsChange]);
 
   useEffect(() => {
     if (!enabled) return;

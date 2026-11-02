@@ -77,10 +77,10 @@ export function registerIpcHandlers(): void {
     return deckQueries.getDecks(getDb());
   });
 
-  ipcMain.handle('backup:export', async (event, filterSetsByUuid: Record<string, string[]> = {}) => {
+  ipcMain.handle('backup:export', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return { saved: false };
-    const backup = exportBackup(getDb(), filterSetsByUuid);
+    const backup = exportBackup(getDb());
     if (backup.decks.length === 0 && backup.collection.length === 0) {
       return { saved: false, error: 'Nothing to back up' };
     }
@@ -106,7 +106,6 @@ export function registerIpcHandlers(): void {
         collectionCards: 0,
         tagsImported: 0,
         missing: [],
-        filterSets: [],
       };
     }
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
@@ -120,7 +119,6 @@ export function registerIpcHandlers(): void {
         collectionCards: 0,
         tagsImported: 0,
         missing: [],
-        filterSets: [],
         canceled: true,
       };
     }
@@ -134,7 +132,6 @@ export function registerIpcHandlers(): void {
         collectionCards: 0,
         tagsImported: 0,
         missing: [],
-        filterSets: [],
         error: err instanceof Error ? err.message : String(err),
       };
     }
@@ -169,8 +166,7 @@ export function registerIpcHandlers(): void {
           collectionCards: 0,
           tagsImported: 0,
           missing: [],
-          filterSets: [],
-          error: err instanceof Error ? err.message : String(err),
+            error: err instanceof Error ? err.message : String(err),
         };
       }
     },
@@ -331,9 +327,9 @@ export function registerIpcHandlers(): void {
     return settingsQueries.getDriveSyncSettings(db);
   });
 
-  ipcMain.handle('drive:pushBackup', async (_event, filterSetsByUuid: Record<string, string[]> = {}) => {
+  ipcMain.handle('drive:pushBackup', async () => {
     try {
-      return await pushBackupToDrive(getDb(), filterSetsByUuid);
+      return await pushBackupToDrive(getDb());
     } catch (err) {
       return {
         pushed: false,
@@ -352,7 +348,6 @@ export function registerIpcHandlers(): void {
         collectionCards: 0,
         tagsImported: 0,
         missing: [],
-        filterSets: [],
         error: err instanceof Error ? err.message : String(err),
       };
     }
@@ -376,7 +371,6 @@ export function registerIpcHandlers(): void {
         collectionCards: 0,
         tagsImported: 0,
         missing: [],
-        filterSets: [],
         error: err instanceof Error ? err.message : String(err),
       };
     }

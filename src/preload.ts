@@ -34,8 +34,7 @@ const api: ElectronAPI = {
   updateTag: (id: number, updates: { name?: string; color?: string }) => ipcRenderer.invoke('tags:update', id, updates),
   deleteTag: (id: number) => ipcRenderer.invoke('tags:delete', id),
   setDeckTags: (deckId: number, tagIds: number[]) => ipcRenderer.invoke('decks:setTags', deckId, tagIds),
-  exportBackup: (filterSetsByUuid?: Record<string, string[]>) =>
-    ipcRenderer.invoke('backup:export', filterSetsByUuid ?? {}),
+  exportBackup: () => ipcRenderer.invoke('backup:export'),
   importBackup: () => ipcRenderer.invoke('backup:import'),
   previewBackupImport: (): Promise<BackupPreviewResult> => ipcRenderer.invoke('backup:preview'),
   applyBackupImport: (backup: AppBackup, mode: BackupApplyMode) =>
@@ -66,8 +65,7 @@ const api: ElectronAPI = {
   getDriveSyncSettings: (): Promise<DriveSyncSettings> => ipcRenderer.invoke('drive:getSettings'),
   updateDriveSyncSettings: (updates: { backupFileId?: string }): Promise<DriveSyncSettings> =>
     ipcRenderer.invoke('drive:updateSettings', updates),
-  pushBackupToDrive: (filterSetsByUuid?: Record<string, string[]>): Promise<DrivePushResult> =>
-    ipcRenderer.invoke('drive:pushBackup', filterSetsByUuid ?? {}),
+  pushBackupToDrive: (): Promise<DrivePushResult> => ipcRenderer.invoke('drive:pushBackup'),
   pullBackupFromDrive: (): Promise<DrivePullResult> => ipcRenderer.invoke('drive:pullBackup'),
   previewBackupFromDrive: (): Promise<BackupPreviewResult> => ipcRenderer.invoke('drive:previewPull'),
   applyBackupFromDrive: (payload: DriveBackupApplyPayload): Promise<DrivePullResult> =>
