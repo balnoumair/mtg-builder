@@ -4,12 +4,16 @@ import {
   addToCollection,
   getCollection,
   getCollectionQuantities,
+  getInDeckQuantities,
   updateCollectionQuantity,
   removeFromCollection,
   getCollectionStats,
 } from '../collection';
 import { addCardToDeck, claimDeckFromCollection, createDeck } from '../decks';
 import { createTestDb, insertTestCard } from './helpers';
+import { BASIC_LAND_NAMES } from '../../../shared/basicLands';
+
+const basicLandName = [...BASIC_LAND_NAMES][0];
 
 let db: Database.Database;
 
@@ -166,6 +170,43 @@ describe('getCollection', () => {
     addCardToDeck(db, owned.id, pending, 'main', 1);
 
     expect(getCollection(db, {}).total).toBe(0);
+  });
+
+  it('leaves out basic lands held only in decks but keeps loose basics', () => {
+    const deckBasic = insertTestCard(db, { name: basicLandName });
+    const looseBasic = insertTestCard(db, { name: basicLandName });
+    addToCollection(db, looseBasic, 1);
+    const deck = createDeck(db, { name: 'Owned' });
+    addCardToDeck(db, deck.id, deckBasic, 'main', 17);
+    claimDeckFromCollection(db, deck.id);
+
+    const result = getCollection(db, {});
+    expect(result.cards.map((cc) => cc.card_id)).toEqual([looseBasic]);
+    expect(result.cards[0].in_decks).toBe(0);
+    expect(getCollectionStats(db).inDeckCopies).toBe(0);
+  });
+});
+
+describe('getInDeckQuantities', () => {
+  it('sums copies across owned decks, skipping unowned decks and basic lands', () => {
+    const shared = insertTestCard(db);
+    const planned = insertTestCard(db);
+    const basic = insertTestCard(db, { name: basicLandName });
+    const first = createDeck(db, { name: 'First' });
+    const second = createDeck(db, { name: 'Second' });
+    addCardToDeck(db, first.id, shared, 'main', 2);
+    addCardToDeck(db, first.id, basic, 'main', 10);
+    addCardToDeck(db, second.id, shared, 'sideboard', 1);
+    claimDeckFromCollection(db, first.id);
+    claimDeckFromCollection(db, second.id);
+    const unowned = createDeck(db, { name: 'Unowned' });
+    addCardToDeck(db, unowned.id, planned, 'main', 4);
+
+    expect(getInDeckQuantities(db, [shared, planned, basic])).toEqual({ [shared]: 3 });
+  });
+
+  it('returns an empty map for no ids', () => {
+    expect(getInDeckQuantities(db, [])).toEqual({});
   });
 });
 

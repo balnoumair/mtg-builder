@@ -4,7 +4,7 @@ import { useCardDetail } from '../hooks/useCards';
 import { useDeckEditorCards } from '../hooks/useDeckEditorCards';
 import { useInfiniteScrollSentinel } from '../hooks/useInfiniteScrollSentinel';
 import { useDeckCards } from '../hooks/useDecks';
-import { useCollectionLookup, useCollectionActions } from '../hooks/useCollection';
+import { useCollectionLookup, useInDeckLookup, useCollectionActions } from '../hooks/useCollection';
 import { getCardTypeCategory, TYPE_ORDER, CMC_GROUP_ORDER, getCmcGroup, getManaMeta } from '../lib/mana';
 import { getMaxCopies, PLAYSET_SIZE } from '../../shared/deckLimits';
 import CardFilters from './CardFilters';
@@ -136,6 +136,7 @@ export default function DeckEditor({
 
   const searchCardIds = useMemo(() => searchCards.map((c) => c.id), [searchCards]);
   const searchOwnedQtys = useCollectionLookup(searchCardIds, colVersion);
+  const searchInDecksQtys = useInDeckLookup(searchCardIds, colVersion);
 
   const deckCardIds = useMemo(() => deckCards.map((c) => c.card_id), [deckCards]);
   const deckOwnedQtys = useCollectionLookup(deckCardIds, colVersion);
@@ -487,6 +488,7 @@ export default function DeckEditor({
                   selectedId={selectedCardId}
                   deckQuantities={searchDeckQtys}
                   ownedQuantities={searchOwnedQtys}
+                  inDecksQuantities={searchInDecksQtys}
                   onCardClick={handleSearchCardAdd}
                   onViewCard={handleSearchCardClick}
                   onAddPlayset={handleAddPlayset}

@@ -74,6 +74,22 @@ export function useCollectionLookup(cardIds: string[], version = 0) {
   return quantities;
 }
 
+/** Copies of each card held in owned decks, for showing total ownership. */
+export function useInDeckLookup(cardIds: string[], version = 0) {
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const idsKey = cardIds.join(',');
+
+  useEffect(() => {
+    if (cardIds.length === 0) {
+      setQuantities({});
+      return;
+    }
+    window.electronAPI.getInDeckQuantities(cardIds).then(setQuantities).catch(console.error);
+  }, [idsKey, version]);
+
+  return quantities;
+}
+
 export function useCollectionActions(onChanged?: () => void) {
   const addToCollection = useCallback(async (cardId: string, quantity?: number) => {
     await window.electronAPI.addToCollection(cardId, quantity);

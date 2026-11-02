@@ -24,6 +24,7 @@ const createElectronApiMock = (): ElectronAPI => ({
   claimDeckFromCollection: vi.fn(),
   getCollection: vi.fn(),
   getCollectionQuantities: vi.fn(),
+  getInDeckQuantities: vi.fn(),
   addToCollection: vi.fn(),
   updateCollectionQuantity: vi.fn(),
   removeFromCollection: vi.fn(),

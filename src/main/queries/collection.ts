@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { Card, CardFilters, CollectionCard, CollectionStats } from '../../shared/types';
 import { buildSearchConditions } from './searchQuery';
+import { BASIC_LAND_NAMES } from '../../shared/basicLands';
 
 export function rowToCard(row: Record<string, unknown>): Card {
   return {
@@ -22,19 +23,29 @@ function rowToCollectionCard(row: Record<string, unknown>): CollectionCard {
   };
 }
 
+// Confirmed copies sitting in owned decks, per card. Pending (unconfirmed)
+// deck edits are excluded: owned_quantity is the physical baseline. Basic
+// lands are left out: every deck carries a pile of them, and counting those
+// would flood My Cards with lands the user never tracked as cards.
+const BASIC_NAMES_SQL = [...BASIC_LAND_NAMES].map((n) => `'${n}'`).join(', ');
+const IN_DECKS_SQL = `
+  SELECT dc.card_id, dc.owned_quantity AS in_decks
+  FROM deck_cards dc
+  JOIN decks d ON d.id = dc.deck_id
+  JOIN cards bc ON bc.id = dc.card_id
+  WHERE d.owned = 1 AND dc.owned_quantity > 0 AND bc.name NOT IN (${BASIC_NAMES_SQL})
+`;
+
 // Everything the user owns, per card: loose copies in the collection plus
-// confirmed copies sitting in owned decks. Claiming a deck deducts its cards
-// from the collection, so the two never overlap. Pending (unconfirmed) deck
-// edits are excluded: owned_quantity is the physical baseline.
+// copies in owned decks. Claiming a deck deducts its cards from the
+// collection, so the two never overlap.
 const HOLDINGS_CTE = `
   WITH holdings AS (
     SELECT card_id, SUM(loose) AS quantity, SUM(in_decks) AS in_decks, MAX(added_at) AS added_at
     FROM (
       SELECT card_id, quantity AS loose, 0 AS in_decks, added_at FROM collection
       UNION ALL
-      SELECT dc.card_id, 0, dc.owned_quantity, NULL
-      FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
-      WHERE d.owned = 1 AND dc.owned_quantity > 0
+      SELECT card_id, 0, in_decks, NULL FROM (${IN_DECKS_SQL})
     )
     GROUP BY card_id
   )
@@ -187,6 +198,31 @@ export function getCollectionQuantities(
   const result: Record<string, number> = {};
   for (const row of rows) {
     result[row.card_id] = row.quantity;
+  }
+  return result;
+}
+
+/** Copies of each card held in owned decks, keyed by card id; absent when none. */
+export function getInDeckQuantities(
+  db: Database.Database,
+  cardIds: string[]
+): Record<string, number> {
+  if (cardIds.length === 0) return {};
+
+  const placeholders = cardIds.map((_, i) => `@id${i}`).join(',');
+  const params: Record<string, string> = {};
+  cardIds.forEach((id, i) => { params[`id${i}`] = id; });
+
+  const rows = db.prepare(`
+    SELECT card_id, SUM(in_decks) AS in_decks
+    FROM (${IN_DECKS_SQL})
+    WHERE card_id IN (${placeholders})
+    GROUP BY card_id
+  `).all(params) as { card_id: string; in_decks: number }[];
+
+  const result: Record<string, number> = {};
+  for (const row of rows) {
+    result[row.card_id] = row.in_decks;
   }
   return result;
 }
