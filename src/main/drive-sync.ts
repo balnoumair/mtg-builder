@@ -115,11 +115,8 @@ async function getBackupFile(token: string, fileId: string): Promise<DriveFile> 
   return file as DriveFile;
 }
 
-export async function pushBackupToDrive(
-  db: Database.Database,
-  filterSetsByUuid: Record<string, string[]> = {},
-): Promise<DrivePushResult> {
-  const backup = exportBackup(db, filterSetsByUuid);
+export async function pushBackupToDrive(db: Database.Database): Promise<DrivePushResult> {
+  const backup = exportBackup(db);
   if (backup.decks.length === 0 && backup.collection.length === 0) {
     throw new Error('Nothing to back up');
   }

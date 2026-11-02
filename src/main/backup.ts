@@ -39,25 +39,9 @@ export interface BackupImportSummary {
   tagsImported: number;
   /** Cards that no longer exist in the local database; deck is null for collection entries. */
   missing: Array<{ deck: string | null; card: string; quantity: number }>;
-  /**
-   * Edition filters to write into localStorage after import, keyed by deck uuid.
-   * Every backed-up deck with a uuid is listed; an empty `sets` array means clear.
-   */
-  filterSets: Array<{ uuid: string; sets: string[] }>;
 }
 
-function normalizeFilterSets(value: unknown): string[] | undefined {
-  if (value === undefined) return undefined;
-  if (!Array.isArray(value) || !value.every((s) => typeof s === 'string' && s.length > 0)) {
-    throw new Error('filter_sets must be an array of non-empty strings');
-  }
-  return value.length > 0 ? [...value] : undefined;
-}
-
-export function exportBackup(
-  db: Database.Database,
-  filterSetsByUuid: Record<string, string[]> = {},
-): AppBackup {
+export function exportBackup(db: Database.Database): AppBackup {
   const deckRows = db.prepare(
     'SELECT id, uuid, name, format, description, owned, cover_card_id FROM decks ORDER BY name'
   ).all() as Array<{
@@ -99,7 +83,6 @@ export function exportBackup(
     exported_at: new Date().toISOString(),
     ...(tags.length > 0 ? { tags } : {}),
     decks: deckRows.map((deck) => {
-      const filter_sets = normalizeFilterSets(filterSetsByUuid[deck.uuid]);
       const deckTags = (deckTagsStmt.all(deck.id) as { uuid: string }[]).map((t) => t.uuid);
       return {
         uuid: deck.uuid,
@@ -110,7 +93,6 @@ export function exportBackup(
         cover: deck.cover_card_id
           ? (coverStmt.get(deck.cover_card_id) as BackupDeck['cover']) ?? null
           : null,
-        ...(filter_sets ? { filter_sets } : {}),
         ...(deckTags.length > 0 ? { tags: deckTags } : {}),
         cards: (cardsStmt.all(deck.id) as Required<BackupDeckCard>[]).map(
           ({ ignore_color_identity, ...card }) =>
@@ -192,11 +174,6 @@ function validateBackup(parsed: unknown): AppBackup {
     }
     if (!Array.isArray(deck.cards) || !deck.cards.every(isBackupDeckCard)) {
       throw new Error(`Deck "${deck.name}" has invalid card entries`);
-    }
-    try {
-      deck.filter_sets = normalizeFilterSets(deck.filter_sets);
-    } catch {
-      throw new Error(`Deck "${deck.name}" has invalid filter_sets`);
     }
     try {
       deck.tags = normalizeDeckTags(deck.tags);
@@ -382,7 +359,6 @@ export function importBackup(
   );
 
   const missing: BackupImportSummary['missing'] = [];
-  const filterSets: BackupImportSummary['filterSets'] = [];
   let collectionCards = 0;
   let decksImported = 0;
   let decksUpdated = 0;
@@ -426,10 +402,6 @@ export function importBackup(
 
     for (const deck of backup.decks) {
       const uuid = typeof deck.uuid === 'string' && deck.uuid ? deck.uuid : randomUUID();
-      if (typeof deck.uuid === 'string' && deck.uuid) {
-        filterSets.push({ uuid, sets: deck.filter_sets ?? [] });
-      }
-
       const name = deck.name;
       const format = typeof deck.format === 'string' ? deck.format : '';
       const description = typeof deck.description === 'string' ? deck.description : '';
@@ -505,5 +477,5 @@ export function importBackup(
   });
   run();
 
-  return { decksImported, decksUpdated, collectionCards, tagsImported, missing, filterSets };
+  return { decksImported, decksUpdated, collectionCards, tagsImported, missing };
 }

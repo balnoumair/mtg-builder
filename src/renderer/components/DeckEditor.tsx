@@ -70,7 +70,7 @@ export default function DeckEditor({
     refresh: refreshDeckCards,
   } = useDeckCards(deckId);
   const { filters, updateFilters, cards: searchCards, total: searchTotal, loading, loadingMore, hasMore, loadMore } =
-    useDeckEditorCards(deckId, { enabled: active });
+    useDeckEditorCards(deckId, { enabled: active, deck });
   const { card: detailCard, open: detailOpen, showCard, close: closeDetail } = useCardDetail();
   const [activeBoard, setActiveBoard] = useState<'main' | 'sideboard'>('main');
   const [deckView, setDeckView] = useState<'list' | 'visual'>('visual');

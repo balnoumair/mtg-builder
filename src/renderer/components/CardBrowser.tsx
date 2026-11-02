@@ -8,6 +8,7 @@ import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
 import ViewToggle from './ViewToggle';
 import InfiniteScrollFooter from './InfiniteScrollFooter';
+import { PLAYSET_SIZE } from '../../shared/deckLimits';
 
 interface Props {
   onCollectionChanged?: () => void;
@@ -30,6 +31,7 @@ export default function CardBrowser({ onCollectionChanged }: Props) {
   const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refreshCol);
 
   const handleAddToCollection = useCallback((c: Card) => addToCollection(c.id), [addToCollection]);
+  const handleAddPlayset = useCallback((c: Card) => addToCollection(c.id, PLAYSET_SIZE), [addToCollection]);
 
   const sentinelRef = useInfiniteScrollSentinel(scrollRef, {
     hasMore,
@@ -125,6 +127,8 @@ export default function CardBrowser({ onCollectionChanged }: Props) {
           loading={loading}
           onCardClick={showCard}
           ownedQuantities={ownedQuantities}
+          onAddPlayset={handleAddPlayset}
+          playsetTarget="collection"
           view={viewMode}
         />
         <div ref={sentinelRef} style={{ height: 1 }} />

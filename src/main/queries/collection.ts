@@ -16,10 +16,29 @@ function rowToCollectionCard(row: Record<string, unknown>): CollectionCard {
   return {
     card_id: row.card_id as string,
     quantity: row.quantity as number,
-    added_at: row.added_at as string,
+    in_decks: row.in_decks as number,
+    added_at: (row.added_at as string | null) ?? null,
     card: rowToCard(row),
   };
 }
+
+// Everything the user owns, per card: loose copies in the collection plus
+// confirmed copies sitting in owned decks. Claiming a deck deducts its cards
+// from the collection, so the two never overlap. Pending (unconfirmed) deck
+// edits are excluded: owned_quantity is the physical baseline.
+const HOLDINGS_CTE = `
+  WITH holdings AS (
+    SELECT card_id, SUM(loose) AS quantity, SUM(in_decks) AS in_decks, MAX(added_at) AS added_at
+    FROM (
+      SELECT card_id, quantity AS loose, 0 AS in_decks, added_at FROM collection
+      UNION ALL
+      SELECT dc.card_id, 0, dc.owned_quantity, NULL
+      FROM deck_cards dc JOIN decks d ON d.id = dc.deck_id
+      WHERE d.owned = 1 AND dc.owned_quantity > 0
+    )
+    GROUP BY card_id
+  )
+`;
 
 export function getCollection(
   db: Database.Database,
@@ -128,10 +147,11 @@ export function getCollection(
   const validSorts = ['name', 'cmc', 'rarity', 'released_at'];
   const sort = validSorts.includes(sortColumn) ? sortColumn : 'name';
 
-  const countSql = `SELECT COUNT(*) as total FROM collection col JOIN cards c ON c.id = col.card_id ${whereClause}`;
+  const countSql = `${HOLDINGS_CTE} SELECT COUNT(*) as total FROM holdings col JOIN cards c ON c.id = col.card_id ${whereClause}`;
   const dataSql = `
-    SELECT col.card_id, col.quantity, col.added_at, c.*
-    FROM collection col
+    ${HOLDINGS_CTE}
+    SELECT c.*, col.card_id, col.quantity, col.in_decks, col.added_at
+    FROM holdings col
     JOIN cards c ON c.id = col.card_id
     ${whereClause}
     ORDER BY c.${sort} ASC
@@ -204,9 +224,11 @@ export function removeFromCollection(
 
 export function getCollectionStats(db: Database.Database): CollectionStats {
   return db.prepare(`
+    ${HOLDINGS_CTE}
     SELECT
       COUNT(*) as uniqueCards,
-      COALESCE(SUM(quantity), 0) as totalCopies
-    FROM collection
+      COALESCE(SUM(quantity), 0) as totalCopies,
+      COALESCE(SUM(in_decks), 0) as inDeckCopies
+    FROM holdings
   `).get() as CollectionStats;
 }

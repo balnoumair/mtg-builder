@@ -103,6 +103,19 @@ describe('getDecks', () => {
     expect(getDecks(db).find((d) => d.id === owned.id)?.has_unconfirmed_changes).toBe(false);
   });
 
+  it('derives search sets from the whole block a deck draws from', () => {
+    insertTestSet(db, { code: 'bk1', name: 'Block One', released_at: '2020-01-01', block_code: 'blk', block_name: 'Test Block' });
+    insertTestSet(db, { code: 'bk2', name: 'Block Two', released_at: '2020-06-01', block_code: 'blk', block_name: 'Test Block' });
+    insertTestSet(db, { code: 'solo', name: 'Solo', released_at: '2021-01-01' });
+    const blockDeck = createDeck(db, { name: 'Block' });
+    addCardToDeck(db, blockDeck.id, insertTestCard(db, { set_code: 'bk1', block_code: 'blk', block_name: 'Test Block' }), 'main');
+    const emptyDeck = createDeck(db, { name: 'Empty' });
+
+    const decks = getDecks(db);
+    expect(decks.find((d) => d.id === blockDeck.id)?.search_sets?.sort()).toEqual(['bk1', 'bk2']);
+    expect(decks.find((d) => d.id === emptyDeck.id)?.search_sets).toEqual([]);
+  });
+
   it('aggregates main-board color identity in WUBRG order', () => {
     const deck = createDeck(db, { name: 'Colors' });
     const red = insertTestCard(db, { color_identity: ['R'] });

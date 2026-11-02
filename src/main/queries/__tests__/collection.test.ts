@@ -8,6 +8,7 @@ import {
   removeFromCollection,
   getCollectionStats,
 } from '../collection';
+import { addCardToDeck, claimDeckFromCollection, createDeck } from '../decks';
 import { createTestDb, insertTestCard } from './helpers';
 
 let db: Database.Database;
@@ -127,6 +128,45 @@ describe('getCollection', () => {
     expect(page1.cards).toHaveLength(2);
     expect(page2.cards).toHaveLength(1);
   });
+
+  it('reports loose copies and copies held in owned decks separately', () => {
+    const cardId = insertTestCard(db, { name: 'Split Card' });
+    addToCollection(db, cardId, 5);
+    const deck = createDeck(db, { name: 'Owned' });
+    addCardToDeck(db, deck.id, cardId, 'main', 3);
+    claimDeckFromCollection(db, deck.id);
+
+    const result = getCollection(db, {});
+    expect(result.cards).toHaveLength(1);
+    expect(result.cards[0].quantity).toBe(2);
+    expect(result.cards[0].in_decks).toBe(3);
+  });
+
+  it('lists cards held only in owned decks with zero loose copies', () => {
+    const cardId = insertTestCard(db, { name: 'Deck Only' });
+    const deck = createDeck(db, { name: 'Owned' });
+    addCardToDeck(db, deck.id, cardId, 'main', 2);
+    claimDeckFromCollection(db, deck.id);
+
+    const result = getCollection(db, {});
+    expect(result.total).toBe(1);
+    expect(result.cards[0].card.name).toBe('Deck Only');
+    expect(result.cards[0].quantity).toBe(0);
+    expect(result.cards[0].in_decks).toBe(2);
+    expect(result.cards[0].added_at).toBeNull();
+  });
+
+  it('ignores unowned decks and unconfirmed additions to owned decks', () => {
+    const planned = insertTestCard(db, { name: 'Planned' });
+    const pending = insertTestCard(db, { name: 'Pending' });
+    const unowned = createDeck(db, { name: 'Unowned' });
+    addCardToDeck(db, unowned.id, planned, 'main', 4);
+    const owned = createDeck(db, { name: 'Owned' });
+    claimDeckFromCollection(db, owned.id);
+    addCardToDeck(db, owned.id, pending, 'main', 1);
+
+    expect(getCollection(db, {}).total).toBe(0);
+  });
 });
 
 describe('getCollectionQuantities', () => {
@@ -201,6 +241,22 @@ describe('getCollectionStats', () => {
     const stats = getCollectionStats(db);
     expect(stats.uniqueCards).toBe(0);
     expect(stats.totalCopies).toBe(0);
+    expect(stats.inDeckCopies).toBe(0);
+  });
+
+  it('counts copies in owned decks apart from loose copies', () => {
+    const shared = insertTestCard(db);
+    const deckOnly = insertTestCard(db);
+    addToCollection(db, shared, 4);
+    const deck = createDeck(db, { name: 'Owned' });
+    addCardToDeck(db, deck.id, shared, 'main', 1);
+    addCardToDeck(db, deck.id, deckOnly, 'sideboard', 2);
+    claimDeckFromCollection(db, deck.id);
+
+    const stats = getCollectionStats(db);
+    expect(stats.uniqueCards).toBe(2);
+    expect(stats.totalCopies).toBe(3);
+    expect(stats.inDeckCopies).toBe(3);
   });
 
   it('counts unique cards and total copies correctly', () => {

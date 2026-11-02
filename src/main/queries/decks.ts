@@ -4,6 +4,7 @@ import type { Deck, DeckCard } from '../../shared/types';
 import { addToCollection } from './collection';
 import {
   classifyDeckSetGroup,
+  deckSearchSetCodes,
   type DeckCardSetInfo,
   type DeckSetGroup,
   MIXED_DECK_SET_GROUP,
@@ -76,7 +77,9 @@ function loadSetCatalog(db: Database.Database): SetCatalogEntry[] {
   }));
 }
 
-function getDeckSetGroups(db: Database.Database): Map<number, DeckSetGroup> {
+function getDeckSetGroups(
+  db: Database.Database,
+): Map<number, { group: DeckSetGroup; searchSets: string[] }> {
   const catalog = loadSetCatalog(db);
   const blockSortKeys = buildBlockSortKeys(catalog);
   const setReleaseDates = buildSetReleaseDates(catalog);
@@ -101,9 +104,12 @@ function getDeckSetGroups(db: Database.Database): Map<number, DeckSetGroup> {
     });
   }
 
-  const result = new Map<number, DeckSetGroup>();
+  const result = new Map<number, { group: DeckSetGroup; searchSets: string[] }>();
   for (const [deckId, cards] of byDeck) {
-    result.set(deckId, classifyDeckSetGroup(cards, blockSortKeys, setReleaseDates));
+    result.set(deckId, {
+      group: classifyDeckSetGroup(cards, blockSortKeys, setReleaseDates),
+      searchSets: deckSearchSetCodes(cards, catalog),
+    });
   }
   return result;
 }
@@ -131,7 +137,8 @@ export function getDecks(db: Database.Database): Deck[] {
     owned: !!r.owned,
     has_unconfirmed_changes: !!r.has_unconfirmed_changes,
     color_identity: colorIdentities.get(r.id) ?? [],
-    set_group: setGroups.get(r.id) ?? MIXED_DECK_SET_GROUP,
+    set_group: setGroups.get(r.id)?.group ?? MIXED_DECK_SET_GROUP,
+    search_sets: setGroups.get(r.id)?.searchSets ?? [],
     tags: tagsByDeck.get(r.id) ?? [],
   }));
 }

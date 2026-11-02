@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   classifyDeckSetGroup,
+  deckSearchSetCodes,
   groupDecksBySetGroup,
   MIXED_DECK_SET_GROUP,
   type DeckCardSetInfo,
@@ -148,5 +149,33 @@ describe('buildSetDropdownEntries', () => {
     if (entries[0].kind === 'standalone') {
       expect(entries[0].set.code).toBe('mkm');
     }
+  });
+});
+
+describe('deckSearchSetCodes', () => {
+  const blockCard = (name: string, set_code: string) =>
+    card({ name, set_code, set_name: set_code, block_code: 'innistrad', block_name: 'Innistrad' });
+
+  it('selects every set in the block, including ones the deck does not use', () => {
+    expect(deckSearchSetCodes([blockCard('A', 'isd')], catalog).sort()).toEqual(['avr', 'dka', 'isd']);
+    expect(deckSearchSetCodes([blockCard('A', 'isd'), blockCard('B', 'dka')], catalog).sort())
+      .toEqual(['avr', 'dka', 'isd']);
+  });
+
+  it('selects just the set for a standalone single-set deck, ignoring basic lands', () => {
+    expect(deckSearchSetCodes([
+      card({ name: 'Card', set_code: 'mkm', set_name: 'Murders at Karlov Manor' }),
+      card({ name: 'Forest', set_code: 'm21', set_name: 'Core Set 2021' }),
+    ], catalog)).toEqual(['mkm']);
+  });
+
+  it('selects nothing for mixed, empty, and basic-only decks', () => {
+    expect(deckSearchSetCodes([
+      blockCard('A', 'isd'),
+      card({ name: 'B', set_code: 'mkm', set_name: 'Murders at Karlov Manor' }),
+    ], catalog)).toEqual([]);
+    expect(deckSearchSetCodes([], catalog)).toEqual([]);
+    expect(deckSearchSetCodes([card({ name: 'Plains', set_code: 'm21', set_name: 'Core Set 2021' })], catalog))
+      .toEqual([]);
   });
 });

@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { AppBackup, BackupApplyMode, BackupPreview } from '../../shared/backup';
 import type { ImportProgress } from '../../shared/types';
-import {
-  applyDeckSetsFiltersFromBackup,
-  collectDeckSetsFiltersForBackup,
-  clearDeckSetsFilters,
-} from '../lib/deckFilterStorage';
 import DriveBackupSection from './DriveBackupSection';
 import SheetSyncSection from './SheetSyncSection';
 import BackupPreviewView from './BackupPreview';
@@ -39,9 +34,7 @@ export default function ImportScreen({
   const [backupBusy, setBackupBusy] = useState(false);
 
   const handleBackup = async () => {
-    const decks = await window.electronAPI.getDecks();
-    const filterSetsByUuid = collectDeckSetsFiltersForBackup(decks);
-    const result = await window.electronAPI.exportBackup(filterSetsByUuid);
+    const result = await window.electronAPI.exportBackup();
     if (result.error) setBackupStatus(`Backup failed: ${result.error}`);
     else if (result.saved) setBackupStatus(`Backup saved to ${result.path}`);
   };
@@ -67,16 +60,10 @@ export default function ImportScreen({
     setBackupBusy(true);
     setBackupStatus(null);
     try {
-      const localDecks = mode === 'replace' ? await window.electronAPI.getDecks() : [];
       const result = await window.electronAPI.applyBackupImport(pendingBackup, mode);
       if (result.error) {
         setBackupStatus(`Import failed: ${result.error}`);
         return;
-      }
-      if (mode === 'replace') clearDeckSetsFilters(localDecks);
-      if (result.filterSets?.length) {
-        const decks = await window.electronAPI.getDecks();
-        applyDeckSetsFiltersFromBackup(result.filterSets, decks);
       }
       onBackupImported?.();
       const parts: string[] = [];

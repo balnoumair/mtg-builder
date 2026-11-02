@@ -18,7 +18,6 @@ export interface BackupDeck {
   description: string;
   owned: number;
   cover: { oracle_id: string; set_code: string } | null;
-  filter_sets?: string[];
   tags?: string[];
   cards: BackupDeckCard[];
 }

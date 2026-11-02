@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AppBackup, BackupApplyMode, BackupPreview } from '../../shared/backup';
 import type { DriveSyncSettings } from '../../shared/types';
-import {
-  applyDeckSetsFiltersFromBackup,
-  collectDeckSetsFiltersForBackup,
-  clearDeckSetsFilters,
-} from '../lib/deckFilterStorage';
 import BackupPreviewView from './BackupPreview';
 
 interface Props {
@@ -53,9 +48,7 @@ export default function DriveBackupSection({ onImported }: Props) {
     setStatus(null);
     setError(null);
     try {
-      const decks = await window.electronAPI.getDecks();
-      const filterSetsByUuid = collectDeckSetsFiltersForBackup(decks);
-      const result = await window.electronAPI.pushBackupToDrive(filterSetsByUuid);
+      const result = await window.electronAPI.pushBackupToDrive();
       if (result.error) {
         setError(result.error);
       } else {
@@ -103,7 +96,6 @@ export default function DriveBackupSection({ onImported }: Props) {
     setStatus(null);
     setError(null);
     try {
-      const localDecks = mode === 'replace' ? await window.electronAPI.getDecks() : [];
       const result = await window.electronAPI.applyBackupFromDrive({
         backup: pendingBackup,
         mode,
@@ -112,11 +104,6 @@ export default function DriveBackupSection({ onImported }: Props) {
       if (result.error) {
         setError(result.error);
         return;
-      }
-      if (mode === 'replace') clearDeckSetsFilters(localDecks);
-      if (result.filterSets?.length) {
-        const decks = await window.electronAPI.getDecks();
-        applyDeckSetsFiltersFromBackup(result.filterSets, decks);
       }
       onImported?.();
 

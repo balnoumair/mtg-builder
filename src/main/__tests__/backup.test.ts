@@ -74,7 +74,7 @@ describe('exportBackup', () => {
     addDeckCard(deckId, 'p-1', { quantity: 4, owned_quantity: 2, board: 'main' });
     addToCollection('p-2', 3);
 
-    const backup = exportBackup(db, { [uuid]: ['aaa', 'bbb'] });
+    const backup = exportBackup(db);
 
     expect(backup.kind).toBe(BACKUP_KIND);
     expect(backup.version).toBe(BACKUP_VERSION);
@@ -86,23 +86,14 @@ describe('exportBackup', () => {
       format: 'modern',
       description: 'notes here',
       owned: 1,
-      filter_sets: ['aaa', 'bbb'],
     });
+    expect(deck).not.toHaveProperty('filter_sets');
     expect(deck.cover).toEqual({ oracle_id: 'o-1', set_code: 'aaa' });
     expect(deck.cards).toEqual([
       { name: 'Alpha', oracle_id: 'o-1', set_code: 'aaa', board: 'main', quantity: 4, owned_quantity: 2, ignore_copy_limit: 0 },
     ]);
     expect(backup.collection).toHaveLength(1);
     expect(backup.collection[0]).toMatchObject({ name: 'Beta', oracle_id: 'o-2', set_code: 'bbb', quantity: 3 });
-  });
-
-  it('omits filter_sets when empty or absent', () => {
-    insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Alpha', set_code: 'aaa' });
-    const uuid = randomUUID();
-    createDeck('Bare', { uuid });
-    const backup = exportBackup(db, { [uuid]: [] });
-    expect(backup.decks[0].filter_sets).toBeUndefined();
-    expect('filter_sets' in backup.decks[0]).toBe(false);
   });
 });
 
@@ -216,7 +207,7 @@ describe('importBackup', () => {
     addDeckCard(deckId, 'p-1', { quantity: 4, owned_quantity: 2 });
     addToCollection('p-2', 3);
 
-    const backup = exportBackup(db, { [uuid]: ['aaa'] });
+    const backup = exportBackup(db);
     db.prepare('DELETE FROM deck_cards').run();
     db.prepare('DELETE FROM decks').run();
     db.prepare('DELETE FROM collection').run();
@@ -229,7 +220,6 @@ describe('importBackup', () => {
       collectionCards: 1,
       tagsImported: 0,
       missing: [],
-      filterSets: [{ uuid, sets: ['aaa'] }],
     });
     const decks = db.prepare('SELECT uuid, name, format, description, owned, cover_card_id FROM decks').all() as Array<Record<string, unknown>>;
     expect(decks).toEqual([{ uuid, name: 'My Deck', format: 'modern', description: 'notes', owned: 1, cover_card_id: 'p-1' }]);
@@ -245,7 +235,7 @@ describe('importBackup', () => {
     addDeckCard(deckId, 'p-1', { ignore_color_identity: 1 });
     addDeckCard(deckId, 'p-2');
 
-    const backup = exportBackup(db, {});
+    const backup = exportBackup(db);
     const exported = backup.decks[0].cards;
     expect(exported.find((c) => c.name === 'Alpha')?.ignore_color_identity).toBe(1);
     expect(exported.find((c) => c.name === 'Beta')).not.toHaveProperty('ignore_color_identity');
@@ -276,7 +266,6 @@ describe('importBackup', () => {
         description: 'from backup',
         owned: 1,
         cover: { oracle_id: 'o-2', set_code: 'bbb' },
-        filter_sets: ['bbb'],
         cards: [
           { name: 'Beta', oracle_id: 'o-2', set_code: 'bbb', board: 'main', quantity: 2, owned_quantity: 1, ignore_copy_limit: 0 },
         ],
@@ -289,7 +278,6 @@ describe('importBackup', () => {
       collectionCards: 0,
       tagsImported: 0,
       missing: [],
-      filterSets: [{ uuid, sets: ['bbb'] }],
     });
     expect(db.prepare('SELECT COUNT(*) n FROM decks').get()).toEqual({ n: 1 });
     const deck = db.prepare('SELECT uuid, name, format, description, owned, cover_card_id FROM decks WHERE id = ?').get(deckId);
@@ -306,7 +294,7 @@ describe('importBackup', () => {
     ]);
   });
 
-  it('returns filter_sets for updated decks so localStorage can be overwritten', () => {
+  it('still imports older backups that carry per-deck filter_sets', () => {
     insertTestCard(db, { id: 'p-1', oracle_id: 'o-1', name: 'Alpha', set_code: 'aaa' });
     const uuid = randomUUID();
     createDeck('My Deck', { uuid });
@@ -325,7 +313,7 @@ describe('importBackup', () => {
     }));
 
     expect(summary.decksUpdated).toBe(1);
-    expect(summary.filterSets).toEqual([{ uuid, sets: ['mkm', 'dsk'] }]);
+    expect(summary).not.toHaveProperty('filterSets');
   });
 
   it('overwrites collection quantities with the backup values', () => {
@@ -346,7 +334,6 @@ describe('importBackup', () => {
       collectionCards: 2,
       tagsImported: 0,
       missing: [],
-      filterSets: [],
     });
     expect(db.prepare('SELECT card_id, quantity FROM collection ORDER BY card_id').all()).toEqual([
       { card_id: 'p-1', quantity: 2 },
@@ -488,18 +475,6 @@ describe('importBackup', () => {
     expect(() => importBackup(db, emptyBackup({
       decks: [{ uuid: '', name: 'Bad', format: '', description: '', owned: 0, cover: null, cards: [] }],
     }))).toThrow('invalid uuid');
-    expect(() => importBackup(db, emptyBackup({
-      decks: [{
-        uuid: randomUUID(),
-        name: 'Bad filters',
-        format: '',
-        description: '',
-        owned: 0,
-        cover: null,
-        filter_sets: [''],
-        cards: [],
-      }],
-    }))).toThrow('invalid filter_sets');
     expect(db.prepare('SELECT COUNT(*) n FROM decks').get()).toEqual({ n: 0 });
   });
 });

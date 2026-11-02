@@ -61,6 +61,8 @@ export interface Deck {
   has_unconfirmed_changes?: boolean;
   color_identity?: string[];
   set_group?: DeckSetGroup;
+  /** Edition filter the deck's card search starts with, derived from its cards. */
+  search_sets?: string[];
   tags?: Tag[];
 }
 
@@ -114,14 +116,21 @@ export interface CardSet {
 
 export interface CollectionCard {
   card_id: string;
+  /** Loose copies, not in any deck; 0 when every copy is in owned decks. */
   quantity: number;
-  added_at: string;
+  /** Confirmed copies held in owned decks. */
+  in_decks: number;
+  /** Null for cards held only in decks. */
+  added_at: string | null;
   card: Card;
 }
 
 export interface CollectionStats {
   uniqueCards: number;
+  /** Loose copies, not in any deck. */
   totalCopies: number;
+  /** Confirmed copies held in owned decks. */
+  inDeckCopies: number;
 }
 
 export interface WantSource {
@@ -174,8 +183,6 @@ export interface ImportBackupResult {
   tagsImported: number;
   /** Cards from the backup that no longer exist in the local database; deck is null for collection entries. */
   missing: Array<{ deck: string | null; card: string; quantity: number }>;
-  /** Edition filters to restore into localStorage (empty sets = clear). Absent on cancel/error. */
-  filterSets?: Array<{ uuid: string; sets: string[] }>;
   canceled?: boolean;
   error?: string;
 }
@@ -345,7 +352,7 @@ export interface ElectronAPI {
   updateTag(id: number, updates: { name?: string; color?: string }): Promise<Tag>;
   deleteTag(id: number): Promise<void>;
   setDeckTags(deckId: number, tagIds: number[]): Promise<void>;
-  exportBackup(filterSetsByUuid?: Record<string, string[]>): Promise<ExportBackupResult>;
+  exportBackup(): Promise<ExportBackupResult>;
   importBackup(): Promise<ImportBackupResult>;
   previewBackupImport(): Promise<BackupPreviewResult>;
   applyBackupImport(backup: AppBackup, mode: BackupApplyMode): Promise<ImportBackupResult>;
@@ -373,7 +380,7 @@ export interface ElectronAPI {
   pickServiceAccountKey(): Promise<SheetSyncSettings>;
   getDriveSyncSettings(): Promise<DriveSyncSettings>;
   updateDriveSyncSettings(updates: { backupFileId?: string }): Promise<DriveSyncSettings>;
-  pushBackupToDrive(filterSetsByUuid?: Record<string, string[]>): Promise<DrivePushResult>;
+  pushBackupToDrive(): Promise<DrivePushResult>;
   pullBackupFromDrive(): Promise<DrivePullResult>;
   previewBackupFromDrive(): Promise<BackupPreviewResult>;
   applyBackupFromDrive(payload: DriveBackupApplyPayload): Promise<DrivePullResult>;

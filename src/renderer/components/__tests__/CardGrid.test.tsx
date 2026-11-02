@@ -67,3 +67,22 @@ describe.each(['grid', 'list'] as const)('%s nested deck controls', (view) => {
     expect(addPlayset).toHaveBeenCalledWith(card);
   });
 });
+
+describe.each(['grid', 'list'] as const)('%s collection controls', (view) => {
+  it('adds four copies to the collection without a copy limit', () => {
+    const addPlayset = vi.fn();
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      ownedQuantities={{ [card.id]: 8 }} onAddPlayset={addPlayset} playsetTarget="collection" />);
+    const button = screen.getByRole('button', { name: '+4' });
+    expect(button).toHaveAttribute('title', 'Add 4 copies to My Cards');
+    fireEvent.click(button);
+    expect(addPlayset).toHaveBeenCalledWith(card);
+  });
+
+  it('shows loose and in-deck counts, including cards held only in decks', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      ownedQuantities={{ [card.id]: 0 }} inDecksQuantities={{ [card.id]: 3 }} />);
+    expect(screen.getByText('3 in decks')).toBeInTheDocument();
+    expect(screen.getByTitle('0 not in a deck')).toHaveTextContent('×0');
+  });
+});
