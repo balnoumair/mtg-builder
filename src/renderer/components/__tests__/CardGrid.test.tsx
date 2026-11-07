@@ -95,6 +95,25 @@ describe.each(['grid', 'list'] as const)('%s collection controls', (view) => {
     expect(owned).toHaveAttribute('data-count-kind', 'owned');
   });
 
+  it('leaves the open deck out of the in-decks tag', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      deckQuantities={{ [card.id]: 2 }} ownedQuantities={{}} inDecksQuantities={{ [card.id]: 4 }}
+      currentDeckQuantities={{ [card.id]: 2 }} />);
+    expect(screen.getByText('2 in deck')).toBeInTheDocument();
+    expect(screen.getByText('4 owned')).toBeInTheDocument();
+    expect(screen.getByText('2 in other decks')).toBeInTheDocument();
+    expect(screen.queryByText(/^\d+ in decks$/)).toBeNull();
+  });
+
+  it('hides the other-decks tag when every copy is in the open deck', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      deckQuantities={{ [card.id]: 4 }} ownedQuantities={{}} inDecksQuantities={{ [card.id]: 4 }}
+      currentDeckQuantities={{ [card.id]: 4 }} />);
+    expect(screen.getByText('4 in deck')).toBeInTheDocument();
+    expect(screen.getByText('4 owned')).toBeInTheDocument();
+    expect(screen.queryByText(/in (other )?decks$/)).toBeNull();
+  });
+
   it('shows cards held only in decks as owned', () => {
     render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
       ownedQuantities={{}} inDecksQuantities={{ [card.id]: 3 }} />);

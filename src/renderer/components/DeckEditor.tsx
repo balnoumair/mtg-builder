@@ -148,6 +148,17 @@ export default function DeckEditor({
   }, [onCollectionChanged]);
   const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refreshCol);
 
+  // Confirmed copies of this deck, counted in the in-decks lookup when the
+  // deck is owned; search results leave them out of "in other decks".
+  const confirmedDeckQtys = useMemo(() => {
+    const qtys: Record<string, number> = {};
+    if (!deck?.owned) return qtys;
+    for (const dc of deckCards) {
+      qtys[dc.card_id] = (qtys[dc.card_id] ?? 0) + (dc.owned_quantity ?? 0);
+    }
+    return qtys;
+  }, [deckCards, deck?.owned]);
+
   const searchDeckQtys = useMemo(() => {
     const qtys: Record<string, number> = {};
     for (const dc of deckCards) {
@@ -490,6 +501,7 @@ export default function DeckEditor({
                   deckQuantities={searchDeckQtys}
                   ownedQuantities={searchOwnedQtys}
                   inDecksQuantities={searchInDecksQtys}
+                  currentDeckQuantities={confirmedDeckQtys}
                   onCardClick={handleSearchCardAdd}
                   onViewCard={handleSearchCardClick}
                   onAddPlayset={handleAddPlayset}

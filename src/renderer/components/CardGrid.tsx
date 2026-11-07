@@ -32,6 +32,12 @@ interface Props {
    * the user owns (loose plus in decks), with the split as a secondary label.
    */
   inDecksQuantities?: Record<string, number>;
+  /**
+   * Confirmed copies in the deck being edited. When present, the in-decks tag
+   * leaves them out and reads "in other decks", so this deck's copies aren't
+   * shown twice next to the in-deck tag.
+   */
+  currentDeckQuantities?: Record<string, number>;
   selectedId?: string | null;
   view?: 'grid' | 'list';
 }
@@ -56,9 +62,12 @@ export default function CardGrid({
   ownedQuantities,
   deckQuantities,
   inDecksQuantities,
+  currentDeckQuantities,
   selectedId,
   view = 'grid',
 }: Props) {
+  const otherDecks = (cardId: string, decked: number) =>
+    currentDeckQuantities ? Math.max(0, decked - (currentDeckQuantities[cardId] ?? 0)) : undefined;
   const [cardSize, setCardSize] = useCardSize();
   const minTileWidth = CARD_GRID_MIN_WIDTH[cardSize];
   const sizeControl = view === 'grid' ? (
@@ -158,7 +167,12 @@ export default function CardGrid({
               >
                 {card.name}
               </span>
-              <CountTags inDeck={inDeck} owned={qty} decked={inDecksQuantities ? decked : undefined} />
+              <CountTags
+                inDeck={inDeck}
+                owned={qty}
+                decked={inDecksQuantities ? decked : undefined}
+                otherDecks={otherDecks(card.id, decked)}
+              />
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
@@ -265,6 +279,7 @@ export default function CardGrid({
               owned={ownedQuantities?.[card.id] ?? 0}
               inDeck={inDeck}
               decked={inDecksQuantities ? inDecksQuantities[card.id] ?? 0 : undefined}
+              otherDecks={otherDecks(card.id, inDecksQuantities?.[card.id] ?? 0)}
               selected={selectedId === card.id}
               onClick={() => onCardClick(card)}
               onView={onViewCard ? () => onViewCard(card) : undefined}
@@ -286,6 +301,8 @@ interface TileProps {
   inDeck: number;
   /** Copies in owned decks; undefined when the view doesn't track them. */
   decked?: number;
+  /** Copies in owned decks other than the one being edited, when editing one. */
+  otherDecks?: number;
   selected: boolean;
   onClick: () => void;
   onView?: () => void;
@@ -295,15 +312,23 @@ interface TileProps {
   onRemove?: () => void;
 }
 
+/** The in-decks tag, or "in other decks" when a deck is open. */
+function DecksTag({ decked, otherDecks, overlay }: { decked?: number; otherDecks?: number; overlay?: boolean }) {
+  if (otherDecks !== undefined) {
+    return otherDecks > 0 ? <CountTag kind="inOtherDecks" count={otherDecks} overlay={overlay} /> : null;
+  }
+  return decked ? <CountTag kind="inDecks" count={decked} overlay={overlay} /> : null;
+}
+
 /** In-deck, owned and in-decks tags for one card, in that fixed order. */
-function CountTags({ inDeck, owned, decked }: { inDeck: number; owned: number; decked?: number }) {
+function CountTags({ inDeck, owned, decked, otherDecks }: { inDeck: number; owned: number; decked?: number; otherDecks?: number }) {
   const total = owned + (decked ?? 0);
   if (inDeck <= 0 && total <= 0) return null;
   return (
     <span style={{ display: 'inline-flex', gap: 4, flexShrink: 0 }}>
       {inDeck > 0 && <CountTag kind="inDeck" count={inDeck} />}
       {total > 0 && <CountTag kind="owned" count={total} title={ownedSplitTitle(owned, decked)} />}
-      {!!decked && <CountTag kind="inDecks" count={decked} />}
+      <DecksTag decked={decked} otherDecks={otherDecks} />
     </span>
   );
 }
@@ -320,7 +345,7 @@ function playsetTitle(target: 'deck' | 'collection'): string {
     : `Add playset (${PLAYSET_SIZE} copies)`;
 }
 
-function CardTile({ card, owned, inDeck, decked, selected, onClick, onView, onAdd, onAddPlayset, playsetTitle, onRemove }: TileProps) {
+function CardTile({ card, owned, inDeck, decked, otherDecks, selected, onClick, onView, onAdd, onAddPlayset, playsetTitle, onRemove }: TileProps) {
   const [hover, setHover] = useState(false);
   const total = owned + (decked ?? 0);
   const hasImage = !!card.image_uri_normal;
@@ -374,7 +399,7 @@ function CardTile({ card, owned, inDeck, decked, selected, onClick, onView, onAd
             }}
           >
             <CountTag kind="owned" count={total} overlay title={ownedSplitTitle(owned, decked)} />
-            {!!decked && <CountTag kind="inDecks" count={decked} overlay />}
+            <DecksTag decked={decked} otherDecks={otherDecks} overlay />
           </div>
         )}
         {removeControl}
@@ -610,7 +635,7 @@ function CardTile({ card, owned, inDeck, decked, selected, onClick, onView, onAd
             justifyContent: 'flex-end',
           }}
         >
-          <CountTags inDeck={inDeck} owned={owned} decked={decked} />
+          <CountTags inDeck={inDeck} owned={owned} decked={decked} otherDecks={otherDecks} />
         </div>
       )}
       {removeControl}

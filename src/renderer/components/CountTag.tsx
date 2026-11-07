@@ -4,12 +4,13 @@ import type { CSSProperties } from 'react';
  * Kinds of card counts. Each kind has one color, used on every page, so a
  * count reads the same wherever it appears.
  */
-export type CountKind = 'owned' | 'inDeck' | 'inDecks' | 'new' | 'need';
+export type CountKind = 'owned' | 'inDeck' | 'inDecks' | 'inOtherDecks' | 'new' | 'need';
 
 const KIND_COLOR: Record<CountKind, string> = {
   owned: 'var(--count-owned)',
   inDeck: 'var(--count-in-deck)',
   inDecks: 'var(--count-in-decks)',
+  inOtherDecks: 'var(--count-in-decks)',
   new: 'var(--count-new)',
   need: 'var(--count-need)',
 };
@@ -20,6 +21,7 @@ export function countLabel(kind: CountKind, count: number): string {
     case 'owned': return `${n} owned`;
     case 'inDeck': return `${n} in deck`;
     case 'inDecks': return `${n} in decks`;
+    case 'inOtherDecks': return `${n} in other decks`;
     case 'new': return `+${n} new`;
     case 'need': return `need ${n}`;
   }
