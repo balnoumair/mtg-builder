@@ -22,6 +22,7 @@ import DeckChangesModal, { type PendingChangeEntry } from './DeckChangesModal';
 import SplitPane, { PanelCollapseButton } from './SplitPane';
 import DeckTagPicker from './DeckTagPicker';
 import InfiniteScrollFooter from './InfiniteScrollFooter';
+import CountTag from './CountTag';
 import { COST_PILL, TYPE_PILL, GroupPillHeader, formatCostGroupLabel, type PillStyle } from './PillLabel';
 
 const REMOVED_PILL: PillStyle = {
@@ -870,16 +871,8 @@ export default function DeckEditor({
                           if (!sel) e.currentTarget.style.background = 'transparent';
                         }}
                       >
-                        <span
-                          style={{
-                            width: 18,
-                            textAlign: 'right',
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: 11,
-                            color: 'var(--text-dim)',
-                          }}
-                        >
-                          {dc.quantity}
+                        <span style={{ width: 64, flexShrink: 0, display: 'flex' }}>
+                          <CountTag kind="inDeck" count={dc.quantity} compact />
                         </span>
                         <span
                           style={{
@@ -920,21 +913,16 @@ export default function DeckEditor({
                           </span>
                         )}
                         {newCount > 0 && (
-                          <span
+                          <CountTag
+                            kind="new"
+                            count={newCount}
+                            compact
                             title={`${newCount} added since last confirm — not yet owned`}
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: 9,
-                              color: '#c9a86c',
-                              flexShrink: 0,
-                            }}
-                          >
-                            +{newCount} new
-                          </span>
+                          />
                         )}
                         <span
                           style={{
-                            width: 48,
+                            width: 56,
                             flexShrink: 0,
                             display: 'flex',
                             alignItems: 'center',
@@ -942,16 +930,7 @@ export default function DeckEditor({
                           }}
                         >
                           {owned > 0 && need > 0 && (
-                            <span
-                              title={`Own ${owned}, need ${need} more`}
-                              style={{
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: 9,
-                                color: 'var(--danger)',
-                              }}
-                            >
-                              need {need}
-                            </span>
+                            <CountTag kind="need" count={need} compact title={`Own ${owned}, need ${need} more`} />
                           )}
                           {owned > 0 && need <= 0 && (
                             <span
@@ -1284,45 +1263,24 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
         </div>
       )}
 
-      <span
-        style={{
-          position: 'absolute',
-          top: 5,
-          left: 6,
-          padding: '1px 5px',
-          fontSize: 9,
-          fontFamily: 'var(--font-mono)',
-          background: 'rgba(0,0,0,0.65)',
-          color: 'var(--text)',
-          borderRadius: 3,
-          fontVariantNumeric: 'tabular-nums',
-          backdropFilter: 'blur(4px)',
-        }}
-      >
-        ×{deckCard.quantity}
-        {deckCard.ignore_copy_limit ? ' ∞' : ''}
-        {colorsIgnored ? ' ⊘' : ''}
-      </span>
+      <CountTag
+        kind="inDeck"
+        count={deckCard.quantity}
+        overlay
+        compact
+        suffix={`${deckCard.ignore_copy_limit ? ' ∞' : ''}${colorsIgnored ? ' ⊘' : ''}`}
+        style={{ position: 'absolute', top: 5, left: 6 }}
+      />
 
       {newCount > 0 && (
-        <span
+        <CountTag
+          kind="new"
+          count={newCount}
+          overlay
+          compact
           title={`${newCount} added since last confirm — not yet owned`}
-          style={{
-            position: 'absolute',
-            top: 5,
-            right: 6,
-            padding: '1px 5px',
-            fontSize: 9,
-            fontFamily: 'var(--font-mono)',
-            background: 'rgba(0,0,0,0.65)',
-            color: '#c9a86c',
-            border: '1px solid rgba(201, 168, 108, 0.35)',
-            borderRadius: 3,
-            backdropFilter: 'blur(4px)',
-          }}
-        >
-          +{newCount} new
-        </span>
+          style={{ position: 'absolute', top: 5, right: 6 }}
+        />
       )}
 
       {hover && (

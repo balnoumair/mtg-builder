@@ -82,12 +82,22 @@ describe.each(['grid', 'list'] as const)('%s collection controls', (view) => {
   it('counts every owned copy and shows the loose/in-deck split', () => {
     render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
       ownedQuantities={{ [card.id]: 2 }} inDecksQuantities={{ [card.id]: 3 }} />);
-    expect(screen.getByTitle('2 loose · 3 in decks')).toHaveTextContent('×5');
+    expect(screen.getByTitle('2 loose · 3 in decks')).toHaveTextContent('5 owned');
+    expect(screen.getByText('3 in decks')).toBeInTheDocument();
+  });
+
+  it('labels deck and owned counts as distinct tags', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()} onAddToDeck={vi.fn()}
+      deckQuantities={{ [card.id]: 2 }} ownedQuantities={{ [card.id]: 2 }} />);
+    const inDeck = screen.getByText('2 in deck');
+    const owned = screen.getByText('2 owned');
+    expect(inDeck).toHaveAttribute('data-count-kind', 'inDeck');
+    expect(owned).toHaveAttribute('data-count-kind', 'owned');
   });
 
   it('shows cards held only in decks as owned', () => {
     render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
       ownedQuantities={{}} inDecksQuantities={{ [card.id]: 3 }} />);
-    expect(screen.getByTitle('0 loose · 3 in decks')).toHaveTextContent('×3');
+    expect(screen.getByTitle('0 loose · 3 in decks')).toHaveTextContent('3 owned');
   });
 });

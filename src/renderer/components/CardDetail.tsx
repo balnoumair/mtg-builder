@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Card } from '../../shared/types';
 import ManaSymbols from './ManaSymbols';
+import CountTag from './CountTag';
 import { getManaMeta } from '../lib/mana';
 import { CARD_DETAIL_WIDTH, CARD_SIZE_LABELS, CARD_SIZE_ORDER, useCardSize } from '../lib/cardSize';
 
@@ -397,14 +398,16 @@ export default function CardDetail({
               { l: 'Rarity', v: rarity || '—' },
               {
                 l: 'Owned',
-                v: inDecksQuantity > 0 ? (
-                  <span title={`${owned} loose · ${inDecksQuantity} in decks`}>
-                    {owned + inDecksQuantity}
-                    <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-mute)' }}>
-                      {inDecksQuantity} in decks
-                    </span>
+                v: (
+                  <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+                    <CountTag
+                      kind="owned"
+                      count={owned + inDecksQuantity}
+                      title={inDecksQuantity > 0 ? `${owned} loose · ${inDecksQuantity} in decks` : undefined}
+                    />
+                    {inDecksQuantity > 0 && <CountTag kind="inDecks" count={inDecksQuantity} />}
                   </span>
-                ) : String(owned),
+                ),
               },
             ].map((s, i) => (
               <div key={i} style={{ background: 'var(--bg-panel)', padding: '7px 10px' }}>

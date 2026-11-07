@@ -6,6 +6,7 @@ import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
 import ViewToggle from './ViewToggle';
+import CountTag from './CountTag';
 import { PLAYSET_SIZE } from '../../shared/deckLimits';
 
 interface Props {
@@ -76,6 +77,7 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
           <div
             style={{
               display: 'flex',
+              alignItems: 'center',
               gap: 12,
               fontFamily: 'var(--font-mono)',
               fontSize: 11,
@@ -85,14 +87,12 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
             <span>
               <span style={{ color: 'var(--text-dim)' }}>{stats.uniqueCards.toLocaleString()}</span> unique
             </span>
-            <span title={`${stats.totalCopies.toLocaleString()} loose · ${stats.inDeckCopies.toLocaleString()} in decks`}>
-              <span style={{ color: 'var(--text-dim)' }}>
-                {(stats.totalCopies + stats.inDeckCopies).toLocaleString()}
-              </span> copies
-            </span>
-            <span>
-              <span style={{ color: 'var(--text-dim)' }}>{stats.inDeckCopies.toLocaleString()}</span> in decks
-            </span>
+            <CountTag
+              kind="owned"
+              count={stats.totalCopies + stats.inDeckCopies}
+              title={`${stats.totalCopies.toLocaleString()} loose · ${stats.inDeckCopies.toLocaleString()} in decks`}
+            />
+            <CountTag kind="inDecks" count={stats.inDeckCopies} />
           </div>
           <div style={{ flex: 1 }} />
           <ViewToggle value={viewMode} onChange={setViewMode} />
