@@ -23,28 +23,44 @@ describe('colorComboKey', () => {
 });
 
 describe('countDecksByColorCombo', () => {
-  it('counts decks per combination with an owned/wishlist split, most common first', () => {
+  it('counts decks per combination with an owned/wishlist split', () => {
     const rows = countDecksByColorCombo([
       { owned: true, color_identity: ['R'] },
       { owned: false, color_identity: ['U', 'W'] },
       { owned: true, color_identity: ['W', 'U'] },
       { owned: true, color_identity: ['R'] },
       { owned: false, color_identity: ['R'] },
-      { owned: true },
     ]);
-    expect(rows.map((r) => [r.key, r.total, r.owned, r.wishlist])).toEqual([
-      ['R', 3, 2, 1],
-      ['WU', 2, 1, 1],
-      ['', 1, 1, 0],
-    ]);
+    const byKey = Object.fromEntries(rows.map((r) => [r.key, [r.total, r.owned, r.wishlist]]));
+    expect(byKey.R).toEqual([3, 2, 1]);
+    expect(byKey.WU).toEqual([2, 1, 1]);
   });
 
-  it('breaks ties by fewer colors first, then WUBRG order', () => {
+  it('lists every one-, two- and three-color combination even with no decks', () => {
+    const rows = countDecksByColorCombo([]);
+    expect(rows).toHaveLength(5 + 10 + 10);
+    expect(rows.every((r) => r.total === 0)).toBe(true);
+  });
+
+  it('lists colorless, four- and five-color rows only when a deck has them', () => {
+    const keys = countDecksByColorCombo([
+      { owned: true },
+      { owned: true, color_identity: ['U', 'B', 'R', 'G'] },
+    ]).map((r) => r.key);
+    expect(keys).toContain('');
+    expect(keys).toContain('UBRG');
+    expect(keys).not.toContain('WUBRG');
+  });
+
+  it('orders rows by number of colors, not by deck count', () => {
     const rows = countDecksByColorCombo([
+      { owned: true },
+      { owned: true, color_identity: ['B', 'G'] },
       { owned: true, color_identity: ['B', 'G'] },
       { owned: true, color_identity: ['G'] },
-      { owned: true, color_identity: ['W'] },
     ]);
-    expect(rows.map((r) => r.key)).toEqual(['W', 'G', 'BG']);
+    const sizes = rows.map((r) => r.colors.length);
+    expect(sizes).toEqual([...sizes].sort((a, b) => a - b));
+    expect(rows.slice(0, 6).map((r) => r.key)).toEqual(['', 'W', 'U', 'B', 'R', 'G']);
   });
 });

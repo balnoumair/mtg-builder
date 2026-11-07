@@ -20,7 +20,7 @@ export default function DeckColorStatsModal({ decks, filtered, onClose }: Props)
   }, [onClose]);
 
   const rows = useMemo(() => countDecksByColorCombo(decks), [decks]);
-  const max = rows[0]?.total ?? 0;
+  const max = Math.max(0, ...rows.map((r) => r.total));
 
   return (
     <div
@@ -105,6 +105,7 @@ export default function DeckColorStatsModal({ decks, filtered, onClose }: Props)
                   gap: 10,
                   padding: '5px 18px',
                   fontSize: 12.5,
+                  opacity: row.total === 0 ? 0.4 : 1,
                 }}
               >
                 <span style={{ display: 'inline-flex' }}>

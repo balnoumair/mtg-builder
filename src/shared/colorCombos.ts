@@ -56,27 +56,26 @@ export interface ColorComboCount {
   wishlist: number;
 }
 
-/** Decks counted per color identity, most common first, ties in WUBRG order. */
+/**
+ * Decks counted per color identity, ordered by number of colors (colorless
+ * first) and then in the usual combination order. Every one-, two- and
+ * three-color combination is listed even with no decks; colorless, four- and
+ * five-color rows appear only when some deck has them.
+ */
 export function countDecksByColorCombo(
   decks: readonly { owned: boolean; color_identity?: string[] }[],
 ): ColorComboCount[] {
   const byKey = new Map<string, ColorComboCount>();
+  for (const key of Object.keys(COMBO_NAMES)) {
+    byKey.set(key, { key, colors: key.split('').filter(Boolean), name: colorComboName(key), total: 0, owned: 0, wishlist: 0 });
+  }
   for (const deck of decks) {
-    const key = colorComboKey(deck.color_identity);
-    let row = byKey.get(key);
-    if (!row) {
-      row = { key, colors: key.split('').filter(Boolean), name: colorComboName(key), total: 0, owned: 0, wishlist: 0 };
-      byKey.set(key, row);
-    }
+    const row = byKey.get(colorComboKey(deck.color_identity))!;
     row.total += 1;
     if (deck.owned) row.owned += 1;
     else row.wishlist += 1;
   }
-  return [...byKey.values()].sort(
-    (a, b) => b.total - a.total || a.key.length - b.key.length || comboOrder(a.key) - comboOrder(b.key),
+  return [...byKey.values()].filter(
+    (row) => row.total > 0 || (row.key.length >= 1 && row.key.length <= 3),
   );
-}
-
-function comboOrder(key: string): number {
-  return Object.keys(COMBO_NAMES).indexOf(key);
 }
