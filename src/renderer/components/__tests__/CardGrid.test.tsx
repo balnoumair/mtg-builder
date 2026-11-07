@@ -119,6 +119,20 @@ describe.each(['grid', 'list'] as const)('%s collection controls', (view) => {
     expect(screen.queryByText(/free$|in (other )?decks$/)).toBeNull();
   });
 
+  it('shows unconfirmed additions as new, not again as in deck', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      deckQuantities={{ [card.id]: 4 }} newQuantities={{ [card.id]: 4 }} />);
+    expect(screen.getByText('+4 new')).toBeInTheDocument();
+    expect(screen.queryByText(/in deck$/)).toBeNull();
+  });
+
+  it('splits a deck count into confirmed and new copies', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      deckQuantities={{ [card.id]: 4 }} newQuantities={{ [card.id]: 2 }} />);
+    expect(screen.getByText('2 in deck')).toBeInTheDocument();
+    expect(screen.getByText('+2 new')).toBeInTheDocument();
+  });
+
   it('shows cards held only in decks with the in-decks tag alone', () => {
     render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
       ownedQuantities={{}} inDecksQuantities={{ [card.id]: 3 }} />);

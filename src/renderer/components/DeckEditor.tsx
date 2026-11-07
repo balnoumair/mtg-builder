@@ -159,6 +159,17 @@ export default function DeckEditor({
     return qtys;
   }, [deckCards, deck?.owned]);
 
+  // Copies added to this owned deck since its last confirm, per card.
+  const searchNewQtys = useMemo(() => {
+    const qtys: Record<string, number> = {};
+    if (!deck?.owned) return qtys;
+    for (const dc of deckCards) {
+      const added = dc.quantity - (dc.owned_quantity ?? 0);
+      if (added > 0) qtys[dc.card_id] = (qtys[dc.card_id] ?? 0) + added;
+    }
+    return qtys;
+  }, [deckCards, deck?.owned]);
+
   const searchDeckQtys = useMemo(() => {
     const qtys: Record<string, number> = {};
     for (const dc of deckCards) {
@@ -502,6 +513,7 @@ export default function DeckEditor({
                   ownedQuantities={searchOwnedQtys}
                   inDecksQuantities={searchInDecksQtys}
                   currentDeckQuantities={confirmedDeckQtys}
+                  newQuantities={searchNewQtys}
                   onCardClick={handleSearchCardAdd}
                   onViewCard={handleSearchCardClick}
                   onAddPlayset={handleAddPlayset}
@@ -883,8 +895,18 @@ export default function DeckEditor({
                           if (!sel) e.currentTarget.style.background = 'transparent';
                         }}
                       >
-                        <span style={{ width: 64, flexShrink: 0, display: 'flex' }}>
-                          <CountTag kind="inDeck" count={dc.quantity} compact />
+                        <span style={{ width: 112, flexShrink: 0, display: 'flex', gap: 3 }}>
+                          {dc.quantity - Math.max(0, newCount) > 0 && (
+                            <CountTag kind="inDeck" count={dc.quantity - Math.max(0, newCount)} compact />
+                          )}
+                          {newCount > 0 && (
+                            <CountTag
+                              kind="new"
+                              count={newCount}
+                              compact
+                              title={`${newCount} added since last confirm — not yet owned`}
+                            />
+                          )}
                         </span>
                         <span
                           style={{
@@ -923,14 +945,6 @@ export default function DeckEditor({
                           >
                             ⊘
                           </span>
-                        )}
-                        {newCount > 0 && (
-                          <CountTag
-                            kind="new"
-                            count={newCount}
-                            compact
-                            title={`${newCount} added since last confirm — not yet owned`}
-                          />
                         )}
                         <span
                           style={{
@@ -1208,6 +1222,9 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
   const card = deckCard.card;
   if (!card) return null;
   const tint = card.color_identity?.[0] ? getManaMeta(card.color_identity[0]) : null;
+  // In deck and new are separate piles: new copies aren't counted again as in deck.
+  const confirmed = deckCard.quantity - Math.max(0, newCount);
+  const markers = `${deckCard.ignore_copy_limit ? ' ∞' : ''}${colorsIgnored ? ' ⊘' : ''}` || undefined;
 
   return (
     <div
@@ -1275,14 +1292,16 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
         </div>
       )}
 
-      <CountTag
-        kind="inDeck"
-        count={deckCard.quantity}
-        overlay
-        compact
-        suffix={`${deckCard.ignore_copy_limit ? ' ∞' : ''}${colorsIgnored ? ' ⊘' : ''}`}
-        style={{ position: 'absolute', top: 5, left: 6 }}
-      />
+      {confirmed > 0 && (
+        <CountTag
+          kind="inDeck"
+          count={confirmed}
+          overlay
+          compact
+          suffix={markers}
+          style={{ position: 'absolute', top: 5, left: 6 }}
+        />
+      )}
 
       {newCount > 0 && (
         <CountTag
@@ -1290,6 +1309,7 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
           count={newCount}
           overlay
           compact
+          suffix={confirmed > 0 ? undefined : markers}
           title={`${newCount} added since last confirm — not yet owned`}
           style={{ position: 'absolute', top: 5, right: 6 }}
         />
