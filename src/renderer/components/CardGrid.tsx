@@ -28,8 +28,8 @@ interface Props {
   ownedQuantities?: Record<string, number>;
   deckQuantities?: Record<string, number>;
   /**
-   * Copies held in owned decks. When present, the owned ×N counts every copy
-   * the user owns (loose plus in decks), with the split as a secondary label.
+   * Copies held in owned decks, shown as their own tag next to the free
+   * (loose) copies; together they are everything the user owns.
    */
   inDecksQuantities?: Record<string, number>;
   /**
@@ -320,23 +320,22 @@ function DecksTag({ decked, otherDecks, overlay }: { decked?: number; otherDecks
   return decked ? <CountTag kind="inDecks" count={decked} overlay={overlay} /> : null;
 }
 
-/** In-deck, owned and in-decks tags for one card, in that fixed order. */
+/** In-deck, free and in-decks tags for one card, in that fixed order. */
 function CountTags({ inDeck, owned, decked, otherDecks }: { inDeck: number; owned: number; decked?: number; otherDecks?: number }) {
   const total = owned + (decked ?? 0);
   if (inDeck <= 0 && total <= 0) return null;
   return (
     <span style={{ display: 'inline-flex', gap: 4, flexShrink: 0 }}>
       {inDeck > 0 && <CountTag kind="inDeck" count={inDeck} />}
-      {total > 0 && <CountTag kind="owned" count={total} title={ownedSplitTitle(owned, decked)} />}
+      {owned > 0 && <CountTag kind="free" count={owned} title={ownedSplitTitle(owned, decked)} />}
       <DecksTag decked={decked} otherDecks={otherDecks} />
     </span>
   );
 }
 
-/** Tooltip for the owned count: how the total splits between loose and in-deck copies. */
-function ownedSplitTitle(loose: number, decked: number | undefined): string | undefined {
-  if (decked === undefined) return undefined;
-  return `${loose} loose · ${decked} in decks`;
+/** Tooltip for the free count: loose copies, not in any deck, and the total owned. */
+function ownedSplitTitle(loose: number, decked: number | undefined): string {
+  return `Not in any deck · ${loose + (decked ?? 0)} owned in total`;
 }
 
 function playsetTitle(target: 'deck' | 'collection'): string {
@@ -398,7 +397,7 @@ function CardTile({ card, owned, inDeck, decked, otherDecks, selected, onClick, 
               gap: 3,
             }}
           >
-            <CountTag kind="owned" count={total} overlay title={ownedSplitTitle(owned, decked)} />
+            {owned > 0 && <CountTag kind="free" count={owned} overlay title={ownedSplitTitle(owned, decked)} />}
             <DecksTag decked={decked} otherDecks={otherDecks} overlay />
           </div>
         )}

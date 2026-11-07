@@ -2,12 +2,13 @@ import type { CSSProperties } from 'react';
 
 /**
  * Kinds of card counts. Each kind has one color, used on every page, so a
- * count reads the same wherever it appears.
+ * count reads the same wherever it appears. Free, in-deck and in-decks are
+ * separate piles: shown together they never count the same copy twice.
  */
-export type CountKind = 'owned' | 'inDeck' | 'inDecks' | 'inOtherDecks' | 'new' | 'need';
+export type CountKind = 'free' | 'inDeck' | 'inDecks' | 'inOtherDecks' | 'new' | 'need';
 
 const KIND_COLOR: Record<CountKind, string> = {
-  owned: 'var(--count-owned)',
+  free: 'var(--count-free)',
   inDeck: 'var(--count-in-deck)',
   inDecks: 'var(--count-in-decks)',
   inOtherDecks: 'var(--count-in-decks)',
@@ -18,7 +19,7 @@ const KIND_COLOR: Record<CountKind, string> = {
 export function countLabel(kind: CountKind, count: number): string {
   const n = count.toLocaleString();
   switch (kind) {
-    case 'owned': return `${n} owned`;
+    case 'free': return `${n} free`;
     case 'inDeck': return `${n} in deck`;
     case 'inDecks': return `${n} in decks`;
     case 'inOtherDecks': return `${n} in other decks`;

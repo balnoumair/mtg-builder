@@ -399,12 +399,12 @@ export default function CardDetail({
               {
                 l: 'Owned',
                 v: (
-                  <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
-                    <CountTag
-                      kind="owned"
-                      count={owned + inDecksQuantity}
-                      title={inDecksQuantity > 0 ? `${owned} loose · ${inDecksQuantity} in decks` : undefined}
-                    />
+                  <span
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}
+                    title={`${owned + inDecksQuantity} owned in total`}
+                  >
+                    {owned + inDecksQuantity === 0 && '0'}
+                    {owned > 0 && <CountTag kind="free" count={owned} title="Not in any deck" />}
                     {inDecksQuantity > 0 && <CountTag kind="inDecks" count={inDecksQuantity} />}
                   </span>
                 ),

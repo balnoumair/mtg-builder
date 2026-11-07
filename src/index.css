@@ -61,7 +61,7 @@
   --good: #86a98c;
 
   /* Count tags: one color per kind of count, the same on every page. */
-  --count-owned: #86a98c;
+  --count-free: #86a98c;
   --count-in-deck: #7fa3c9;
   --count-in-decks: #a48fc9;
   --count-new: #c9a86c;

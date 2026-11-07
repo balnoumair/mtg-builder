@@ -88,9 +88,9 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
               <span style={{ color: 'var(--text-dim)' }}>{stats.uniqueCards.toLocaleString()}</span> unique
             </span>
             <CountTag
-              kind="owned"
-              count={stats.totalCopies + stats.inDeckCopies}
-              title={`${stats.totalCopies.toLocaleString()} loose · ${stats.inDeckCopies.toLocaleString()} in decks`}
+              kind="free"
+              count={stats.totalCopies}
+              title={`Not in any deck · ${(stats.totalCopies + stats.inDeckCopies).toLocaleString()} copies owned in total`}
             />
             <CountTag kind="inDecks" count={stats.inDeckCopies} />
           </div>
