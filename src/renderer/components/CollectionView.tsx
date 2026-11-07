@@ -85,11 +85,13 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
             <span>
               <span style={{ color: 'var(--text-dim)' }}>{stats.uniqueCards.toLocaleString()}</span> unique
             </span>
-            <span>
-              <span style={{ color: 'var(--text-dim)' }}>{stats.totalCopies.toLocaleString()}</span> not in decks
+            <span title={`${stats.totalCopies.toLocaleString()} loose · ${stats.inDeckCopies.toLocaleString()} in decks`}>
+              <span style={{ color: 'var(--text-dim)' }}>
+                {(stats.totalCopies + stats.inDeckCopies).toLocaleString()}
+              </span> copies
             </span>
             <span>
-              <span style={{ color: 'var(--accent)' }}>{stats.inDeckCopies.toLocaleString()}</span> in decks
+              <span style={{ color: 'var(--text-dim)' }}>{stats.inDeckCopies.toLocaleString()}</span> in decks
             </span>
           </div>
           <div style={{ flex: 1 }} />
@@ -219,6 +221,7 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
           card={card}
           onClose={close}
           collectionQuantity={detailQty}
+          inDecksQuantity={card ? inDecksQuantities[card.id] ?? 0 : 0}
           onAddToCollection={handleAddToCollection}
           onUpdateCollectionQuantity={updateCollectionQuantity}
           onRemoveFromCollection={removeFromCollection}

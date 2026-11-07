@@ -146,6 +146,8 @@ export default function App() {
 
   const handleDeleteDeck = async (id: number) => {
     await deleteDeck(id);
+    // An owned deck's cards stop counting as held in decks.
+    bumpCollection();
     if (activeDeckId === id) {
       setActiveDeckId(null);
       setView('decks');
@@ -251,7 +253,7 @@ export default function App() {
               switching between them never remounts and re-fetches (which would
               flash a loading/empty state). The per-deck editor stays conditional. */}
           <ViewPane active={view === 'collection'}>
-            <CardBrowser onCollectionChanged={bumpCollection} />
+            <CardBrowser onCollectionChanged={bumpCollection} collectionVersion={collectionVersion} />
           </ViewPane>
           <ViewPane active={view === 'my-cards'}>
             <CollectionView

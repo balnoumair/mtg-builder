@@ -8,7 +8,10 @@ interface Props {
   card: Card;
   onClose: () => void;
   onAddToDeck?: (card: Card) => void;
+  /** Loose copies in My Cards; the stepper edits this count. */
   collectionQuantity?: number;
+  /** Copies held in owned decks, added to the Owned total when given. */
+  inDecksQuantity?: number;
   onAddToCollection?: (card: Card) => void;
   onUpdateCollectionQuantity?: (cardId: string, quantity: number) => void;
   onRemoveFromCollection?: (cardId: string) => void;
@@ -28,6 +31,7 @@ export default function CardDetail({
   onClose,
   onAddToDeck,
   collectionQuantity,
+  inDecksQuantity = 0,
   onAddToCollection,
   onUpdateCollectionQuantity,
   onRemoveFromCollection,
@@ -391,7 +395,17 @@ export default function CardDetail({
             {[
               { l: 'Cost', v: <ManaSymbols cost={card.mana_cost} size={11} /> },
               { l: 'Rarity', v: rarity || '—' },
-              { l: 'Owned', v: String(owned) },
+              {
+                l: 'Owned',
+                v: inDecksQuantity > 0 ? (
+                  <span title={`${owned} loose · ${inDecksQuantity} in decks`}>
+                    {owned + inDecksQuantity}
+                    <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-mute)' }}>
+                      {inDecksQuantity} in decks
+                    </span>
+                  </span>
+                ) : String(owned),
+              },
             ].map((s, i) => (
               <div key={i} style={{ background: 'var(--bg-panel)', padding: '7px 10px' }}>
                 <div
@@ -457,7 +471,12 @@ export default function CardDetail({
                 >
                   −
                 </button>
-                <span style={{ minWidth: 18, textAlign: 'center', color: 'var(--text)' }}>×{owned}</span>
+                <span
+                  style={{ minWidth: 18, textAlign: 'center', color: 'var(--text)' }}
+                  title={inDecksQuantity > 0 ? 'Loose copies, not in a deck' : undefined}
+                >
+                  ×{owned}
+                </span>
                 <button
                   onClick={() => onUpdateCollectionQuantity(card.id, owned + 1)}
                   style={stepBtn}

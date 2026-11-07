@@ -53,6 +53,7 @@ const api: ElectronAPI = {
   discardDeckChanges: (deckId: number) => ipcRenderer.invoke('decks:discardChanges', deckId),
   getCollection: (filters: CardFilters) => ipcRenderer.invoke('collection:get', filters),
   getCollectionQuantities: (cardIds: string[]) => ipcRenderer.invoke('collection:quantities', cardIds),
+  getInDeckQuantities: (cardIds: string[]) => ipcRenderer.invoke('collection:inDeckQuantities', cardIds),
   addToCollection: (cardId: string, quantity?: number) => ipcRenderer.invoke('collection:add', cardId, quantity),
   updateCollectionQuantity: (cardId: string, quantity: number) => ipcRenderer.invoke('collection:update', cardId, quantity),
   removeFromCollection: (cardId: string) => ipcRenderer.invoke('collection:remove', cardId),

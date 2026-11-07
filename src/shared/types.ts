@@ -370,6 +370,8 @@ export interface ElectronAPI {
   discardDeckChanges(deckId: number): Promise<void>;
   getCollection(filters: CardFilters): Promise<{ cards: CollectionCard[]; total: number }>;
   getCollectionQuantities(cardIds: string[]): Promise<Record<string, number>>;
+  /** Copies held in owned decks (basic lands excluded). */
+  getInDeckQuantities(cardIds: string[]): Promise<Record<string, number>>;
   addToCollection(cardId: string, quantity?: number): Promise<void>;
   updateCollectionQuantity(cardId: string, quantity: number): Promise<void>;
   removeFromCollection(cardId: string): Promise<void>;

@@ -249,6 +249,10 @@ export function registerIpcHandlers(): void {
     return collectionQueries.getCollectionQuantities(getDb(), cardIds);
   });
 
+  ipcMain.handle('collection:inDeckQuantities', (_event, cardIds: string[]) => {
+    return collectionQueries.getInDeckQuantities(getDb(), cardIds);
+  });
+
   ipcMain.handle('collection:add', (_event, cardId: string, quantity?: number) => {
     return collectionQueries.addToCollection(getDb(), cardId, quantity);
   });

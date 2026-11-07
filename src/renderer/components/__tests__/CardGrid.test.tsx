@@ -79,10 +79,15 @@ describe.each(['grid', 'list'] as const)('%s collection controls', (view) => {
     expect(addPlayset).toHaveBeenCalledWith(card);
   });
 
-  it('shows loose and in-deck counts, including cards held only in decks', () => {
+  it('counts every owned copy and shows the loose/in-deck split', () => {
     render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
-      ownedQuantities={{ [card.id]: 0 }} inDecksQuantities={{ [card.id]: 3 }} />);
-    expect(screen.getByText('3 in decks')).toBeInTheDocument();
-    expect(screen.getByTitle('0 not in a deck')).toHaveTextContent('×0');
+      ownedQuantities={{ [card.id]: 2 }} inDecksQuantities={{ [card.id]: 3 }} />);
+    expect(screen.getByTitle('2 loose · 3 in decks')).toHaveTextContent('×5');
+  });
+
+  it('shows cards held only in decks as owned', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      ownedQuantities={{}} inDecksQuantities={{ [card.id]: 3 }} />);
+    expect(screen.getByTitle('0 loose · 3 in decks')).toHaveTextContent('×3');
   });
 });

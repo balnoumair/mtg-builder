@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback, useRef } from 'react';
 import type { Card } from '../../shared/types';
 import { useCards, useCardDetail } from '../hooks/useCards';
-import { useCollectionLookup, useCollectionActions } from '../hooks/useCollection';
+import { useCollectionLookup, useInDeckLookup, useCollectionActions } from '../hooks/useCollection';
 import { useInfiniteScrollSentinel } from '../hooks/useInfiniteScrollSentinel';
 import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
@@ -12,9 +12,11 @@ import { PLAYSET_SIZE } from '../../shared/deckLimits';
 
 interface Props {
   onCollectionChanged?: () => void;
+  /** Bumped when the collection or owned decks change elsewhere in the app. */
+  collectionVersion?: number;
 }
 
-export default function CardBrowser({ onCollectionChanged }: Props) {
+export default function CardBrowser({ onCollectionChanged, collectionVersion = 0 }: Props) {
   const { filters, updateFilters, cards, total, loading, loadingMore, hasMore, loadMore } = useCards();
   const { card, open, showCard, close } = useCardDetail();
   const [colVersion, setColVersion] = useState(0);
@@ -22,7 +24,8 @@ export default function CardBrowser({ onCollectionChanged }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const cardIds = useMemo(() => cards.map((c) => c.id), [cards]);
-  const ownedQuantities = useCollectionLookup(cardIds, colVersion);
+  const ownedQuantities = useCollectionLookup(cardIds, colVersion + collectionVersion);
+  const inDecksQuantities = useInDeckLookup(cardIds, colVersion + collectionVersion);
 
   const refreshCol = useCallback(() => {
     setColVersion((v) => v + 1);
@@ -127,6 +130,7 @@ export default function CardBrowser({ onCollectionChanged }: Props) {
           loading={loading}
           onCardClick={showCard}
           ownedQuantities={ownedQuantities}
+          inDecksQuantities={inDecksQuantities}
           onAddPlayset={handleAddPlayset}
           playsetTarget="collection"
           view={viewMode}
@@ -145,6 +149,7 @@ export default function CardBrowser({ onCollectionChanged }: Props) {
           card={card}
           onClose={close}
           collectionQuantity={ownedQuantities[card.id] ?? 0}
+          inDecksQuantity={inDecksQuantities[card.id] ?? 0}
           onAddToCollection={handleAddToCollection}
           onUpdateCollectionQuantity={updateCollectionQuantity}
           onRemoveFromCollection={removeFromCollection}
