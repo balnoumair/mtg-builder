@@ -6,6 +6,7 @@ import { cardHoverBar, cardHoverButton, cardRowButton } from '../lib/cardControl
 import ManaSymbols, { ColorIdentity } from './ManaSymbols';
 import { getManaMeta } from '../lib/mana';
 import CardSizeControl from './CardSizeControl';
+import CountTag from './CountTag';
 import { CARD_GRID_MIN_WIDTH, useCardSize } from '../lib/cardSize';
 import { getMaxCopies, PLAYSET_SIZE } from '../../shared/deckLimits';
 
@@ -27,10 +28,21 @@ interface Props {
   ownedQuantities?: Record<string, number>;
   deckQuantities?: Record<string, number>;
   /**
-   * Copies held in owned decks. When present, the owned ×N counts every copy
-   * the user owns (loose plus in decks), with the split as a secondary label.
+   * Copies held in owned decks, shown as their own tag next to the free
+   * (loose) copies; together they are everything the user owns.
    */
   inDecksQuantities?: Record<string, number>;
+  /**
+   * Confirmed copies in the deck being edited. When present, the in-decks tag
+   * leaves them out and reads "in other decks", so this deck's copies aren't
+   * shown twice next to the in-deck tag.
+   */
+  currentDeckQuantities?: Record<string, number>;
+  /**
+   * Copies of deckQuantities added to an owned deck since its last confirm.
+   * Shown as "+N new" and left out of the in-deck tag, so none count twice.
+   */
+  newQuantities?: Record<string, number>;
   selectedId?: string | null;
   view?: 'grid' | 'list';
 }
@@ -55,9 +67,13 @@ export default function CardGrid({
   ownedQuantities,
   deckQuantities,
   inDecksQuantities,
+  currentDeckQuantities,
+  newQuantities,
   selectedId,
   view = 'grid',
 }: Props) {
+  const otherDecks = (cardId: string, decked: number) =>
+    currentDeckQuantities ? Math.max(0, decked - (currentDeckQuantities[cardId] ?? 0)) : undefined;
   const [cardSize, setCardSize] = useCardSize();
   const minTileWidth = CARD_GRID_MIN_WIDTH[cardSize];
   const sizeControl = view === 'grid' ? (
@@ -121,7 +137,6 @@ export default function CardGrid({
             : null;
           const atMax = max !== null && inDeck >= max;
           const decked = inDecksQuantities?.[card.id] ?? 0;
-          const total = qty + decked;
           const sel = selectedId === card.id;
           return (
             <div
@@ -146,33 +161,6 @@ export default function CardGrid({
                 if (!sel) e.currentTarget.style.background = 'transparent';
               }}
             >
-              {total > 0 && (
-                <span
-                  style={{
-                    width: 22,
-                    textAlign: 'right',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    color: 'var(--text-dim)',
-                  }}
-                  title={ownedSplitTitle(qty, inDecksQuantities ? decked : undefined)}
-                >
-                  ×{total}
-                </span>
-              )}
-              {inDecksQuantities && (
-                <span
-                  style={{
-                    width: 64,
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
-                    color: 'var(--text-faint)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {decked > 0 ? `${decked} in decks` : ''}
-                </span>
-              )}
               <ColorIdentity colors={card.color_identity ?? []} size={9} />
               <span
                 style={{
@@ -185,6 +173,13 @@ export default function CardGrid({
               >
                 {card.name}
               </span>
+              <CountTags
+                inDeck={inDeck}
+                newCount={newQuantities?.[card.id] ?? 0}
+                owned={qty}
+                decked={inDecksQuantities ? decked : undefined}
+                otherDecks={otherDecks(card.id, decked)}
+              />
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
@@ -253,26 +248,12 @@ export default function CardGrid({
                     }}
                     title={inDeck ? `${inDeck} in deck — click to add another` : 'Add to deck'}
                   >
-                    {inDeck ? `×${inDeck}` : '+'}
+                    +
                   </button>
                 )
               )}
               {onRemoveFromCollection && qty > 0 && (
                 <RemoveCollectionButton card={card} quantity={qty} onRemove={() => onRemoveFromCollection(card)} />
-              )}
-              {qty > 0 && (
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 9,
-                    color: 'var(--good)',
-                    width: 22,
-                    textAlign: 'right',
-                  }}
-                  title={`Owned: ${qty}`}
-                >
-                  ◉
-                </span>
               )}
             </div>
           );
@@ -304,7 +285,9 @@ export default function CardGrid({
               card={card}
               owned={ownedQuantities?.[card.id] ?? 0}
               inDeck={inDeck}
+              newCount={newQuantities?.[card.id] ?? 0}
               decked={inDecksQuantities ? inDecksQuantities[card.id] ?? 0 : undefined}
+              otherDecks={otherDecks(card.id, inDecksQuantities?.[card.id] ?? 0)}
               selected={selectedId === card.id}
               onClick={() => onCardClick(card)}
               onView={onViewCard ? () => onViewCard(card) : undefined}
@@ -324,8 +307,12 @@ interface TileProps {
   card: Card;
   owned: number;
   inDeck: number;
+  /** Part of inDeck added since the deck's last confirm. */
+  newCount: number;
   /** Copies in owned decks; undefined when the view doesn't track them. */
   decked?: number;
+  /** Copies in owned decks other than the one being edited, when editing one. */
+  otherDecks?: number;
   selected: boolean;
   onClick: () => void;
   onView?: () => void;
@@ -335,10 +322,43 @@ interface TileProps {
   onRemove?: () => void;
 }
 
-/** Tooltip for the owned ×N: how the total splits between loose and in-deck copies. */
-function ownedSplitTitle(loose: number, decked: number | undefined): string | undefined {
-  if (decked === undefined) return undefined;
-  return `${loose} loose · ${decked} in decks`;
+/** The in-decks tag, or "in other decks" when a deck is open. */
+function DecksTag({ decked, otherDecks, overlay }: { decked?: number; otherDecks?: number; overlay?: boolean }) {
+  if (otherDecks !== undefined) {
+    return otherDecks > 0 ? <CountTag kind="inOtherDecks" count={otherDecks} overlay={overlay} /> : null;
+  }
+  return decked ? <CountTag kind="inDecks" count={decked} overlay={overlay} /> : null;
+}
+
+/** In-deck and new tags: confirmed copies and unconfirmed additions, never overlapping. */
+function DeckTags({ inDeck, newCount, overlay }: { inDeck: number; newCount: number; overlay?: boolean }) {
+  const fresh = Math.max(0, Math.min(newCount, inDeck));
+  return (
+    <>
+      {inDeck - fresh > 0 && <CountTag kind="inDeck" count={inDeck - fresh} overlay={overlay} />}
+      {fresh > 0 && (
+        <CountTag kind="new" count={fresh} overlay={overlay} title={`${fresh} added since last confirm — not yet owned`} />
+      )}
+    </>
+  );
+}
+
+/** In-deck, new, free and in-decks tags for one card, in that fixed order. */
+function CountTags({ inDeck, newCount, owned, decked, otherDecks }: { inDeck: number; newCount: number; owned: number; decked?: number; otherDecks?: number }) {
+  const total = owned + (decked ?? 0);
+  if (inDeck <= 0 && total <= 0) return null;
+  return (
+    <span style={{ display: 'inline-flex', gap: 4, flexShrink: 0 }}>
+      <DeckTags inDeck={inDeck} newCount={newCount} />
+      {owned > 0 && <CountTag kind="free" count={owned} title={ownedSplitTitle(owned, decked)} />}
+      <DecksTag decked={decked} otherDecks={otherDecks} />
+    </span>
+  );
+}
+
+/** Tooltip for the free count: loose copies, not in any deck, and the total owned. */
+function ownedSplitTitle(loose: number, decked: number | undefined): string {
+  return `Not in any deck · ${loose + (decked ?? 0)} owned in total`;
 }
 
 function playsetTitle(target: 'deck' | 'collection'): string {
@@ -347,7 +367,7 @@ function playsetTitle(target: 'deck' | 'collection'): string {
     : `Add playset (${PLAYSET_SIZE} copies)`;
 }
 
-function CardTile({ card, owned, inDeck, decked, selected, onClick, onView, onAdd, onAddPlayset, playsetTitle, onRemove }: TileProps) {
+function CardTile({ card, owned, inDeck, newCount, decked, otherDecks, selected, onClick, onView, onAdd, onAddPlayset, playsetTitle, onRemove }: TileProps) {
   const [hover, setHover] = useState(false);
   const total = owned + (decked ?? 0);
   const hasImage = !!card.image_uri_normal;
@@ -386,45 +406,25 @@ function CardTile({ card, owned, inDeck, decked, selected, onClick, onView, onAd
       >
         <CardImage src={card.image_uri_normal!} alt={card.name} />
         {inDeck > 0 && (
-          <span
-            style={{
-              position: 'absolute',
-              top: 8,
-              left: 8,
-              padding: '2px 7px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              background: 'rgba(0,0,0,0.65)',
-              color: 'var(--accent)',
-              border: '1px solid var(--accent-line)',
-              borderRadius: 3,
-              fontVariantNumeric: 'tabular-nums',
-              backdropFilter: 'blur(4px)',
-            }}
-          >
-            ×{inDeck}
-          </span>
+          <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', gap: 3 }}>
+            <DeckTags inDeck={inDeck} newCount={newCount} overlay />
+          </div>
         )}
         {total > 0 && (
-          <span
-            title={ownedSplitTitle(owned, decked)}
+          <div
             style={{
               position: 'absolute',
               top: 8,
               right: 8,
-              padding: '2px 7px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              background: 'rgba(0,0,0,0.65)',
-              color: 'var(--text)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 3,
-              fontVariantNumeric: 'tabular-nums',
-              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              gap: 3,
             }}
           >
-            ×{total}
-          </span>
+            {owned > 0 && <CountTag kind="free" count={owned} overlay title={ownedSplitTitle(owned, decked)} />}
+            <DecksTag decked={decked} otherDecks={otherDecks} overlay />
+          </div>
         )}
         {removeControl}
         {onView && (
@@ -649,7 +649,7 @@ function CardTile({ card, owned, inDeck, decked, selected, onClick, onView, onAd
       >
         {card.oracle_text || '—'}
       </div>
-      {total > 0 && (
+      {(total > 0 || inDeck > 0) && (
         <div
           style={{
             padding: '6px 10px',
@@ -657,14 +657,9 @@ function CardTile({ card, owned, inDeck, decked, selected, onClick, onView, onAd
             background: 'var(--bg-panel)',
             display: 'flex',
             justifyContent: 'flex-end',
-            gap: 10,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            color: 'var(--text-dim)',
           }}
         >
-          {!!decked && <span style={{ color: 'var(--text-faint)' }}>{decked} in decks</span>}
-          <span title={ownedSplitTitle(owned, decked)}>×{total}</span>
+          <CountTags inDeck={inDeck} newCount={newCount} owned={owned} decked={decked} otherDecks={otherDecks} />
         </div>
       )}
       {removeControl}

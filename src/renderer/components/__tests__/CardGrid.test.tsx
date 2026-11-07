@@ -79,15 +79,64 @@ describe.each(['grid', 'list'] as const)('%s collection controls', (view) => {
     expect(addPlayset).toHaveBeenCalledWith(card);
   });
 
-  it('counts every owned copy and shows the loose/in-deck split', () => {
+  it('shows free and in-decks copies as separate piles', () => {
     render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
       ownedQuantities={{ [card.id]: 2 }} inDecksQuantities={{ [card.id]: 3 }} />);
-    expect(screen.getByTitle('2 loose · 3 in decks')).toHaveTextContent('×5');
+    expect(screen.getByText('2 free')).toHaveAttribute('title', 'Not in any deck · 5 owned in total');
+    expect(screen.getByText('3 in decks')).toBeInTheDocument();
   });
 
-  it('shows cards held only in decks as owned', () => {
+  it('labels deck and free counts as distinct tags', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()} onAddToDeck={vi.fn()}
+      deckQuantities={{ [card.id]: 2 }} ownedQuantities={{ [card.id]: 2 }} />);
+    expect(screen.getByText('2 in deck')).toHaveAttribute('data-count-kind', 'inDeck');
+    expect(screen.getByText('2 free')).toHaveAttribute('data-count-kind', 'free');
+  });
+
+  it('splits copies between this deck, free and other decks without overlap', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      deckQuantities={{ [card.id]: 2 }} ownedQuantities={{ [card.id]: 1 }} inDecksQuantities={{ [card.id]: 3 }}
+      currentDeckQuantities={{ [card.id]: 2 }} />);
+    expect(screen.getByText('2 in deck')).toBeInTheDocument();
+    expect(screen.getByText('1 free')).toBeInTheDocument();
+    expect(screen.getByText('1 in other decks')).toBeInTheDocument();
+    expect(screen.queryByText(/^\d+ in decks$/)).toBeNull();
+  });
+
+  it('shows only the other-decks tag when every copy is in another deck', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      ownedQuantities={{}} inDecksQuantities={{ [card.id]: 4 }} currentDeckQuantities={{}} />);
+    expect(screen.getByText('4 in other decks')).toBeInTheDocument();
+    expect(screen.queryByText(/free$/)).toBeNull();
+    expect(screen.queryByText(/in deck$/)).toBeNull();
+  });
+
+  it('hides the other-decks tag when every copy is in the open deck', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      deckQuantities={{ [card.id]: 4 }} ownedQuantities={{}} inDecksQuantities={{ [card.id]: 4 }}
+      currentDeckQuantities={{ [card.id]: 4 }} />);
+    expect(screen.getByText('4 in deck')).toBeInTheDocument();
+    expect(screen.queryByText(/free$|in (other )?decks$/)).toBeNull();
+  });
+
+  it('shows unconfirmed additions as new, not again as in deck', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      deckQuantities={{ [card.id]: 4 }} newQuantities={{ [card.id]: 4 }} />);
+    expect(screen.getByText('+4 new')).toBeInTheDocument();
+    expect(screen.queryByText(/in deck$/)).toBeNull();
+  });
+
+  it('splits a deck count into confirmed and new copies', () => {
+    render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
+      deckQuantities={{ [card.id]: 4 }} newQuantities={{ [card.id]: 2 }} />);
+    expect(screen.getByText('2 in deck')).toBeInTheDocument();
+    expect(screen.getByText('+2 new')).toBeInTheDocument();
+  });
+
+  it('shows cards held only in decks with the in-decks tag alone', () => {
     render(<CardGrid cards={[card]} loading={false} view={view} onCardClick={vi.fn()}
       ownedQuantities={{}} inDecksQuantities={{ [card.id]: 3 }} />);
-    expect(screen.getByTitle('0 loose · 3 in decks')).toHaveTextContent('×3');
+    expect(screen.getByText('3 in decks')).toBeInTheDocument();
+    expect(screen.queryByText(/free$/)).toBeNull();
   });
 });

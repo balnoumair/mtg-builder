@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Deck, Tag } from '../../shared/types';
 import { groupDecksBySetGroup } from '../../shared/deckSetGroup';
 import DeckGroupLabel, { partitionDecks } from './DeckGroupLabel';
+import DeckColorStatsModal from './DeckColorStatsModal';
 import DeckRowColorIdentity from './DeckRowColorIdentity';
 import DeckSetGroupLabel from './DeckSetGroupLabel';
 import DeckTag from './DeckTag';
@@ -48,6 +49,7 @@ export default function DeckList({
   onClearTagFilter,
 }: Props) {
   const [showCreate, setShowCreate] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const [name, setName] = useState('');
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -285,6 +287,21 @@ export default function DeckList({
           </span>
           <div style={{ flex: 1 }} />
           <button
+            onClick={() => setShowStats(true)}
+            title="Count decks by color combination"
+            style={{
+              padding: '5px 11px',
+              background: 'var(--bg-chip)',
+              border: '1px solid var(--border-strong)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text-dim)',
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
+          >
+            Stats
+          </button>
+          <button
             onClick={() => setShowCreate((v) => !v)}
             style={{
               padding: '5px 11px',
@@ -452,6 +469,9 @@ export default function DeckList({
           </>
         )}
       </div>
+      {showStats && (
+        <DeckColorStatsModal decks={decks} filtered={hasDeckFilters} onClose={() => setShowStats(false)} />
+      )}
     </div>
   );
 }
