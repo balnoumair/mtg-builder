@@ -13,6 +13,7 @@ import {
 } from '../queries/externalDecks';
 import { getAccessToken } from './googleAuth';
 import { getSheetSyncSettings, setSetting } from '../queries/settings';
+import { tMain } from '../i18n';
 
 export const MAZOS_SHEET = 'MAZOS';
 export const EDICIONES_SHEET = 'EDICIONES';
@@ -34,7 +35,7 @@ export function parseSpreadsheetId(input: string): string {
 
 export function requireSpreadsheetId(spreadsheetId: string): string {
   if (!spreadsheetId) {
-    throw new Error('No spreadsheet configured — paste the sheet link in the Playgroup sheet settings first.');
+    throw new Error(tMain('main.sheetPull.noSpreadsheet'));
   }
   return spreadsheetId;
 }
@@ -56,11 +57,9 @@ export async function sheetsApi(
   if (!res.ok) {
     const error = body.error as { message?: string; status?: string } | undefined;
     if (error?.status === 'PERMISSION_DENIED') {
-      throw new Error(
-        'The service account has no access — share the spreadsheet with its client_email (Viewer is enough for pull; Editor is required for push).',
-      );
+      throw new Error(tMain('main.sheetPull.permissionDenied'));
     }
-    throw new Error(`Sheets API error: ${error?.message ?? res.status}`);
+    throw new Error(tMain('main.sheetPull.apiError', { message: error?.message ?? res.status }));
   }
   return body;
 }
@@ -84,7 +83,10 @@ export function assertMazosHeader(rows: string[][]): void {
   const actual = header.slice(0, EXPECTED_HEADER.length).map((h) => h.trim());
   if (EXPECTED_HEADER.some((expected, i) => actual[i] !== expected)) {
     throw new Error(
-      `MAZOS columns changed: expected [${EXPECTED_HEADER.join(', ')}], found [${actual.join(', ')}]. Sync aborted to avoid corrupting the sheet.`,
+      tMain('main.sheetPull.headerChanged', {
+        expected: EXPECTED_HEADER.join(', '),
+        found: actual.join(', '),
+      }),
     );
   }
 }
@@ -266,7 +268,7 @@ export function setSheetBlockCodes(
   const result = db.prepare(
     'UPDATE sheet_blocks SET set_codes = ?, manual = 1 WHERE label = ?',
   ).run(JSON.stringify(cleaned), label);
-  if (result.changes === 0) throw new Error(`Unknown sheet label: ${label}`);
+  if (result.changes === 0) throw new Error(tMain('main.sheetPull.unknownLabel', { label }));
 }
 
 /** Drops a manual override, restoring the seeded dictionary mapping. */
@@ -274,7 +276,7 @@ export function resetSheetBlockCodes(db: Database.Database, label: string): void
   const result = db.prepare(
     'UPDATE sheet_blocks SET set_codes = ?, manual = 0 WHERE label = ?',
   ).run(JSON.stringify(SHEET_BLOCK_SETS[label] ?? []), label);
-  if (result.changes === 0) throw new Error(`Unknown sheet label: ${label}`);
+  if (result.changes === 0) throw new Error(tMain('main.sheetPull.unknownLabel', { label }));
 }
 
 /** Whether the seed dictionary knows this label, i.e. a reset would restore something. */

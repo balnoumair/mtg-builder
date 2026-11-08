@@ -1,10 +1,14 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import type { Card, Deck, DeckCard, Tag } from '../../shared/types';
+import { displayCardName } from '../../shared/cardDisplay';
 import { useCardDetail } from '../hooks/useCards';
 import { useDeckEditorCards } from '../hooks/useDeckEditorCards';
 import { useInfiniteScrollSentinel } from '../hooks/useInfiniteScrollSentinel';
+import { useScrollTopOnChange } from '../hooks/useScrollTopOnChange';
 import { useDeckCards } from '../hooks/useDecks';
 import { useCollectionLookup, useInDeckLookup, useCollectionActions } from '../hooks/useCollection';
+import { useCardLanguage } from '../hooks/useCardLanguage';
+import { useI18n } from '../i18n/I18nProvider';
 import { getCardTypeCategory, TYPE_ORDER, CMC_GROUP_ORDER, getCmcGroup, getManaMeta } from '../lib/mana';
 import { getMaxCopies, PLAYSET_SIZE } from '../../shared/deckLimits';
 import CardFilters from './CardFilters';
@@ -23,7 +27,8 @@ import SplitPane, { PanelCollapseButton } from './SplitPane';
 import DeckTagPicker from './DeckTagPicker';
 import InfiniteScrollFooter from './InfiniteScrollFooter';
 import CountTag from './CountTag';
-import { COST_PILL, TYPE_PILL, GroupPillHeader, formatCostGroupLabel, type PillStyle } from './PillLabel';
+import CardLanguageSelect from './CardLanguageSelect';
+import { COST_PILL, TYPE_PILL, GroupPillHeader, formatGroupLabel, type PillStyle } from './PillLabel';
 
 const REMOVED_PILL: PillStyle = {
   color: '#d98a8a',
@@ -58,6 +63,8 @@ export default function DeckEditor({
   onSetDeckTags,
   onCreateTag,
 }: Props) {
+  const { t } = useI18n();
+  const { language, setLanguage, available } = useCardLanguage();
   const deck = decks.find((d) => d.id === deckId);
   const {
     cards: deckCards,
@@ -73,6 +80,10 @@ export default function DeckEditor({
   const { filters, updateFilters, cards: searchCards, total: searchTotal, loading, loadingMore, hasMore, loadMore } =
     useDeckEditorCards(deckId, { enabled: active, deck });
   const { card: detailCard, open: detailOpen, showCard, close: closeDetail } = useCardDetail();
+
+  useEffect(() => {
+    if (filters.lang !== language) updateFilters({ lang: language });
+  }, [language, filters.lang, updateFilters]);
   const [activeBoard, setActiveBoard] = useState<'main' | 'sideboard'>('main');
   const [deckView, setDeckView] = useState<'list' | 'visual'>('visual');
   const [deckGroupBy, setDeckGroupBy] = useState<'type' | 'cost'>('cost');
@@ -253,7 +264,7 @@ export default function DeckEditor({
   };
 
   const handleDeleteDeck = async () => {
-    if (!deck || !confirm(`Delete "${deck.name}"?`)) return;
+    if (!deck || !confirm(t('deckEditor.deleteConfirm', { name: deck.name }))) return;
     await onDeleteDeck(deckId);
   };
 
@@ -410,6 +421,7 @@ export default function DeckEditor({
     loadingMore,
     onLoadMore: loadMore,
   });
+  useScrollTopOnChange(searchScrollRef, filters);
 
   const mainCount = deckCards.filter((c) => c.board === 'main').reduce((s, c) => s + c.quantity, 0);
   const sideCount = deckCards.filter((c) => c.board === 'sideboard').reduce((s, c) => s + c.quantity, 0);
@@ -434,8 +446,8 @@ export default function DeckEditor({
         minRight={260}
         defaultLeftCollapsed
         resetKey={`${deckId}:${active}`}
-        leftLabel="Card finder"
-        rightLabel="Deck"
+        leftLabel={t('deckEditor.cardFinder')}
+        rightLabel={t('deckEditor.deckPanel')}
         left={({ collapse }) => (
             <div
               style={{
@@ -472,8 +484,8 @@ export default function DeckEditor({
                     <input
                       value={filters.query || ''}
                       onChange={(e) => updateFilters({ query: e.target.value || undefined })}
-                      placeholder="Search cards to add… (name, text, or type)"
-                      title="Words search name, rules text, and type. Prefixes: t: type, o: rules text, n: name. Quote phrases: t:&quot;human soldier&quot;"
+                      placeholder={t('deckEditor.searchPlaceholder')}
+                      title={t('cardBrowser.searchTitle')}
                       style={{
                         flex: 1,
                         minWidth: 0,
@@ -489,10 +501,11 @@ export default function DeckEditor({
                       {searchTotal.toLocaleString()}
                     </span>
                   </div>
+                  <CardLanguageSelect value={language} available={available} onChange={setLanguage} />
                   <ViewToggle value={searchView} onChange={setSearchView} />
                   <PanelCollapseButton
                     direction="left"
-                    title="Hide card finder"
+                    title={t('deckEditor.hideCardFinder')}
                     onClick={collapse}
                   />
                 </div>
@@ -501,7 +514,6 @@ export default function DeckEditor({
 
               <div
                 ref={searchScrollRef}
-                className="scroll-hidden"
                 style={{ flex: 1, overflowY: 'auto', padding: searchView === 'grid' ? 'var(--pad)' : 0 }}
               >
                 <CardGrid
@@ -582,9 +594,9 @@ export default function DeckEditor({
               />
             ) : (
               [
-                { k: 'main' as const, l: 'Main', n: mainCount as number | null },
-                { k: 'sideboard' as const, l: 'Sideboard', n: sideCount as number | null },
-                ...(deck?.owned ? [{ k: 'notes' as const, l: 'Notes', n: null }] : []),
+                { k: 'main' as const, l: t('deckEditor.tabMain'), n: mainCount as number | null },
+                { k: 'sideboard' as const, l: t('deckEditor.tabSideboard'), n: sideCount as number | null },
+                ...(deck?.owned ? [{ k: 'notes' as const, l: t('deckEditor.tabNotes'), n: null }] : []),
               ].map((tab) => {
                 const active = notesOpen ? tab.k === 'notes' : activeBoard === tab.k;
                 return (
@@ -629,7 +641,7 @@ export default function DeckEditor({
                     ) : (
                       notes.trim() !== '' && (
                         <span
-                          title="This deck has notes"
+                          title={t('deckEditor.hasNotes')}
                           style={{
                             width: 4,
                             height: 4,
@@ -645,7 +657,7 @@ export default function DeckEditor({
               })
             )}
             <div style={{ flex: 1, minWidth: 0 }} />
-            <PanelCollapseButton direction="right" title="Hide deck panel" onClick={collapse} />
+            <PanelCollapseButton direction="right" title={t('deckEditor.hideDeckPanel')} onClick={collapse} />
           </div>
 
           <div
@@ -663,32 +675,32 @@ export default function DeckEditor({
                   value={deckView}
                   onChange={setDeckView}
                   options={[
-                    { value: 'list', label: 'list' },
-                    { value: 'visual', label: 'visual' },
+                    { value: 'list', label: t('deckEditor.viewList') },
+                    { value: 'visual', label: t('deckEditor.viewVisual') },
                   ]}
                 />
                 <ViewToggle
                   value={deckGroupBy}
                   onChange={setDeckGroupBy}
                   options={[
-                    { value: 'type', label: 'type' },
-                    { value: 'cost', label: 'cost' },
+                    { value: 'type', label: t('deckEditor.groupByType') },
+                    { value: 'cost', label: t('deckEditor.groupByCost') },
                   ]}
                 />
               </>
             )}
             <button onClick={() => setShowExport(true)} style={chipBtn}>
-              Export
+              {t('deckEditor.export')}
             </button>
             <button onClick={startRename} style={chipBtn}>
-              Rename
+              {t('deckEditor.rename')}
             </button>
             <button onClick={() => void handleDeleteDeck()} style={{ ...chipBtn, color: 'var(--danger)' }}>
-              Delete
+              {t('deckEditor.delete')}
             </button>
             {!deck?.owned && (
               <button onClick={() => setShowClaim(true)} style={chipBtn}>
-                Claim
+                {t('deckEditor.claim')}
               </button>
             )}
           </div>
@@ -721,15 +733,15 @@ export default function DeckEditor({
             >
               <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                 {[
-                  addedCount > 0 ? `${addedCount} added` : null,
-                  removedCount > 0 ? `${removedCount} removed` : null,
+                  addedCount > 0 ? t('deckEditor.pendingAdded', { count: addedCount }) : null,
+                  removedCount > 0 ? t('deckEditor.pendingRemoved', { count: removedCount }) : null,
                 ]
                   .filter(Boolean)
                   .join(' · ')}{' '}
-                <span style={{ color: 'var(--text-mute)' }}>unconfirmed</span>
+                <span style={{ color: 'var(--text-mute)' }}>{t('deckEditor.unconfirmed')}</span>
               </span>
-              <button onClick={handleDiscardChanges} style={chipBtn} title="Revert to the last confirmed deck">
-                Discard
+              <button onClick={handleDiscardChanges} style={chipBtn} title={t('deckEditor.discardTitle')}>
+                {t('deckEditor.discard')}
               </button>
               <button
                 onClick={() => setShowChanges(true)}
@@ -740,7 +752,7 @@ export default function DeckEditor({
                   color: 'var(--accent)',
                 }}
               >
-                Confirm…
+                {t('deckEditor.confirm')}
               </button>
             </div>
           )}
@@ -759,7 +771,7 @@ export default function DeckEditor({
             <textarea
               value={notes}
               onChange={(e) => handleNotesChange(e.target.value)}
-              placeholder="Sideboard plans, swaps to try, matchup notes…"
+              placeholder={t('deckEditor.notesPlaceholder')}
               spellCheck={false}
               style={{
                 flex: 1,
@@ -793,13 +805,16 @@ export default function DeckEditor({
                   color: 'var(--text-faint)',
                 }}
               >
-                {notesStatus === 'saving' ? 'Saving…' : notesStatus === 'saved' ? 'Saved' : ''}
+                {notesStatus === 'saving'
+                  ? t('deckEditor.notesSaving')
+                  : notesStatus === 'saved'
+                    ? t('deckEditor.notesSaved')
+                    : ''}
               </span>
             </div>
           </div>
         )}
         <div
-          className="scroll-hidden"
           style={{
             flex: 1,
             minHeight: 0,
@@ -812,9 +827,9 @@ export default function DeckEditor({
         >
           {groupedCards.length === 0 && removedRows.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '32px 16px' }}>
-              <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>No cards yet</p>
+              <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>{t('deckEditor.emptyTitle')}</p>
               <p style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 6 }}>
-                Click any card on the left to add it
+                {t('deckEditor.emptyHint')}
               </p>
             </div>
           ) : (
@@ -823,7 +838,7 @@ export default function DeckEditor({
               <div key={key} style={{ marginTop: 8 }}>
                 <div style={{ padding: deckView === 'visual' ? '4px 0 8px' : '4px var(--pad)' }}>
                   <GroupPillHeader
-                    label={deckGroupBy === 'cost' ? formatCostGroupLabel(key) : key}
+                    label={formatGroupLabel(key, t)}
                     style={deckGroupBy === 'cost' ? COST_PILL : TYPE_PILL}
                     count={count}
                   />
@@ -904,7 +919,7 @@ export default function DeckEditor({
                               kind="new"
                               count={newCount}
                               compact
-                              title={`${newCount} added since last confirm — not yet owned`}
+                              title={t('deckEditor.newSinceConfirm', { count: newCount })}
                             />
                           )}
                         </span>
@@ -922,7 +937,7 @@ export default function DeckEditor({
                         </span>
                         {dc.ignore_copy_limit && (
                           <span
-                            title="Copy limit ignored for this card"
+                            title={t('deckEditor.copyLimitIgnored')}
                             style={{
                               fontFamily: 'var(--font-mono)',
                               fontSize: 10,
@@ -935,7 +950,7 @@ export default function DeckEditor({
                         )}
                         {dc.card && colorIgnoredNames.has(dc.card.name) && (
                           <span
-                            title="Not counted toward the deck's colors"
+                            title={t('deckEditor.colorsIgnored')}
                             style={{
                               fontFamily: 'var(--font-mono)',
                               fontSize: 10,
@@ -956,11 +971,16 @@ export default function DeckEditor({
                           }}
                         >
                           {owned > 0 && need > 0 && (
-                            <CountTag kind="need" count={need} compact title={`Own ${owned}, need ${need} more`} />
+                            <CountTag
+                              kind="need"
+                              count={need}
+                              compact
+                              title={t('deckEditor.ownNeedMore', { owned, need })}
+                            />
                           )}
                           {owned > 0 && need <= 0 && (
                             <span
-                              title={`Owned: ${owned}`}
+                              title={t('deckEditor.ownedCount', { count: owned })}
                               style={{
                                 width: 6,
                                 height: 6,
@@ -1010,8 +1030,8 @@ export default function DeckEditor({
                               }
                               title={
                                 dc.ignore_copy_limit
-                                  ? 'Copy limit ignored for this card — click to enforce it again'
-                                  : 'Ignore the copy limit for this card in this deck'
+                                  ? t('deckEditor.enforceCopyLimit')
+                                  : t('deckEditor.ignoreCopyLimit')
                               }
                             >
                               ∞
@@ -1035,8 +1055,8 @@ export default function DeckEditor({
                               }
                               title={
                                 colorIgnoredNames.has(dc.card!.name)
-                                  ? "Not counted toward the deck's colors — click to count it again"
-                                  : "Don't count this card toward the deck's colors"
+                                  ? t('deckEditor.countColors')
+                                  : t('deckEditor.ignoreColors')
                               }
                             >
                               ⊘
@@ -1048,7 +1068,7 @@ export default function DeckEditor({
                               handleQuantityChange(dc.card_id, dc.board, -1);
                             }}
                             style={miniBtn}
-                            title="Remove one"
+                            title={t('deckEditor.removeOne')}
                           >
                             −
                           </button>
@@ -1059,7 +1079,7 @@ export default function DeckEditor({
                             }}
                             disabled={!canAdd}
                             style={{ ...miniBtn, opacity: canAdd ? 1 : 0.35, cursor: canAdd ? 'pointer' : 'default' }}
-                            title={canAdd ? 'Add one' : 'Copy limit reached'}
+                            title={canAdd ? t('deckEditor.addOne') : t('deckEditor.copyLimitReached')}
                           >
                             +
                           </button>
@@ -1069,7 +1089,7 @@ export default function DeckEditor({
                               handleRemoveAll(dc);
                             }}
                             style={{ ...miniBtn, color: 'var(--danger)' }}
-                            title={`Remove all ${dc.quantity} copies`}
+                            title={t(dc.quantity === 1 ? 'deckEditor.removeAllOne' : 'deckEditor.removeAllOther', { count: dc.quantity })}
                           >
                             ✕
                           </button>
@@ -1084,7 +1104,7 @@ export default function DeckEditor({
               <div style={{ marginTop: 14 }}>
                 <div style={{ padding: deckView === 'visual' ? '4px 0 8px' : '4px var(--pad)' }}>
                   <GroupPillHeader
-                    label="Removed"
+                    label={t('deckEditor.removedGroup')}
                     style={REMOVED_PILL}
                     count={removedRows.reduce((s, dc) => s + ((dc.owned_quantity ?? 0) - dc.quantity), 0)}
                   />
@@ -1144,9 +1164,9 @@ export default function DeckEditor({
                         }}
                         className="opacity-0 group-hover:opacity-100"
                         style={{ ...miniBtn, width: 'auto', padding: '0 6px', transition: 'opacity 120ms' }}
-                        title="Put back in the deck"
+                        title={t('deckEditor.restoreTitle')}
                       >
-                        restore
+                        {t('deckEditor.restore')}
                       </button>
                     </div>
                   );
@@ -1174,7 +1194,7 @@ export default function DeckEditor({
 
       {showExport && (
         <ExportDeckModal
-          deckName={deck?.name || 'Deck'}
+          deckName={deck?.name || t('deckEditor.untitledDeck')}
           deckCards={deckCards.filter((c) => c.quantity > 0)}
           onClose={() => setShowExport(false)}
         />
@@ -1182,7 +1202,7 @@ export default function DeckEditor({
 
       {showClaim && (
         <ClaimDeckModal
-          deckName={deck?.name || 'Deck'}
+          deckName={deck?.name || t('deckEditor.untitledDeck')}
           deckCards={deckCards}
           ownedQuantities={deckOwnedQtys}
           onConfirm={handleClaimDeck}
@@ -1192,7 +1212,7 @@ export default function DeckEditor({
 
       {showChanges && (
         <DeckChangesModal
-          deckName={deck?.name || 'Deck'}
+          deckName={deck?.name || t('deckEditor.untitledDeck')}
           additions={pending.additions}
           removals={pending.removals}
           onConfirm={handleConfirmChanges}
@@ -1218,6 +1238,7 @@ interface TileProps {
 }
 
 function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, onRemove, onRemoveAll, onToggleLimit, colorsIgnored, onToggleColors }: TileProps) {
+  const { t } = useI18n();
   const [hover, setHover] = useState(false);
   const card = deckCard.card;
   if (!card) return null;
@@ -1243,7 +1264,7 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
       }}
     >
       {card.image_uri_normal ? (
-        <CardImage src={card.image_uri_normal} alt={card.name} />
+        <CardImage src={card.image_uri_normal} alt={displayCardName(card)} />
       ) : (
         <div
           style={{
@@ -1270,7 +1291,7 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
               textOverflow: 'ellipsis',
             }}
           >
-            {card.name}
+            {displayCardName(card)}
           </div>
           <div style={{ flex: 1 }} />
           <div
@@ -1310,7 +1331,7 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
           overlay
           compact
           suffix={confirmed > 0 ? undefined : markers}
-          title={`${newCount} added since last confirm — not yet owned`}
+          title={t('deckEditor.newSinceConfirm', { count: newCount })}
           style={{ position: 'absolute', top: 5, right: 6 }}
         />
       )}
@@ -1323,7 +1344,7 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
               onRemove();
             }}
             style={hoverBtn}
-            title="Remove one"
+            title={t('deckEditor.removeOne')}
           >
             −
           </button>
@@ -1334,7 +1355,7 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
             }}
             disabled={!canAdd}
             style={{ ...hoverBtn, opacity: canAdd ? 1 : 0.35, cursor: canAdd ? 'pointer' : 'default' }}
-            title={canAdd ? 'Add one' : 'Copy limit reached'}
+            title={canAdd ? t('deckEditor.addOne') : t('deckEditor.copyLimitReached')}
           >
             +
           </button>
@@ -1351,8 +1372,8 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
               }
               title={
                 deckCard.ignore_copy_limit
-                  ? 'Copy limit ignored for this card — click to enforce it again'
-                  : 'Ignore the copy limit for this card in this deck'
+                  ? t('deckEditor.enforceCopyLimit')
+                  : t('deckEditor.ignoreCopyLimit')
               }
             >
               ∞
@@ -1371,8 +1392,8 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
               }
               title={
                 colorsIgnored
-                  ? "Not counted toward the deck's colors — click to count it again"
-                  : "Don't count this card toward the deck's colors"
+                  ? t('deckEditor.countColors')
+                  : t('deckEditor.ignoreColors')
               }
             >
               ⊘
@@ -1385,7 +1406,9 @@ function DeckCardTile({ deckCard, selected, newCount, canAdd, onClick, onAdd, on
               onRemoveAll();
             }}
             style={{ ...hoverBtn, color: 'var(--danger)' }}
-            title={`Remove all ${deckCard.quantity} copies`}
+            title={t(deckCard.quantity === 1 ? 'deckEditor.removeAllOne' : 'deckEditor.removeAllOther', {
+              count: deckCard.quantity,
+            })}
           >
             ✕
           </button>

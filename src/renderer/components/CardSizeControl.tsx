@@ -1,8 +1,9 @@
 import {
-  CARD_SIZE_LABELS,
+  CARD_SIZE_LABEL_KEYS,
   stepCardSize,
   type CardSize,
 } from '../lib/cardSize';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   value: CardSize;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function CardSizeControl({ value, onChange }: Props) {
+  const { t } = useI18n();
   const smaller = stepCardSize(value, -1);
   const larger = stepCardSize(value, 1);
   const atSmallest = smaller === value;
@@ -29,25 +31,25 @@ export default function CardSizeControl({ value, onChange }: Props) {
         fontSize: 10,
       }}
       role="group"
-      aria-label="Card size"
+      aria-label={t('cardSize.label')}
     >
       <button
         onClick={() => onChange(smaller)}
         disabled={atSmallest}
-        aria-label="Decrease card size"
-        title="Decrease card size"
+        aria-label={t('cardSize.decrease')}
+        title={t('cardSize.decrease')}
         style={sizeButton(atSmallest)}
       >
         −
       </button>
       <span style={{ minWidth: 22, textAlign: 'center', color: 'var(--text-mute)' }}>
-        {CARD_SIZE_LABELS[value]}
+        {t(CARD_SIZE_LABEL_KEYS[value])}
       </span>
       <button
         onClick={() => onChange(larger)}
         disabled={atLargest}
-        aria-label="Increase card size"
-        title="Increase card size"
+        aria-label={t('cardSize.increase')}
+        title={t('cardSize.increase')}
         style={sizeButton(atLargest)}
       >
         +

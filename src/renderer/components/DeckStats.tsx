@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { DeckCard } from '../../shared/types';
+import type { MessageKey } from '../../shared/i18n';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   cards: DeckCard[];
@@ -23,20 +25,27 @@ function cmcKey(cmc: number): string {
   return cmc >= 6 ? '6+' : String(Math.floor(cmc));
 }
 
-function formatCurveTooltip(bucket: CurveBucket): string {
+type Translate = (key: MessageKey, vars?: Record<string, string | number>) => string;
+
+function creatureCount(t: Translate, count: number): string {
+  return t(count === 1 ? 'deckStats.creatureCountOne' : 'deckStats.creatureCountOther', { count });
+}
+
+function spellCount(t: Translate, count: number): string {
+  return t(count === 1 ? 'deckStats.spellCountOne' : 'deckStats.spellCountOther', { count });
+}
+
+function formatCurveTooltip(bucket: CurveBucket, t: Translate): string {
   const total = bucket.creatures + bucket.spells;
-  if (total === 0) return 'No cards';
+  if (total === 0) return t('deckStats.noCards');
   const parts: string[] = [];
-  if (bucket.creatures > 0) {
-    parts.push(`${bucket.creatures} creature${bucket.creatures === 1 ? '' : 's'}`);
-  }
-  if (bucket.spells > 0) {
-    parts.push(`${bucket.spells} spell${bucket.spells === 1 ? '' : 's'}`);
-  }
+  if (bucket.creatures > 0) parts.push(creatureCount(t, bucket.creatures));
+  if (bucket.spells > 0) parts.push(spellCount(t, bucket.spells));
   return parts.join(', ');
 }
 
 export default function DeckStats({ cards, board, targetTotal = 60, targetLands = 24 }: Props) {
+  const { t } = useI18n();
   const boardCards = cards.filter((c) => c.board === board);
 
   let total = 0;
@@ -63,10 +72,10 @@ export default function DeckStats({ cards, board, targetTotal = 60, targetLands 
   }
 
   const tiles = [
-    { l: 'Cards', v: total, t: targetTotal },
-    { l: 'Lands', v: lands, t: targetLands },
-    { l: 'Creatures', v: creatures },
-    { l: 'Spells', v: spells },
+    { l: t('deckStats.cards'), v: total, t: targetTotal },
+    { l: t('deckStats.lands'), v: lands, t: targetLands },
+    { l: t('deckStats.creatures'), v: creatures },
+    { l: t('deckStats.spells'), v: spells },
   ];
 
   return (
@@ -121,6 +130,7 @@ export default function DeckStats({ cards, board, targetTotal = 60, targetLands 
 }
 
 function ManaCurve({ curve }: { curve: Record<string, CurveBucket> }) {
+  const { t } = useI18n();
   const max = Math.max(
     1,
     ...CURVE_KEYS.map((k) => {
@@ -142,7 +152,7 @@ function ManaCurve({ curve }: { curve: Record<string, CurveBucket> }) {
           marginBottom: 6,
         }}
       >
-        Curve
+        {t('deckStats.curve')}
       </div>
       <div
         style={{
@@ -163,7 +173,7 @@ function ManaCurve({ curve }: { curve: Record<string, CurveBucket> }) {
               cmc={k}
               bucket={bucket}
               barHeight={barHeight}
-              tooltip={formatCurveTooltip(bucket)}
+              tooltip={formatCurveTooltip(bucket, t)}
               total={total}
             />
           );
@@ -186,6 +196,7 @@ function CurveBar({
   tooltip: string;
   total: number;
 }) {
+  const { t } = useI18n();
   const [hover, setHover] = useState(false);
 
   return (
@@ -226,16 +237,8 @@ function CurveBar({
             zIndex: 5,
           }}
         >
-          {bucket.creatures > 0 && (
-            <div>
-              {bucket.creatures} creature{bucket.creatures === 1 ? '' : 's'}
-            </div>
-          )}
-          {bucket.spells > 0 && (
-            <div>
-              {bucket.spells} spell{bucket.spells === 1 ? '' : 's'}
-            </div>
-          )}
+          {bucket.creatures > 0 && <div>{creatureCount(t, bucket.creatures)}</div>}
+          {bucket.spells > 0 && <div>{spellCount(t, bucket.spells)}</div>}
         </div>
       )}
       {total > 0 && (

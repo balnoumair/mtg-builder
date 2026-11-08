@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { createTag } from './queries/tags';
 import { isTagColor } from '../shared/tagColors';
+import { tMain } from './i18n';
 import type {
   AppBackup,
   BackupApplyMode,
@@ -138,14 +139,14 @@ function normalizeDeckTags(value: unknown): string[] | undefined {
 
 function validateTags(value: unknown): BackupTag[] | undefined {
   if (value === undefined) return undefined;
-  if (!Array.isArray(value)) throw new Error('Backup tags must be a list');
+  if (!Array.isArray(value)) throw new Error(tMain('main.backup.tagsNotList'));
   return value.map((raw) => {
     const tag = raw as BackupTag;
     if (!tag || typeof tag !== 'object' || typeof tag.name !== 'string' || !tag.name.trim()) {
-      throw new Error('Backup contains a tag without a name');
+      throw new Error(tMain('main.backup.tagWithoutName'));
     }
     if (typeof tag.uuid !== 'string' || !tag.uuid) {
-      throw new Error(`Tag "${tag.name}" has an invalid uuid`);
+      throw new Error(tMain('main.backup.tagInvalidUuid', { name: tag.name }));
     }
     // An unknown colour is not worth failing an import over; the tag just
     // takes the next auto-assigned hue.
@@ -156,33 +157,33 @@ function validateTags(value: unknown): BackupTag[] | undefined {
 function validateBackup(parsed: unknown): AppBackup {
   const backup = parsed as AppBackup;
   if (!backup || typeof backup !== 'object' || backup.kind !== BACKUP_KIND) {
-    throw new Error('Not a backup file');
+    throw new Error(tMain('main.backup.notBackupFile'));
   }
   if (backup.version !== BACKUP_VERSION) {
-    throw new Error(`Unsupported backup version ${backup.version}`);
+    throw new Error(tMain('main.backup.unsupportedVersion', { version: String(backup.version) }));
   }
   if (!Array.isArray(backup.decks) || !Array.isArray(backup.collection)) {
-    throw new Error('Backup file is malformed');
+    throw new Error(tMain('main.backup.malformed'));
   }
   backup.tags = validateTags(backup.tags);
   for (const deck of backup.decks) {
     if (!deck || typeof deck !== 'object' || typeof deck.name !== 'string' || !deck.name) {
-      throw new Error('Backup contains a deck without a name');
+      throw new Error(tMain('main.backup.deckWithoutName'));
     }
     if (deck.uuid !== undefined && (typeof deck.uuid !== 'string' || !deck.uuid)) {
-      throw new Error(`Deck "${deck.name}" has an invalid uuid`);
+      throw new Error(tMain('main.backup.deckInvalidUuid', { name: deck.name }));
     }
     if (!Array.isArray(deck.cards) || !deck.cards.every(isBackupDeckCard)) {
-      throw new Error(`Deck "${deck.name}" has invalid card entries`);
+      throw new Error(tMain('main.backup.deckInvalidCards', { name: deck.name }));
     }
     try {
       deck.tags = normalizeDeckTags(deck.tags);
     } catch {
-      throw new Error(`Deck "${deck.name}" has invalid tags`);
+      throw new Error(tMain('main.backup.deckInvalidTags', { name: deck.name }));
     }
   }
   if (!backup.collection.every(isCardIdentity)) {
-    throw new Error('Backup has invalid collection entries');
+    throw new Error(tMain('main.backup.invalidCollection'));
   }
   return backup;
 }

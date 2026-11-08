@@ -22,6 +22,11 @@ export function searchCards(db: Database.Database, filters: CardFilters): CardSe
   const conditions: string[] = [];
   const params: Record<string, unknown> = {};
 
+  if (filters.lang) {
+    conditions.push('lang = @lang');
+    params.lang = filters.lang;
+  }
+
   if (filters.query) {
     const search = buildSearchConditions(filters.query);
     conditions.push(...search.conditions);
@@ -191,6 +196,15 @@ export function getAllSets(db: Database.Database): CardSet[] {
     FROM sets
     ORDER BY released_at DESC, name ASC
   `).all() as CardSet[];
+}
+
+export function getAvailableCardLanguages(db: Database.Database): string[] {
+  return (
+    db.prepare(`
+      SELECT DISTINCT lang FROM cards WHERE lang IS NOT NULL AND lang != ''
+      ORDER BY CASE lang WHEN 'en' THEN 0 ELSE 1 END, lang ASC
+    `).all() as Array<{ lang: string }>
+  ).map((r) => r.lang);
 }
 
 export { VALID_LAYOUTS };

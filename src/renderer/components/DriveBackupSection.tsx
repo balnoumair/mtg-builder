@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { AppBackup, BackupApplyMode, BackupPreview } from '../../shared/backup';
 import type { DriveSyncSettings } from '../../shared/types';
 import BackupPreviewView from './BackupPreview';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   onImported?: () => void;
@@ -9,6 +10,7 @@ interface Props {
 
 /** Pushes and pulls the app's full JSON snapshot through one shared Drive file. */
 export default function DriveBackupSection({ onImported }: Props) {
+  const { t } = useI18n();
   const [settings, setSettings] = useState<DriveSyncSettings | null>(null);
   const [fileDraft, setFileDraft] = useState('');
   const [busy, setBusy] = useState<'push' | 'pull' | 'apply' | null>(null);
@@ -37,7 +39,7 @@ export default function DriveBackupSection({ onImported }: Props) {
     setFileDraft(next.backupFileId);
     setStatus(null);
     if (value && !next.backupFileId) {
-      setError("That doesn't look like a Google Drive file link or id.");
+      setError(t('drive.invalidFile'));
     } else {
       setError(null);
     }
@@ -52,7 +54,11 @@ export default function DriveBackupSection({ onImported }: Props) {
       if (result.error) {
         setError(result.error);
       } else {
-        setStatus(`Pushed backup to Drive${result.fileName ? ` — ${result.fileName}` : ''}.`);
+        setStatus(
+          result.fileName
+            ? t('drive.pushedFile', { file: result.fileName })
+            : t('drive.pushed'),
+        );
         setSettings(await window.electronAPI.getDriveSyncSettings());
       }
     } catch (err) {
@@ -73,7 +79,7 @@ export default function DriveBackupSection({ onImported }: Props) {
         return;
       }
       if (!result.preview || !result.backup || !result.fileId) {
-        setError('Drive preview failed: the backup did not contain usable data.');
+        setError(t('drive.previewFailed'));
         return;
       }
       setBackupPreview(result.preview);
@@ -108,19 +114,26 @@ export default function DriveBackupSection({ onImported }: Props) {
       onImported?.();
 
       const parts: string[] = [];
-      if (result.decksImported > 0) parts.push(`${result.decksImported} new deck${result.decksImported === 1 ? '' : 's'}`);
-      if (result.decksUpdated > 0) parts.push(`${result.decksUpdated} deck${result.decksUpdated === 1 ? '' : 's'} updated`);
-      if (result.decksImported === 0 && result.decksUpdated === 0) parts.push('0 decks');
-      parts.push(`${result.collectionCards} collection card${result.collectionCards === 1 ? '' : 's'}`);
-      if (result.tagsImported > 0) parts.push(`${result.tagsImported} new tag${result.tagsImported === 1 ? '' : 's'}`);
+      if (result.decksImported > 0) {
+        parts.push(t(result.decksImported === 1 ? 'backup.summary.newDecksOne' : 'backup.summary.newDecksOther', { count: result.decksImported }));
+      }
+      if (result.decksUpdated > 0) {
+        parts.push(t(result.decksUpdated === 1 ? 'backup.summary.decksUpdatedOne' : 'backup.summary.decksUpdatedOther', { count: result.decksUpdated }));
+      }
+      if (result.decksImported === 0 && result.decksUpdated === 0) parts.push(t('backup.summary.noDecks'));
+      parts.push(t(result.collectionCards === 1 ? 'backup.summary.collectionCardsOne' : 'backup.summary.collectionCardsOther', { count: result.collectionCards }));
+      if (result.tagsImported > 0) {
+        parts.push(t(result.tagsImported === 1 ? 'backup.summary.newTagsOne' : 'backup.summary.newTagsOther', { count: result.tagsImported }));
+      }
 
       const summary = parts.join(', ');
       setStatus(
         result.missing.length === 0
-          ? `${mode === 'replace' ? 'Replaced local data' : 'Pulled backup'} — ${summary}.`
-          : `${mode === 'replace' ? 'Replaced local data' : 'Pulled backup'} — ${summary}; missing from database: ${result.missing
-              .map((m) => `${m.quantity}× ${m.card}`)
-              .join(', ')}`,
+          ? t(mode === 'replace' ? 'drive.replacedSummary' : 'drive.pulledSummary', { summary })
+          : t(mode === 'replace' ? 'drive.replacedSummaryMissing' : 'drive.pulledSummaryMissing', {
+              summary,
+              missing: result.missing.map((m) => `${m.quantity}× ${m.card}`).join(', '),
+            }),
       );
       setSettings(await window.electronAPI.getDriveSyncSettings());
       setBackupPreview(null);
@@ -139,10 +152,14 @@ export default function DriveBackupSection({ onImported }: Props) {
   const disabled = busy !== null || !hasFile;
   const lastActivity = settings.lastPushedAt || settings.lastPulledAt
     ? [
-        settings.lastPushedAt ? `pushed ${new Date(settings.lastPushedAt).toLocaleString()}` : '',
-        settings.lastPulledAt ? `pulled ${new Date(settings.lastPulledAt).toLocaleString()}` : '',
+        settings.lastPushedAt
+          ? t('drive.lastPushed', { date: new Date(settings.lastPushedAt).toLocaleString() })
+          : '',
+        settings.lastPulledAt
+          ? t('drive.lastPulled', { date: new Date(settings.lastPulledAt).toLocaleString() })
+          : '',
       ].filter(Boolean).join(' · ')
-    : 'never used';
+    : t('drive.neverUsed');
 
   return (
     <div
@@ -162,14 +179,14 @@ export default function DriveBackupSection({ onImported }: Props) {
             fontWeight: 600,
           }}
         >
-          Drive backup
+          {t('drive.title')}
         </h2>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-mute)' }}>
           {lastActivity}
         </span>
       </div>
       <p style={{ ...hint, marginTop: 0, marginBottom: 12 }}>
-        Push replaces one backup file in Drive. Pull restores that snapshot on this device.
+        {t('drive.intro')}
       </p>
 
       <section
@@ -190,13 +207,13 @@ export default function DriveBackupSection({ onImported }: Props) {
             fontWeight: 600,
           }}
         >
-          Backup file
+          {t('drive.fileHeading')}
         </h3>
         <input
           value={fileDraft}
           onChange={(e) => setFileDraft(e.target.value)}
           onBlur={() => void commitFile()}
-          placeholder="Paste the Google Drive file link…"
+          placeholder={t('drive.filePlaceholder')}
           spellCheck={false}
           style={{
             width: '100%',
@@ -212,8 +229,8 @@ export default function DriveBackupSection({ onImported }: Props) {
         />
         <p style={hint}>
           {hasFile
-            ? 'Paste a full Drive file link or its id; the link is stored as an id.'
-            : 'Required. Upload the JSON once, then share that file with the service account as Editor.'}
+            ? t('drive.fileHint')
+            : t('drive.fileRequired')}
         </p>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
@@ -222,24 +239,24 @@ export default function DriveBackupSection({ onImported }: Props) {
             disabled={disabled}
             style={{ ...actionBtn, opacity: disabled ? 0.5 : 1 }}
           >
-            {busy === 'push' ? 'Pushing…' : 'Push to Drive'}
+            {busy === 'push' ? t('drive.pushing') : t('drive.push')}
           </button>
           <button
             onClick={() => void handlePull()}
             disabled={disabled}
             style={{ ...actionBtn, opacity: disabled ? 0.5 : 1 }}
           >
-            {busy === 'pull' ? 'Pulling…' : 'Pull from Drive'}
+            {busy === 'pull' ? t('drive.pulling') : t('drive.pull')}
           </button>
         </div>
         <p style={{ ...hint, fontFamily: 'var(--font-mono)', fontSize: 9 }}>
-          Uses the service-account key configured in the Playgroup sheet section below.
+          {t('drive.keyHint')}
         </p>
 
         {backupPreview && pendingBackup && pendingFile && (
           <BackupPreviewView
             preview={backupPreview}
-            sourceLabel="Drive backup"
+            sourceLabel={t('drive.title')}
             busy={busy === 'apply'}
             onCancel={() => {
               setBackupPreview(null);
@@ -256,7 +273,7 @@ export default function DriveBackupSection({ onImported }: Props) {
               setStatus(null);
               setError(null);
             }}
-            title="Dismiss"
+            title={t('settings.dismiss')}
             style={{
               margin: '10px 0 0',
               fontFamily: 'var(--font-mono)',

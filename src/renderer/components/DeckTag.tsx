@@ -1,5 +1,6 @@
 import type { Tag } from '../../shared/types';
 import { tagColorTokens } from '../../shared/tagColors';
+import { useI18n } from '../i18n/I18nProvider';
 
 /**
  * A tag reads as a binder divider tab: a colored spine on the leading edge, the
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export default function DeckTag({ tag, size = 'sm', active = false, count, onRemove }: Props) {
+  const { t } = useI18n();
   const c = tagColorTokens(tag.color);
   const small = size === 'sm';
 
@@ -72,7 +74,7 @@ export default function DeckTag({ tag, size = 'sm', active = false, count, onRem
             e.stopPropagation();
             onRemove();
           }}
-          title={`Remove ${tag.name}`}
+          title={t('tags.removeTag', { name: tag.name })}
           className="opacity-0 group-hover/tag:opacity-100"
           style={{
             padding: '0 5px 0 1px',

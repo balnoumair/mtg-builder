@@ -1,8 +1,9 @@
 import type Database from 'better-sqlite3';
 
 // Collapse variant arts within a set only: keep one plain (lowest-numbered)
-// print per (set_code, oracle_id). Reprints in other sets stay — decks group
-// by set/block and must keep the print from the set they belong to.
+// print per (set_code, oracle_id, lang). Reprints in other sets and other
+// languages stay — decks group by set/block and must keep the print from the
+// set they belong to.
 //
 // Decks, the collection, and deck covers that pointed at a dropped variant are
 // re-pointed at the surviving plain print in the same set before delete.
@@ -12,23 +13,22 @@ import type Database from 'better-sqlite3';
 // of deleted prints.
 export function dedupeCardPrints(db: Database.Database): number {
   const dedupe = db.transaction((): number => {
+    // A single window pass, not a self-join: the join's plan depends on which
+    // index the planner guesses is selective, and a bad guess is quadratic.
     db.exec(`
       CREATE TEMP TABLE print_remap AS
-      SELECT c.id AS old_id, k.id AS new_id
-      FROM cards c
-      JOIN (
-        SELECT id, set_code, oracle_id FROM (
-          SELECT id, set_code, oracle_id, ROW_NUMBER() OVER (
-            PARTITION BY set_code, oracle_id
-            ORDER BY CAST(collector_number AS INTEGER) ASC,
-                     collector_number ASC,
-                     id ASC
-          ) AS rn
-          FROM cards
-        ) WHERE rn = 1
-      ) k ON k.oracle_id = c.oracle_id AND k.set_code = c.set_code
-      WHERE c.id <> k.id
+      SELECT id AS old_id, keep_id AS new_id FROM (
+        SELECT id, FIRST_VALUE(id) OVER (
+          PARTITION BY set_code, oracle_id, lang
+          ORDER BY CAST(collector_number AS INTEGER) ASC,
+                   collector_number ASC,
+                   id ASC
+        ) AS keep_id
+        FROM cards
+      )
+      WHERE id <> keep_id
     `);
+    db.exec('CREATE INDEX temp.idx_print_remap_old ON print_remap(old_id)');
 
     // Deck entries move onto the surviving print; rows landing on the same
     // (deck, card, board) key merge quantities.

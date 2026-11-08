@@ -45,6 +45,10 @@ function initSchema(db: BetterSqlite3.Database): void {
       id TEXT PRIMARY KEY,
       oracle_id TEXT NOT NULL,
       name TEXT NOT NULL,
+      lang TEXT NOT NULL DEFAULT 'en',
+      printed_name TEXT,
+      printed_type_line TEXT,
+      printed_text TEXT,
       mana_cost TEXT DEFAULT '',
       cmc REAL DEFAULT 0,
       type_line TEXT DEFAULT '',
@@ -181,6 +185,21 @@ export function runMigrations(db: BetterSqlite3.Database): void {
   if (!cardCols.some(c => c.name === 'block_name')) {
     db.exec("ALTER TABLE cards ADD COLUMN block_name TEXT");
   }
+  if (!cardCols.some(c => c.name === 'lang')) {
+    db.exec("ALTER TABLE cards ADD COLUMN lang TEXT NOT NULL DEFAULT 'en'");
+  }
+  if (!cardCols.some(c => c.name === 'printed_name')) {
+    db.exec('ALTER TABLE cards ADD COLUMN printed_name TEXT');
+  }
+  if (!cardCols.some(c => c.name === 'printed_type_line')) {
+    db.exec('ALTER TABLE cards ADD COLUMN printed_type_line TEXT');
+  }
+  if (!cardCols.some(c => c.name === 'printed_text')) {
+    db.exec('ALTER TABLE cards ADD COLUMN printed_text TEXT');
+  }
+  // Only a handful of distinct values; without ANALYZE stats the planner
+  // treated it as selective and turned card joins quadratic.
+  db.exec('DROP INDEX IF EXISTS idx_cards_lang');
   // Prices are intentionally not tracked; drop them from databases created
   // before their removal.
   if (cardCols.some(c => c.name === 'price_usd')) {
@@ -210,6 +229,7 @@ export function runMigrations(db: BetterSqlite3.Database): void {
 export function createIndexes(db: BetterSqlite3.Database): void {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_cards_name ON cards(name);
+    CREATE INDEX IF NOT EXISTS idx_cards_printed_name ON cards(printed_name);
     CREATE INDEX IF NOT EXISTS idx_cards_oracle_id ON cards(oracle_id);
     CREATE INDEX IF NOT EXISTS idx_cards_set_code ON cards(set_code);
     CREATE INDEX IF NOT EXISTS idx_cards_cmc ON cards(cmc);

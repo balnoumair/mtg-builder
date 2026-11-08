@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, onTestFinished } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CardFilters from '../CardFilters';
@@ -103,7 +103,56 @@ describe('CardFilters', () => {
     expect(onUpdate).toHaveBeenCalledWith({ sets: ['bet'] });
   });
 
-  it('pins selected sets in a section above the block list', async () => {
+  it('moves the whole block of a selected set to the top, without duplicating rows', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSets).mockResolvedValue([
+      { code: 'new', name: 'Newer Set', releasedAt: '2024-01-01', blockCode: null, blockName: null },
+      { code: 'ob1', name: 'Old Block One', releasedAt: '2010-01-01', blockCode: 'ob', blockName: 'Old Block' },
+      { code: 'ob2', name: 'Old Block Two', releasedAt: '2010-06-01', blockCode: 'ob', blockName: 'Old Block' },
+    ]);
+
+    const { onUpdate } = renderCardFilters({ sets: ['ob1'] });
+    await user.click(screen.getByRole('button', { name: /^Edition/ }));
+
+    const rows = await screen.findAllByRole('checkbox');
+    expect(rows.map((row) => [row.textContent, row.getAttribute('aria-checked')])).toEqual([
+      ['Old Block Twoob2', 'false'],
+      ['Old Block Oneob1', 'true'],
+      ['Newer Setnew', 'false'],
+    ]);
+
+    await user.click(screen.getByRole('button', { name: 'Select all sets in Old Block' }));
+    expect(onUpdate).toHaveBeenCalledWith({ sets: ['ob1', 'ob2'] });
+  });
+
+  it('scrolls the set list to the top when a newly selected block moves up', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSets).mockResolvedValue([
+      { code: 'new', name: 'Newer Set', releasedAt: '2024-01-01', blockCode: null, blockName: null },
+      { code: 'ob1', name: 'Old Block One', releasedAt: '2010-01-01', blockCode: 'ob', blockName: 'Old Block' },
+    ]);
+    const scrollTo = vi.fn();
+    const originalScrollTo = HTMLElement.prototype.scrollTo;
+    HTMLElement.prototype.scrollTo = scrollTo;
+    onTestFinished(() => {
+      HTMLElement.prototype.scrollTo = originalScrollTo;
+    });
+
+    const onUpdate = vi.fn();
+    const { rerender } = render(<CardFilters filters={{}} onUpdate={onUpdate} />);
+    await user.click(screen.getByRole('button', { name: /^Edition/ }));
+    await screen.findByText('Old Block One');
+    scrollTo.mockClear();
+
+    rerender(<CardFilters filters={{ sets: ['ob1'] }} onUpdate={onUpdate} />);
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+
+    scrollTo.mockClear();
+    rerender(<CardFilters filters={{}} onUpdate={onUpdate} />);
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('pins selected standalone sets above unselected ones', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.getSets).mockResolvedValue([
       { code: 'old', name: 'Older Set', releasedAt: '2010-01-01', blockCode: null, blockName: null },
@@ -117,9 +166,7 @@ describe('CardFilters', () => {
     expect(rows.map((row) => [row.textContent, row.getAttribute('aria-checked')])).toEqual([
       ['Older Setold', 'true'],
       ['Newer Setnew', 'false'],
-      ['Older Setold', 'true'],
     ]);
-    expect(screen.getByText('Selected')).toBeInTheDocument();
   });
 
   it('selects every set in a block, then deselects them once all are selected', async () => {

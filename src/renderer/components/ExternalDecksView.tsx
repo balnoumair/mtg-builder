@@ -5,6 +5,7 @@ import DeckSetGroupLabel from './DeckSetGroupLabel';
 import FilterDropdown, { type FilterOption } from './FilterDropdown';
 import PillLabel from './PillLabel';
 import ViewToggle from './ViewToggle';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   active: boolean;
@@ -14,6 +15,8 @@ interface Props {
 
 const HIDDEN_PLAYERS_KEY = 'others-decks-hidden-players';
 const HIDDEN_SETS_KEY = 'others-decks-hidden-sets';
+// Also the persisted filter value, so it stays fixed whatever the UI language.
+const NO_BLOCK = 'Sin bloque';
 
 const PLAYER_PILL = {
   color: '#9fcfee',
@@ -56,6 +59,7 @@ function countBy(decks: ExternalDeck[], pick: (d: ExternalDeck) => string): Filt
 }
 
 export default function ExternalDecksView({ active, syncVersion }: Props) {
+  const { t } = useI18n();
   const [decks, setDecks] = useState<ExternalDeck[]>([]);
   const [loading, setLoading] = useState(true);
   const [hiddenPlayers, setHiddenPlayers] = useState<string[]>(() => loadHidden(HIDDEN_PLAYERS_KEY));
@@ -80,10 +84,14 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
 
   // An older main-process build (or an unmapped label) can leave set_label
   // empty; fall back to the sheet's own wording so rows always group by block.
-  const blockOf = (deck: ExternalDeck) => deck.set_label || deck.block_label || 'Sin bloque';
+  const blockOf = (deck: ExternalDeck) => deck.set_label || deck.block_label || NO_BLOCK;
+  const blockName = (block: string) => (block === NO_BLOCK ? t('othersDecks.noBlock') : block);
 
   const playerOptions = useMemo(() => countBy(decks, (d) => d.player), [decks]);
-  const setOptions = useMemo(() => countBy(decks, blockOf), [decks]);
+  const setOptions = useMemo(
+    () => countBy(decks, blockOf).map((option) => ({ ...option, label: blockName(option.value) })),
+    [decks, t],
+  );
 
   const visible = useMemo(
     () =>
@@ -184,7 +192,7 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
               letterSpacing: '-0.01em',
             }}
           >
-            Others&rsquo; Decks
+            {t('othersDecks.title')}
           </h1>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
             {filtered ? `${visible.length}/${decks.length}` : decks.length}
@@ -195,23 +203,23 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
               value={viewMode}
               onChange={setViewMode}
               options={[
-                { value: 'player', label: 'player' },
-                { value: 'set', label: 'set' },
+                { value: 'player', label: t('othersDecks.viewPlayer') },
+                { value: 'set', label: t('othersDecks.viewSet') },
               ]}
             />
             <FilterDropdown
-              label="Players"
+              label={t('othersDecks.playersFilter')}
               options={playerOptions}
               hidden={hiddenPlayers}
               onHiddenChange={setHiddenPlayers}
-              emptyHint="Pull the sheet to see players"
+              emptyHint={t('othersDecks.playersFilterEmpty')}
             />
             <FilterDropdown
-              label="Sets"
+              label={t('othersDecks.setsFilter')}
               options={setOptions}
               hidden={hiddenSets}
               onHiddenChange={setHiddenSets}
-              emptyHint="Pull the sheet to see sets"
+              emptyHint={t('othersDecks.setsFilterEmpty')}
             />
           </div>
         </div>
@@ -224,29 +232,29 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
             color: 'var(--text-faint)',
           }}
         >
-          Read-only, from the playgroup sheet
-          {lastSynced ? ` · pulled ${new Date(lastSynced).toLocaleString()}` : ''}
+          {lastSynced
+            ? t('othersDecks.sourcePulled', { date: new Date(lastSynced).toLocaleString() })
+            : t('othersDecks.source')}
         </p>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>
         {loading ? (
-          <div style={{ color: 'var(--text-mute)', fontSize: 12 }}>Loading…</div>
+          <div style={{ color: 'var(--text-mute)', fontSize: 12 }}>{t('app.loading')}</div>
         ) : decks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 16px' }}>
-            <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>No decks pulled yet</p>
+            <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>{t('othersDecks.empty')}</p>
             <p style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 6 }}>
-              Open the sync screen from the card count at the bottom of the sidebar, then use
-              Playgroup sheet &rarr; Pull others&rsquo; decks.
+              {t('othersDecks.emptyHint')}
             </p>
           </div>
         ) : sections.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 16px' }}>
             <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>
-              Everything is hidden
+              {t('othersDecks.allHidden')}
             </p>
             <p style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 6 }}>
-              Re-enable a player or a set to see decks again.
+              {t('othersDecks.allHiddenHint')}
             </p>
           </div>
         ) : viewMode === 'player' ? (
@@ -265,7 +273,7 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
                   key={`${section.player}-${group.label}`}
                   style={{ marginTop: groupIndex ? 14 : 0 }}
                 >
-                  <DeckSetGroupLabel label={group.label} />
+                  <DeckSetGroupLabel label={blockName(group.label)} />
                   <div
                     style={{
                       background: 'var(--bg-panel)',
@@ -312,7 +320,7 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
           setSections.map((section) => (
             <section key={section.label} style={{ marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 0 8px' }}>
-                <PillLabel style={SET_PILL}>{section.label}</PillLabel>
+                <PillLabel style={SET_PILL}>{blockName(section.label)}</PillLabel>
                 <span
                   style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-faint)' }}
                 >
@@ -338,7 +346,7 @@ export default function ExternalDecksView({ active, syncVersion }: Props) {
                       padding: '6px 14px',
                       borderTop: groupIndex ? '1px solid var(--border)' : 'none',
                     }}
-                    title={`${section.label} · ${group.decks.map((deck) => deck.player).join(', ')}`}
+                    title={`${blockName(section.label)} · ${group.decks.map((deck) => deck.player).join(', ')}`}
                   >
                     <DeckRowColorIdentity colors={group.decks[0].colors} />
                     <span

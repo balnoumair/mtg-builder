@@ -33,7 +33,9 @@ import type {
   AppBackup,
   BackupApplyMode,
 } from '../shared/backup';
+import { setMainLocale, tMain } from './i18n';
 import type {
+  AppSettings,
   CardFilters,
   Deck,
   DriveBackupApplyPayload,
@@ -43,6 +45,12 @@ import type {
 } from '../shared/types';
 
 export function registerIpcHandlers(): void {
+  try {
+    setMainLocale(settingsQueries.getAppSettings(getDb()).locale);
+  } catch {
+    // DB unavailable this early; stays English until the renderer saves a locale.
+  }
+
   ipcMain.handle('db:status', () => {
     const db = getDb();
     const row = db.prepare('SELECT COUNT(*) as count FROM cards').get() as { count: number };
@@ -73,6 +81,20 @@ export function registerIpcHandlers(): void {
     return cardQueries.getAllSets(getDb());
   });
 
+  ipcMain.handle('cards:languages', () => {
+    return cardQueries.getAvailableCardLanguages(getDb());
+  });
+
+  ipcMain.handle('app:getSettings', () => {
+    return settingsQueries.getAppSettings(getDb());
+  });
+
+  ipcMain.handle('app:updateSettings', (_event, updates: Partial<AppSettings>) => {
+    const next = settingsQueries.updateAppSettings(getDb(), updates);
+    setMainLocale(next.locale);
+    return next;
+  });
+
   ipcMain.handle('decks:list', () => {
     return deckQueries.getDecks(getDb());
   });
@@ -82,11 +104,11 @@ export function registerIpcHandlers(): void {
     if (!win) return { saved: false };
     const backup = exportBackup(getDb());
     if (backup.decks.length === 0 && backup.collection.length === 0) {
-      return { saved: false, error: 'Nothing to back up' };
+      return { saved: false, error: tMain('main.backup.nothingToBackUp') };
     }
     const { canceled, filePath } = await dialog.showSaveDialog(win, {
       defaultPath: `mtg-builder-backup-${new Date().toISOString().slice(0, 10)}.json`,
-      filters: [{ name: 'mtg-builder backup', extensions: ['json'] }],
+      filters: [{ name: tMain('main.dialogs.backupFilter'), extensions: ['json'] }],
     });
     if (canceled || !filePath) return { saved: false };
     try {
@@ -109,7 +131,7 @@ export function registerIpcHandlers(): void {
       };
     }
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-      filters: [{ name: 'mtg-builder backup', extensions: ['json'] }],
+      filters: [{ name: tMain('main.dialogs.backupFilter'), extensions: ['json'] }],
       properties: ['openFile'],
     });
     if (canceled || !filePaths[0]) {
@@ -141,7 +163,7 @@ export function registerIpcHandlers(): void {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return { canceled: true };
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-      filters: [{ name: 'mtg-builder backup', extensions: ['json'] }],
+      filters: [{ name: tMain('main.dialogs.backupFilter'), extensions: ['json'] }],
       properties: ['openFile'],
     });
     if (canceled || !filePaths[0]) return { canceled: true };
@@ -304,8 +326,8 @@ export function registerIpcHandlers(): void {
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!win) return settingsQueries.getSheetSyncSettings(db);
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-      title: 'Select Google service-account key',
-      filters: [{ name: 'Service account key', extensions: ['json'] }],
+      title: tMain('main.dialogs.pickKeyTitle'),
+      filters: [{ name: tMain('main.dialogs.serviceAccountKeyFilter'), extensions: ['json'] }],
       properties: ['openFile'],
     });
     if (!canceled && filePaths[0]) {

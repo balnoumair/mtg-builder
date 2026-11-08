@@ -1,20 +1,22 @@
 import type { Deck } from '../../shared/types';
+import type { MessageKey } from '../../shared/i18n';
+import { useI18n } from '../i18n/I18nProvider';
 import PillLabel from './PillLabel';
 
 export type DeckGroup = 'owned' | 'wishlist';
 
 const GROUP_META: Record<
   DeckGroup,
-  { label: string; color: string; border: string; background: string }
+  { labelKey: MessageKey; color: string; border: string; background: string }
 > = {
   owned: {
-    label: 'Owned',
+    labelKey: 'deckEditor.deckGroups.owned',
     color: 'var(--good)',
     border: 'rgba(134, 169, 140, 0.35)',
     background: 'rgba(134, 169, 140, 0.1)',
   },
   wishlist: {
-    label: 'Wishlist',
+    labelKey: 'deckEditor.deckGroups.wishlist',
     color: '#c9a86c',
     border: 'rgba(201, 168, 108, 0.35)',
     background: 'rgba(201, 168, 108, 0.1)',
@@ -35,6 +37,7 @@ interface LabelProps {
 }
 
 export default function DeckGroupLabel({ group, count, compact = false }: LabelProps) {
+  const { t } = useI18n();
   const meta = GROUP_META[group];
   return (
     <div
@@ -50,7 +53,7 @@ export default function DeckGroupLabel({ group, count, compact = false }: LabelP
         compact={compact}
         icon={group === 'owned' ? <OwnedIcon /> : <WishlistIcon />}
       >
-        {meta.label}
+        {t(meta.labelKey)}
       </PillLabel>
       <span
         style={{

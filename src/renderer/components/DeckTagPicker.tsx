@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Tag } from '../../shared/types';
 import DeckTag from './DeckTag';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   /** Every tag that exists, for the picker list. */
@@ -16,6 +17,7 @@ interface Props {
  * the same gesture: type a name that does not exist yet and press Enter.
  */
 export default function DeckTagPicker({ tags, deckTags, onChange, onCreate }: Props) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -36,7 +38,7 @@ export default function DeckTagPicker({ tags, deckTags, onChange, onCreate }: Pr
     };
   }, [open]);
 
-  const selectedIds = new Set(deckTags.map((t) => t.id));
+  const selectedIds = new Set(deckTags.map((tag) => tag.id));
 
   const toggle = (tagId: number) => {
     const next = new Set(selectedIds);
@@ -48,9 +50,9 @@ export default function DeckTagPicker({ tags, deckTags, onChange, onCreate }: Pr
   const trimmed = query.trim();
   const needle = trimmed.toLowerCase();
   const visible = needle
-    ? tags.filter((t) => t.name.toLowerCase().includes(needle))
+    ? tags.filter((tag) => tag.name.toLowerCase().includes(needle))
     : tags;
-  const exact = tags.find((t) => t.name.toLowerCase() === needle);
+  const exact = tags.find((tag) => tag.name.toLowerCase() === needle);
 
   const submit = async () => {
     if (!trimmed) return;
@@ -91,7 +93,7 @@ export default function DeckTagPicker({ tags, deckTags, onChange, onCreate }: Pr
           lineHeight: 1,
         }}
       >
-        {deckTags.length === 0 ? 'Add tags' : 'Edit tags'}
+        {deckTags.length === 0 ? t('tags.addTags') : t('tags.editTags')}
       </button>
 
       {open && (
@@ -118,7 +120,7 @@ export default function DeckTagPicker({ tags, deckTags, onChange, onCreate }: Pr
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void submit();
               }}
-              placeholder="Find or create a tag"
+              placeholder={t('tags.findOrCreatePlaceholder')}
               style={{
                 width: '100%',
                 background: 'var(--bg-input)',
@@ -136,7 +138,7 @@ export default function DeckTagPicker({ tags, deckTags, onChange, onCreate }: Pr
             {trimmed && !exact && (
               <PickerRow onClick={() => void submit()}>
                 <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                  Create <span style={{ color: 'var(--text)' }}>{trimmed}</span>
+                  {t('tags.create')} <span style={{ color: 'var(--text)' }}>{trimmed}</span>
                 </span>
               </PickerRow>
             )}
@@ -161,7 +163,7 @@ export default function DeckTagPicker({ tags, deckTags, onChange, onCreate }: Pr
 
             {visible.length === 0 && !trimmed && (
               <p style={{ margin: 0, padding: '10px 8px', fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic' }}>
-                No tags yet. Type a name to make one.
+                {t('tags.noTagsYet')}
               </p>
             )}
           </div>

@@ -29,10 +29,12 @@ const FIELD_ALIASES: Record<string, SearchField> = {
 };
 
 const FIELD_COLUMNS: Record<SearchField, string[]> = {
-  name: ['name'],
-  oracle: ['oracle_text'],
-  type: ['type_line'],
-  any: ['name', 'oracle_text', 'type_line'],
+  // Include printed_* so localized searches hit Spanish (etc.) text while
+  // English oracle names still match via `name` / `oracle_text` / `type_line`.
+  name: ['name', 'printed_name'],
+  oracle: ['oracle_text', 'printed_text'],
+  type: ['type_line', 'printed_type_line'],
+  any: ['name', 'printed_name', 'oracle_text', 'printed_text', 'type_line', 'printed_type_line'],
 };
 
 interface RawToken {

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { SheetPushPlan, SheetPushRowChange } from '../../shared/types';
+import type { MessageKey } from '../../shared/i18n';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   plan: SheetPushPlan;
@@ -61,18 +63,18 @@ function Shell({
 
 type ChangeKind = 'update' | 'append' | 'clear' | 'matched';
 
-const SECTIONS: { kind: ChangeKind; title: string; tone: string }[] = [
-  { kind: 'update', title: 'Update', tone: 'var(--accent)' },
-  { kind: 'append', title: 'Add', tone: 'var(--accent)' },
-  { kind: 'clear', title: 'Remove', tone: 'var(--danger)' },
+const SECTIONS: { kind: ChangeKind; titleKey: MessageKey; tone: string }[] = [
+  { kind: 'update', titleKey: 'sheetPush.sectionUpdate', tone: 'var(--accent)' },
+  { kind: 'append', titleKey: 'sheetPush.sectionAdd', tone: 'var(--accent)' },
+  { kind: 'clear', titleKey: 'sheetPush.sectionRemove', tone: 'var(--danger)' },
 ];
 
 /** Sheet rows are unique within a kind, so this identifies a planned change. */
 const keyOf = (kind: ChangeKind, change: SheetPushRowChange) => `${kind}:${change.sheetRow}`;
 
-function rowText(cells: string[]): string {
+function rowText(cells: string[], emptyLabel: string): string {
   const [, block, colors, name] = cells;
-  if (!block && !name) return '(empty)';
+  if (!block && !name) return emptyLabel;
   return [block, colors, name].filter(Boolean).join(' · ');
 }
 
@@ -87,6 +89,8 @@ export default function SheetPushPreview({
   onDone,
   variant = 'modal',
 }: Props) {
+  const { t } = useI18n();
+  const emptyRow = t('sheetPush.emptyRow');
   const [labels, setLabels] = useState<string[]>([]);
   const [assignments, setAssignments] = useState<Record<number, string>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -134,6 +138,8 @@ export default function SheetPushPreview({
     });
   };
 
+  const [writingAsBefore, writingAsAfter = ''] = t('sheetPush.writingAs').split('{name}');
+
   const selectedRemovals = plan.matched.filter((c) => selected.has(keyOf('matched', c)));
   const selectedCount = allKeys.filter((k) => selected.has(k)).length + selectedRemovals.length;
 
@@ -170,44 +176,44 @@ export default function SheetPushPreview({
       setPushing(false);
       return;
     }
-    onDone(`Pushed ${result.written} row${result.written === 1 ? '' : 's'} to the sheet.`);
+    onDone(t(result.written === 1 ? 'sheetPush.pushedOne' : 'sheetPush.pushedOther', { count: result.written }));
   };
 
   return (
     <Shell variant={variant} pushing={pushing} onClose={onClose}>
-        <div style={reviewEyebrow}>Shared sheet write review</div>
-        <h2 style={reviewTitle}>Push my decks</h2>
+        <div style={reviewEyebrow}>{t('sheetPush.eyebrow')}</div>
+        <h2 style={reviewTitle}>{t('sheetPush.title')}</h2>
         <p style={reviewCopy}>
-          Review the rows that will be written to the shared sheet. Nothing is sent until you select rows and confirm.
-          Writing as <strong>{plan.playerName}</strong>.
+          {t('sheetPush.intro')} {writingAsBefore}<strong>{plan.playerName}</strong>{writingAsAfter}
         </p>
 
         <div style={summaryGrid}>
-          <SummaryCell label="New rows" value={plan.appends.length} color="var(--accent)" />
-          <SummaryCell label="Changed" value={plan.updates.length} color="var(--accent)" />
-          <SummaryCell label="To clear" value={plan.clears.length} color="var(--danger)" />
-          <SummaryCell label="Already match" value={plan.matched.length} color="var(--text)" />
+          <SummaryCell label={t('sheetPush.newRows')} value={plan.appends.length} color="var(--accent)" />
+          <SummaryCell label={t('sheetPush.changed')} value={plan.updates.length} color="var(--accent)" />
+          <SummaryCell label={t('sheetPush.toClear')} value={plan.clears.length} color="var(--danger)" />
+          <SummaryCell label={t('sheetPush.alreadyMatch')} value={plan.matched.length} color="var(--text)" />
         </div>
 
         {allKeys.length > 0 && (
           <div style={selectionBar}>
-            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{selectedCount} row(s) selected</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{t(selectedCount === 1 ? 'sheetPush.selectedOne' : 'sheetPush.selectedOther', { count: selectedCount })}
+            </span>
             <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setSelected(new Set(allKeys))} style={smallBtn}>
-              Select all changes
+              {t('sheetPush.selectAll')}
             </button>
             <button
               onClick={() => setSelected(new Set())}
               disabled={selectedCount === 0}
               style={{ ...smallBtn, opacity: selectedCount === 0 ? 0.5 : 1 }}
             >
-              Select none
+              {t('sheetPush.selectNone')}
             </button>
             </div>
           </div>
         )}
 
-        {SECTIONS.map(({ kind, title, tone }) => {
+        {SECTIONS.map(({ kind, titleKey, tone }) => {
           const changes = changesFor(kind);
           if (changes.length === 0) return null;
           const keys = changes.map((c) => keyOf(kind, c));
@@ -217,14 +223,14 @@ export default function SheetPushPreview({
             <section key={kind} style={changeGroup}>
               <button
                 onClick={() => toggleSection(kind)}
-                title={allOn ? 'Untick this group' : 'Tick this group'}
+                title={allOn ? t('sheetPush.untickGroup') : t('sheetPush.tickGroup')}
                 style={sectionToggle}
               >
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <strong style={{ color: tone }}>{title}</strong>
+                  <strong style={{ color: tone }}>{t(titleKey)}</strong>
                   <span style={sectionCount}>{changes.length}</span>
                 </span>
-                <span style={sectionAction}>{allOn ? 'Clear group' : 'Select group'}</span>
+                <span style={sectionAction}>{allOn ? t('sheetPush.clearGroup') : t('sheetPush.selectGroup')}</span>
               </button>
               <div style={changeList}>
                 {changes.map((c) => {
@@ -241,20 +247,20 @@ export default function SheetPushPreview({
                       onChange={() => toggle(key)}
                       style={{ accentColor: 'var(--accent)', flexShrink: 0 }}
                     />
-                    <span style={{ color: 'var(--text-subtle)', minWidth: 42 }}>row {c.sheetRow}</span>
+                    <span style={{ color: 'var(--text-subtle)', minWidth: 42 }}>{t('sheetPush.rowNumber', { row: c.sheetRow })}</span>
                     <span style={rowValue}>
                       {kind === 'update' ? (
                         <>
-                          {rowText(c.before)} →{' '}
+                          {rowText(c.before, emptyRow)} →{' '}
                           <span style={{ color: on ? 'var(--text)' : 'inherit' }}>
-                            {rowText(c.row)}
+                            {rowText(c.row, emptyRow)}
                           </span>
                         </>
                       ) : kind === 'clear' ? (
-                        <span style={{ textDecoration: 'line-through' }}>{rowText(c.before)}</span>
+                        <span style={{ textDecoration: 'line-through' }}>{rowText(c.before, emptyRow)}</span>
                       ) : (
                         <span style={{ color: on ? 'var(--text)' : 'inherit' }}>
-                          {rowText(c.row)}
+                          {rowText(c.row, emptyRow)}
                         </span>
                       )}
                     </span>
@@ -271,11 +277,10 @@ export default function SheetPushPreview({
             <div
               style={sectionHeadingMuted}
             >
-              Already in the sheet — optionally remove <span style={sectionCount}>{plan.matched.length}</span>
+              {t('sheetPush.matchedHeading')} <span style={sectionCount}>{plan.matched.length}</span>
             </div>
             <p style={sectionDescription}>
-              These match your decks, so nothing is written. Tick one to take it back out of the
-              sheet — the deck stays in the app.
+              {t('sheetPush.matchedHint')}
             </p>
             <div style={changeList}>
               {plan.matched.map((c) => {
@@ -290,12 +295,12 @@ export default function SheetPushPreview({
                     type="checkbox"
                     checked={on}
                     onChange={() => toggle(key)}
-                    title="Remove this row from the sheet"
+                    title={t('sheetPush.removeRowTitle')}
                     style={{ accentColor: 'var(--danger)', flexShrink: 0 }}
                   />
-                  <span style={{ color: 'var(--text-subtle)', minWidth: 42 }}>row {c.sheetRow}</span>
+                  <span style={{ color: 'var(--text-subtle)', minWidth: 42 }}>{t('sheetPush.rowNumber', { row: c.sheetRow })}</span>
                   <span style={{ ...rowValue, textDecoration: on ? 'line-through' : 'none' }}>
-                    {rowText(c.before)}
+                    {rowText(c.before, emptyRow)}
                   </span>
                 </label>
               );
@@ -307,11 +312,10 @@ export default function SheetPushPreview({
         {plan.unmapped.length > 0 && (
           <section style={warningPanel}>
             <div style={{ color: 'var(--warning)', fontSize: 12, fontWeight: 600, marginBottom: 7 }}>
-              No matching block ({plan.unmapped.length})
+              {t('sheetPush.unmappedHeading', { count: plan.unmapped.length })}
             </div>
             <p style={sectionDescription}>
-              These decks aren&rsquo;t pushed. Pick the sheet block they belong to, then re-run the
-              preview.
+              {t('sheetPush.unmappedHint')}
             </p>
             {plan.unmapped.map((u) => (
               <div
@@ -324,7 +328,7 @@ export default function SheetPushPreview({
                   {u.deckName}
                   <span style={{ color: 'var(--text-subtle)', fontFamily: 'var(--font-mono)', fontSize: 9 }}>
                     {' '}
-                    {u.setCodes.join(', ') || 'no sets'}
+                    {u.setCodes.join(', ') || t('sheetPush.noSets')}
                   </span>
                 </span>
                 <select
@@ -332,7 +336,7 @@ export default function SheetPushPreview({
                   onChange={(e) => void handleAssign(u.deckId, u.setCodes, e.target.value)}
                   style={selectStyle}
                 >
-                  <option value="">Choose block…</option>
+                  <option value="">{t('sheetPush.chooseBlock')}</option>
                   {labels.map((label) => (
                     <option key={label} value={label}>
                       {label}
@@ -347,7 +351,7 @@ export default function SheetPushPreview({
         {(plan.duplicates.length > 0 || plan.warnings.length > 0) && (
           <div style={warningText}>
             {plan.duplicates.map((d) => (
-              <div key={d}>Duplicate row skipped: {d}</div>
+              <div key={d}>{t('sheetPush.duplicateSkipped', { row: d })}</div>
             ))}
             {plan.warnings.map((w) => (
               <div key={w}>{w}</div>
@@ -357,7 +361,7 @@ export default function SheetPushPreview({
 
         {allKeys.length === 0 && plan.matched.length === 0 && (
           <p style={emptyText}>
-            Nothing to write — the sheet already matches your decks.
+            {t('sheetPush.nothingToWrite')}
           </p>
         )}
 
@@ -368,9 +372,9 @@ export default function SheetPushPreview({
         )}
 
         <div style={actionRow}>
-          <span style={actionHint}>Only selected rows are written.</span>
+          <span style={actionHint}>{t('sheetPush.onlySelected')}</span>
           <button onClick={onClose} disabled={pushing} style={ghostBtn}>
-            {variant === 'inline' ? 'Discard plan' : 'Cancel'}
+            {variant === 'inline' ? t('sheetPush.discardPlan') : t('sheetPush.cancel')}
           </button>
           <button
             onClick={() => void handleConfirm()}
@@ -378,8 +382,8 @@ export default function SheetPushPreview({
             style={{ ...primaryBtn, opacity: pushing || selectedCount === 0 ? 0.6 : 1 }}
           >
             {pushing
-              ? 'Writing…'
-              : `Write ${selectedCount} row${selectedCount === 1 ? '' : 's'}`}
+              ? t('sheetPush.writing')
+              : t(selectedCount === 1 ? 'sheetPush.writeOne' : 'sheetPush.writeOther', { count: selectedCount })}
           </button>
         </div>
     </Shell>

@@ -6,6 +6,7 @@ import {
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { useI18n } from '../i18n/I18nProvider';
 
 export interface PaneControls {
   collapse: () => void;
@@ -56,11 +57,12 @@ function CollapsedRail({
   side: 'left' | 'right';
   onExpand: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
       onClick={onExpand}
-      title={`Show ${label}`}
+      title={t('splitPane.show', { label })}
       style={{
         width: COLLAPSED_W,
         flexShrink: 0,
@@ -114,8 +116,8 @@ function CollapsedRail({
 export default function SplitPane({
   left,
   right,
-  leftLabel = 'Search',
-  rightLabel = 'Deck',
+  leftLabel,
+  rightLabel,
   defaultRightWidth = 360,
   minLeft = 300,
   minRight = 260,
@@ -123,6 +125,7 @@ export default function SplitPane({
   defaultLeftCollapsed = false,
   resetKey,
 }: Props) {
+  const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const lastRightWidth = useRef(loadWidth(storageKey, defaultRightWidth));
   const [rightWidth, setRightWidth] = useState(lastRightWidth.current);
@@ -217,7 +220,7 @@ export default function SplitPane({
       }}
     >
       {leftCollapsed ? (
-        <CollapsedRail label={leftLabel} side="left" onExpand={expandLeft} />
+        <CollapsedRail label={leftLabel ?? t('splitPane.search')} side="left" onExpand={expandLeft} />
       ) : (
         <div
           style={{
@@ -243,7 +246,7 @@ export default function SplitPane({
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
           onDoubleClick={resetWidth}
-          title="Drag to resize · Double-click to reset"
+          title={t('splitPane.dividerTitle')}
           style={{
             width: DIVIDER_W,
             flexShrink: 0,
@@ -255,7 +258,7 @@ export default function SplitPane({
       )}
 
       {rightCollapsed ? (
-        <CollapsedRail label={rightLabel} side="right" onExpand={expandRight} />
+        <CollapsedRail label={rightLabel ?? t('splitPane.deck')} side="right" onExpand={expandRight} />
       ) : (
         <div
           style={{

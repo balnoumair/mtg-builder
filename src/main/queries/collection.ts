@@ -58,6 +58,11 @@ export function getCollection(
   const conditions: string[] = [];
   const params: Record<string, unknown> = {};
 
+  if (filters.lang) {
+    conditions.push('c.lang = @lang');
+    params.lang = filters.lang;
+  }
+
   if (filters.query) {
     const search = buildSearchConditions(filters.query, 'c.');
     conditions.push(...search.conditions);

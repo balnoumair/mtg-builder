@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { MessageKey } from '../../shared/i18n';
 
 export interface PillStyle {
   color: string;
@@ -56,9 +57,21 @@ export default function PillLabel({ children, style, compact = false, icon }: Pr
   );
 }
 
-export function formatCostGroupLabel(key: string): string {
-  if (key === 'Land') return 'Land';
-  return key;
+const GROUP_LABEL_KEYS: Record<string, MessageKey> = {
+  Creature: 'deckEditor.groups.creature',
+  Planeswalker: 'deckEditor.groups.planeswalker',
+  Instant: 'deckEditor.groups.instant',
+  Sorcery: 'deckEditor.groups.sorcery',
+  Enchantment: 'deckEditor.groups.enchantment',
+  Artifact: 'deckEditor.groups.artifact',
+  Land: 'deckEditor.groups.land',
+  Other: 'deckEditor.groups.other',
+};
+
+/** Display label for a type or cost group key; numeric cost keys pass through. */
+export function formatGroupLabel(key: string, t: (key: MessageKey) => string): string {
+  const labelKey = GROUP_LABEL_KEYS[key];
+  return labelKey ? t(labelKey) : key;
 }
 
 interface GroupHeaderProps {

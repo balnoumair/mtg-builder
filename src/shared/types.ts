@@ -20,6 +20,12 @@ export interface Card {
   id: string;
   oracle_id: string;
   name: string;
+  /** Scryfall language code for this print (`en`, `es`, …). */
+  lang: string;
+  /** Localized printed name when lang is not English. */
+  printed_name: string | null;
+  printed_type_line: string | null;
+  printed_text: string | null;
   mana_cost: string;
   cmc: number;
   type_line: string;
@@ -83,6 +89,8 @@ export interface DeckCard {
 
 export interface CardFilters {
   query?: string;
+  /** Restrict results to this Scryfall language code. */
+  lang?: string;
   colors?: string[];
   colorCategories?: ('multicolor' | 'colorless')[];
   colorMode?: 'include' | 'exact' | 'at_most';
@@ -98,6 +106,14 @@ export interface CardFilters {
   page?: number;
   pageSize?: number;
   sortBy?: 'name' | 'cmc' | 'rarity' | 'released_at';
+}
+
+export interface AppSettings {
+  locale: string;
+  /** Languages imported on the next Scryfall sync (JSON array of codes). */
+  syncLanguages: string[];
+  /** Preferred language for card browsers / search. */
+  browseLanguage: string;
 }
 
 export interface CardSearchResult {
@@ -158,7 +174,7 @@ export interface WantItem {
 export interface ImportProgress {
   current: number;
   total: number;
-  phase: 'downloading' | 'reading' | 'indexing' | 'done';
+  phase: 'downloading' | 'reading' | 'indexing' | 'restoring' | 'done';
 }
 
 export interface DbStatus {
@@ -346,6 +362,9 @@ export interface ElectronAPI {
   getSets(): Promise<CardSet[]>;
   /** Every set in the catalog, including ones with no cards imported. */
   getAllSets(): Promise<CardSet[]>;
+  getAvailableCardLanguages(): Promise<string[]>;
+  getAppSettings(): Promise<AppSettings>;
+  updateAppSettings(updates: Partial<AppSettings>): Promise<AppSettings>;
   getDecks(): Promise<Deck[]>;
   getTags(): Promise<Tag[]>;
   createTag(input: { name: string; color?: string }): Promise<Tag>;

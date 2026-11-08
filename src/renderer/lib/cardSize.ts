@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { MessageKey } from '../../shared/i18n';
 
 export type CardSize = 'small' | 'standard' | 'large';
 
@@ -8,6 +9,12 @@ export const CARD_SIZE_LABELS: Record<CardSize, string> = {
   small: 'S',
   standard: 'M',
   large: 'L',
+};
+
+export const CARD_SIZE_LABEL_KEYS: Record<CardSize, MessageKey> = {
+  small: 'cardSize.small',
+  standard: 'cardSize.standard',
+  large: 'cardSize.large',
 };
 
 export const CARD_GRID_MIN_WIDTH: Record<CardSize, number> = {

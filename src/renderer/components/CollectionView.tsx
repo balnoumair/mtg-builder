@@ -1,12 +1,16 @@
-import { useMemo, useCallback, useState } from 'react';
+import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import type { Card } from '../../shared/types';
 import { useCollection, useCollectionActions } from '../hooks/useCollection';
 import { useCardDetail } from '../hooks/useCards';
+import { useCardLanguage } from '../hooks/useCardLanguage';
+import { useScrollTopOnChange } from '../hooks/useScrollTopOnChange';
+import { useI18n } from '../i18n/I18nProvider';
 import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
 import ViewToggle from './ViewToggle';
 import CountTag from './CountTag';
+import CardLanguageSelect from './CardLanguageSelect';
 import { PLAYSET_SIZE } from '../../shared/deckLimits';
 
 interface Props {
@@ -15,10 +19,18 @@ interface Props {
 }
 
 export default function CollectionView({ onNavigateToBrowse, collectionVersion = 0 }: Props) {
+  const { t } = useI18n();
+  const { language, setLanguage, available } = useCardLanguage();
   const { filters, updateFilters, setPage, result, stats, loading, refresh } = useCollection(collectionVersion);
   const { card, open, showCard, close } = useCardDetail();
   const { addToCollection, updateCollectionQuantity, removeFromCollection } = useCollectionActions(refresh);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useScrollTopOnChange(scrollRef, filters);
+
+  useEffect(() => {
+    if (filters.lang !== language) updateFilters({ lang: language });
+  }, [language, filters.lang, updateFilters]);
 
   const totalPages = Math.ceil(result.total / (filters.pageSize || 60));
   const currentPage = filters.page || 1;
@@ -72,7 +84,7 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
               letterSpacing: '-0.01em',
             }}
           >
-            My Cards
+            {t('myCards.title')}
           </h1>
           <div
             style={{
@@ -85,16 +97,18 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
             }}
           >
             <span>
-              <span style={{ color: 'var(--text-dim)' }}>{stats.uniqueCards.toLocaleString()}</span> unique
+              <span style={{ color: 'var(--text-dim)' }}>{stats.uniqueCards.toLocaleString()}</span>{' '}
+              {t('myCards.unique')}
             </span>
             <CountTag
               kind="free"
               count={stats.totalCopies}
-              title={`Not in any deck · ${(stats.totalCopies + stats.inDeckCopies).toLocaleString()} copies owned in total`}
+              title={t('myCards.freeTitle', { total: (stats.totalCopies + stats.inDeckCopies).toLocaleString() })}
             />
             <CountTag kind="inDecks" count={stats.inDeckCopies} />
           </div>
           <div style={{ flex: 1 }} />
+          <CardLanguageSelect value={language} available={available} onChange={setLanguage} />
           <ViewToggle value={viewMode} onChange={setViewMode} />
         </div>
 
@@ -119,8 +133,8 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
             type="text"
             value={filters.query || ''}
             onChange={(e) => updateFilters({ query: e.target.value || undefined })}
-            placeholder="Filter collection… (name, text, or type)"
-            title="Words search name, rules text, and type. Prefixes: t: type, o: rules text, n: name. Quote phrases: t:&quot;human soldier&quot;"
+            placeholder={t('myCards.searchPlaceholder')}
+            title={t('myCards.searchTitle')}
             style={{
               flex: 1,
               minWidth: 0,
@@ -138,7 +152,7 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>
         {empty ? (
           <div
             style={{
@@ -150,9 +164,9 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
               padding: '48px 16px',
             }}
           >
-            <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>Your collection is empty</p>
+            <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>{t('myCards.emptyTitle')}</p>
             <p style={{ color: 'var(--text-mute)', fontSize: 11, margin: 0 }}>
-              Browse cards and add them to start tracking what you own
+              {t('myCards.emptyHint')}
             </p>
             <button
               onClick={onNavigateToBrowse}
@@ -166,7 +180,7 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
                 cursor: 'pointer',
               }}
             >
-              Browse cards
+              {t('myCards.browseCatalog')}
             </button>
           </div>
         ) : (
@@ -198,7 +212,7 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
                   disabled={currentPage <= 1}
                   style={pageBtn(currentPage <= 1)}
                 >
-                  Prev
+                  {t('pagination.prev')}
                 </button>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
                   {currentPage} / {totalPages}
@@ -208,7 +222,7 @@ export default function CollectionView({ onNavigateToBrowse, collectionVersion =
                   disabled={currentPage >= totalPages}
                   style={pageBtn(currentPage >= totalPages)}
                 >
-                  Next
+                  {t('pagination.next')}
                 </button>
               </div>
             )}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useI18n } from '../i18n/I18nProvider';
 
 export interface FilterOption {
   value: string;
@@ -35,6 +36,7 @@ export default function FilterDropdown({
   emptyHint,
   align = 'right',
 }: Props) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -114,7 +116,7 @@ export default function FilterDropdown({
         >
           {options.length === 0 ? (
             <div style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text-mute)' }}>
-              {emptyHint ?? 'Nothing to filter yet'}
+              {emptyHint ?? t('filters.nothingToFilter')}
             </div>
           ) : (
             <>
@@ -144,12 +146,12 @@ export default function FilterDropdown({
                       aria-label={opt.label}
                       checked={!isHidden}
                       onChange={() => toggle(opt.value)}
-                      title={isHidden ? 'Show this' : 'Hide this'}
+                      title={isHidden ? t('filters.showThis') : t('filters.hideThis')}
                       style={{ accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }}
                     />
                     <button
                       onClick={() => solo(opt.value)}
-                      title="Show only this"
+                      title={t('filters.showOnlyThis')}
                       style={{
                         flex: 1,
                         minWidth: 0,
@@ -191,14 +193,14 @@ export default function FilterDropdown({
                   disabled={hiddenCount === 0}
                   style={footerBtn(hiddenCount === 0)}
                 >
-                  Show all
+                  {t('filters.showAll')}
                 </button>
                 <button
                   onClick={() => onHiddenChange(allValues)}
                   disabled={hiddenCount === allValues.length}
                   style={footerBtn(hiddenCount === allValues.length)}
                 >
-                  Hide all
+                  {t('filters.hideAll')}
                 </button>
               </div>
             </>

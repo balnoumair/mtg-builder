@@ -70,26 +70,32 @@ describe('buildSearchConditions', () => {
     expect(params).toEqual({ q0: 'alpha', q1: 'beta' });
   });
 
-  it('checks only the type column for a type term', () => {
+  it('checks type columns for a type term', () => {
     const { conditions } = buildSearchConditions('t:alpha');
     expect(conditions[0]).toContain('type_line');
+    expect(conditions[0]).toContain('printed_type_line');
     expect(conditions[0]).not.toContain('oracle_text');
     expect(conditions[0]).not.toContain('name');
   });
 
-  it('checks name, oracle, and type for a bare term', () => {
+  it('checks name, oracle, and type (including printed) for a bare term', () => {
     const { conditions } = buildSearchConditions('alpha');
     expect(conditions[0]).toContain('name');
+    expect(conditions[0]).toContain('printed_name');
     expect(conditions[0]).toContain('oracle_text');
+    expect(conditions[0]).toContain('printed_text');
     expect(conditions[0]).toContain('type_line');
+    expect(conditions[0]).toContain('printed_type_line');
   });
 
   it('applies a table alias to every column', () => {
     const { conditions } = buildSearchConditions('alpha t:beta', 'c.');
     expect(conditions[0]).toContain('c.name');
+    expect(conditions[0]).toContain('c.printed_name');
     expect(conditions[0]).toContain('c.oracle_text');
     expect(conditions[0]).toContain('c.type_line');
     expect(conditions[1]).toContain('c.type_line');
+    expect(conditions[1]).toContain('c.printed_type_line');
   });
 
   it('never inlines the search value into SQL', () => {

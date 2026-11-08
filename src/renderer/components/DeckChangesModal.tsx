@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useI18n } from '../i18n/I18nProvider';
 import ManaSymbols from './ManaSymbols';
 
 export interface PendingChangeEntry {
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export default function DeckChangesModal({ deckName, additions, removals, onConfirm, onClose }: Props) {
+  const { t } = useI18n();
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
@@ -32,6 +34,13 @@ export default function DeckChangesModal({ deckName, additions, removals, onConf
   const addedCount = additions.reduce((s, e) => s + e.count, 0);
   const removedCount = removals.reduce((s, e) => s + e.count, 0);
   const deducted = additions.reduce((s, e) => s + Math.min(e.count, e.collectionQty), 0);
+  const [subtitleBefore, subtitleAfter] = t('deckModals.changes.subtitle').split('{name}');
+  const [removedBefore, removedAfter] = t(
+    removedCount === 1 ? 'deckModals.changes.removedOne' : 'deckModals.changes.removedOther',
+  ).split('{count}');
+  const [addedBefore, addedAfter] = t(
+    addedCount === 1 ? 'deckModals.changes.addedOne' : 'deckModals.changes.addedOther',
+  ).split('{count}');
 
   const handleConfirm = async () => {
     setConfirming(true);
@@ -84,10 +93,12 @@ export default function DeckChangesModal({ deckName, additions, removals, onConf
               fontWeight: 600,
             }}
           >
-            Confirm deck changes
+            {t('deckModals.changes.title')}
           </h2>
           <p style={{ color: 'var(--text-mute)', fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-            Apply pending edits to <span style={{ color: 'var(--text-dim)' }}>{deckName}</span>
+            {subtitleBefore}
+            <span style={{ color: 'var(--text-dim)' }}>{deckName}</span>
+            {subtitleAfter}
           </p>
         </div>
 
@@ -102,17 +113,20 @@ export default function DeckChangesModal({ deckName, additions, removals, onConf
         >
           {removedCount > 0 && (
             <>
-              <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{removedCount}</span> removed{' '}
-              {removedCount === 1 ? 'card moves' : 'cards move'} back to your singles collection.{' '}
+              {removedBefore}
+              <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{removedCount}</span>
+              {removedAfter}{' '}
             </>
           )}
           {addedCount > 0 && (
             <>
-              <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{addedCount}</span> new{' '}
-              {addedCount === 1 ? 'card becomes' : 'cards become'} part of the deck
+              {addedBefore}
+              <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{addedCount}</span>
+              {addedAfter}
               {deducted > 0 ? (
                 <span style={{ color: 'var(--text-mute)' }}>
-                  {' '}({deducted} deducted from your singles collection)
+                  {' '}
+                  {t('deckModals.changes.deducted', { count: deducted })}
                 </span>
               ) : null}
               .
@@ -123,7 +137,7 @@ export default function DeckChangesModal({ deckName, additions, removals, onConf
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 18px' }}>
           {removals.length > 0 && (
             <ChangeList
-              title="Moving to collection"
+              title={t('deckModals.changes.movingToCollection')}
               entries={removals}
               sign="−"
               signColor="var(--danger)"
@@ -131,14 +145,14 @@ export default function DeckChangesModal({ deckName, additions, removals, onConf
           )}
           {additions.length > 0 && (
             <ChangeList
-              title="Joining the deck"
+              title={t('deckModals.changes.joiningDeck')}
               entries={additions}
               sign="+"
               signColor="var(--good)"
               noteFor={(e) =>
                 e.collectionQty > 0
-                  ? `−${Math.min(e.count, e.collectionQty)} from collection`
-                  : 'not in collection'
+                  ? t('deckModals.changes.fromCollection', { count: Math.min(e.count, e.collectionQty) })
+                  : t('deckModals.changes.notInCollection')
               }
             />
           )}
@@ -165,7 +179,7 @@ export default function DeckChangesModal({ deckName, additions, removals, onConf
               cursor: 'pointer',
             }}
           >
-            Cancel
+            {t('deckModals.cancel')}
           </button>
           <button
             onClick={handleConfirm}
@@ -181,7 +195,7 @@ export default function DeckChangesModal({ deckName, additions, removals, onConf
               opacity: confirming ? 0.6 : 1,
             }}
           >
-            {confirming ? 'Confirming…' : 'Confirm changes'}
+            {confirming ? t('deckModals.changes.confirming') : t('deckModals.changes.confirm')}
           </button>
         </div>
       </div>
