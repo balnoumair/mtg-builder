@@ -1,4 +1,5 @@
 import type { View } from '../lib/types';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   view: View;
@@ -9,14 +10,6 @@ interface Props {
 }
 
 type NavIconKind = 'grid' | 'box' | 'stack' | 'tag' | 'people';
-
-const NAV_ITEMS: { key: View; label: string; icon: NavIconKind }[] = [
-  { key: 'collection', label: 'Card Browser', icon: 'grid' },
-  { key: 'my-cards', label: 'My Cards', icon: 'box' },
-  { key: 'wants', label: 'Wants', icon: 'tag' },
-  { key: 'decks', label: 'Decks', icon: 'stack' },
-  { key: 'others-decks', label: "Others' Decks", icon: 'people' },
-];
 
 function NavIcon({ icon }: { icon: NavIconKind }) {
   const shapes = {
@@ -111,6 +104,16 @@ export default function Sidebar({
   onSync,
   cardCount,
 }: Props) {
+  const { t } = useI18n();
+
+  const navItems: { key: View; label: string; icon: NavIconKind }[] = [
+    { key: 'collection', label: t('nav.cardBrowser'), icon: 'grid' },
+    { key: 'my-cards', label: t('nav.myCards'), icon: 'box' },
+    { key: 'wants', label: t('nav.wants'), icon: 'tag' },
+    { key: 'decks', label: t('nav.decks'), icon: 'stack' },
+    { key: 'others-decks', label: t('nav.othersDecks'), icon: 'people' },
+  ];
+
   return (
     <aside
       style={{
@@ -124,9 +127,8 @@ export default function Sidebar({
         height: '100%',
       }}
     >
-      {/* Nav */}
       <div style={{ padding: '8px 10px 12px' }}>
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <NavRow
             key={item.key}
             label={item.label}
@@ -139,10 +141,13 @@ export default function Sidebar({
 
       <div style={{ flex: 1, minHeight: 0 }} />
 
-      {/* Footer */}
       <button
         onClick={onSync}
-        title="Sync cards"
+        title={
+          cardCount != null
+            ? t('sidebar.synced', { count: cardCount.toLocaleString() })
+            : t('sidebar.settingsTitle')
+        }
         style={{
           padding: '8px 14px',
           borderTop: '1px solid var(--border)',
@@ -162,8 +167,13 @@ export default function Sidebar({
         }}
       >
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--good)' }} />
-        <span style={{ flex: 1 }}>
-          {cardCount != null ? `Synced · ${cardCount.toLocaleString()} cards` : 'Sync cards'}
+        <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+          <span style={{ color: 'var(--text-dim)' }}>{t('sidebar.settings')}</span>
+          {cardCount != null && (
+            <span style={{ fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {t('sidebar.synced', { count: cardCount.toLocaleString() })}
+            </span>
+          )}
         </span>
       </button>
     </aside>

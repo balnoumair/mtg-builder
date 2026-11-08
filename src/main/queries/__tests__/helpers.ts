@@ -35,6 +35,10 @@ export function createTestDb(): Database.Database {
       id TEXT PRIMARY KEY,
       oracle_id TEXT NOT NULL,
       name TEXT NOT NULL,
+      lang TEXT NOT NULL DEFAULT 'en',
+      printed_name TEXT,
+      printed_type_line TEXT,
+      printed_text TEXT,
       mana_cost TEXT DEFAULT '',
       cmc REAL DEFAULT 0,
       type_line TEXT DEFAULT '',
@@ -178,6 +182,10 @@ export function insertTestCard(
     id: string;
     oracle_id: string;
     name: string;
+    lang: string;
+    printed_name: string | null;
+    printed_type_line: string | null;
+    printed_text: string | null;
     mana_cost: string;
     cmc: number;
     type_line: string;
@@ -202,12 +210,14 @@ export function insertTestCard(
 
   db.prepare(`
     INSERT INTO cards (
-      id, oracle_id, name, mana_cost, cmc, type_line, oracle_text,
+      id, oracle_id, name, lang, printed_name, printed_type_line, printed_text,
+      mana_cost, cmc, type_line, oracle_text,
       colors, color_identity, keywords, rarity, set_code, set_name,
       collector_number, legalities, released_at, artist,
       block_code, block_name
     ) VALUES (
-      @id, @oracle_id, @name, @mana_cost, @cmc, @type_line, @oracle_text,
+      @id, @oracle_id, @name, @lang, @printed_name, @printed_type_line, @printed_text,
+      @mana_cost, @cmc, @type_line, @oracle_text,
       @colors, @color_identity, @keywords, @rarity, @set_code, @set_name,
       @collector_number, @legalities, @released_at, @artist,
       @block_code, @block_name
@@ -216,6 +226,10 @@ export function insertTestCard(
     id,
     oracle_id,
     name: overrides.name ?? `Test Card ${cardSeq}`,
+    lang: overrides.lang ?? 'en',
+    printed_name: overrides.printed_name ?? null,
+    printed_type_line: overrides.printed_type_line ?? null,
+    printed_text: overrides.printed_text ?? null,
     mana_cost: overrides.mana_cost ?? '{1}',
     cmc: overrides.cmc ?? 1,
     type_line: overrides.type_line ?? 'Creature',

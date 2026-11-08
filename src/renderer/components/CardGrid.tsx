@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Card } from '../../shared/types';
+import { displayCardName } from '../../shared/cardDisplay';
 import CardImage from './CardImage';
 import { previewOnModifiedClick } from '../lib/cardClick';
 import { cardHoverBar, cardHoverButton, cardRowButton } from '../lib/cardControls';
@@ -9,6 +10,10 @@ import CardSizeControl from './CardSizeControl';
 import CountTag from './CountTag';
 import { CARD_GRID_MIN_WIDTH, useCardSize } from '../lib/cardSize';
 import { getMaxCopies, PLAYSET_SIZE } from '../../shared/deckLimits';
+import type { MessageKey } from '../../shared/i18n';
+import { useI18n } from '../i18n/I18nProvider';
+
+type Translate = ReturnType<typeof useI18n>['t'];
 
 interface Props {
   cards: Card[];
@@ -47,11 +52,11 @@ interface Props {
   view?: 'grid' | 'list';
 }
 
-const RARITY_SHORT: Record<string, string> = {
-  common: 'C',
-  uncommon: 'U',
-  rare: 'R',
-  mythic: 'M',
+const RARITY_SHORT_KEYS: Record<string, MessageKey> = {
+  common: 'cardGrid.rarityShort.common',
+  uncommon: 'cardGrid.rarityShort.uncommon',
+  rare: 'cardGrid.rarityShort.rare',
+  mythic: 'cardGrid.rarityShort.mythic',
 };
 
 export default function CardGrid({
@@ -72,6 +77,7 @@ export default function CardGrid({
   selectedId,
   view = 'grid',
 }: Props) {
+  const { t } = useI18n();
   const otherDecks = (cardId: string, decked: number) =>
     currentDeckQuantities ? Math.max(0, decked - (currentDeckQuantities[cardId] ?? 0)) : undefined;
   const [cardSize, setCardSize] = useCardSize();
@@ -113,7 +119,7 @@ export default function CardGrid({
           fontSize: 13,
         }}
       >
-        No cards found. Try adjusting your filters.
+        {t('cardGrid.empty')}
       </div>
     );
   }
@@ -171,7 +177,7 @@ export default function CardGrid({
                   textOverflow: 'ellipsis',
                 }}
               >
-                {card.name}
+                {displayCardName(card)}
               </span>
               <CountTags
                 inDeck={inDeck}
@@ -210,7 +216,7 @@ export default function CardGrid({
                     cursor: atMax ? 'default' : 'pointer',
                     opacity: atMax ? 0.4 : 1,
                   }}
-                  title={atMax ? `Copy limit reached (${max})` : playsetTitle(playsetTarget)}
+                  title={atMax ? t('cardGrid.copyLimit', { max: String(max) }) : playsetTitle(playsetTarget, t)}
                 >
                   +{PLAYSET_SIZE}
                 </button>
@@ -222,7 +228,7 @@ export default function CardGrid({
                     onViewCard(card);
                   }}
                   style={detailBtnStyle}
-                  title="View card details"
+                  title={t('cardGrid.viewDetails')}
                 >
                   <ViewIcon />
                 </button>
@@ -246,7 +252,7 @@ export default function CardGrid({
                       lineHeight: 1,
                       padding: 0,
                     }}
-                    title={inDeck ? `${inDeck} in deck — click to add another` : 'Add to deck'}
+                    title={inDeck ? t('cardGrid.inDeckAddAnother', { count: inDeck }) : t('cardGrid.addToDeck')}
                   >
                     +
                   </button>
@@ -293,7 +299,7 @@ export default function CardGrid({
               onView={onViewCard ? () => onViewCard(card) : undefined}
               onAdd={!onViewCard && onAddToDeck ? () => onAddToDeck(card) : undefined}
               onAddPlayset={onAddPlayset && !atMax ? () => onAddPlayset(card) : undefined}
-              playsetTitle={playsetTitle(playsetTarget)}
+              playsetTitle={playsetTitle(playsetTarget, t)}
               onRemove={onRemoveFromCollection ? () => onRemoveFromCollection(card) : undefined}
             />
           );
@@ -332,12 +338,13 @@ function DecksTag({ decked, otherDecks, overlay }: { decked?: number; otherDecks
 
 /** In-deck and new tags: confirmed copies and unconfirmed additions, never overlapping. */
 function DeckTags({ inDeck, newCount, overlay }: { inDeck: number; newCount: number; overlay?: boolean }) {
+  const { t } = useI18n();
   const fresh = Math.max(0, Math.min(newCount, inDeck));
   return (
     <>
       {inDeck - fresh > 0 && <CountTag kind="inDeck" count={inDeck - fresh} overlay={overlay} />}
       {fresh > 0 && (
-        <CountTag kind="new" count={fresh} overlay={overlay} title={`${fresh} added since last confirm — not yet owned`} />
+        <CountTag kind="new" count={fresh} overlay={overlay} title={t('cardGrid.addedSinceConfirm', { count: fresh })} />
       )}
     </>
   );
@@ -345,34 +352,36 @@ function DeckTags({ inDeck, newCount, overlay }: { inDeck: number; newCount: num
 
 /** In-deck, new, free and in-decks tags for one card, in that fixed order. */
 function CountTags({ inDeck, newCount, owned, decked, otherDecks }: { inDeck: number; newCount: number; owned: number; decked?: number; otherDecks?: number }) {
+  const { t } = useI18n();
   const total = owned + (decked ?? 0);
   if (inDeck <= 0 && total <= 0) return null;
   return (
     <span style={{ display: 'inline-flex', gap: 4, flexShrink: 0 }}>
       <DeckTags inDeck={inDeck} newCount={newCount} />
-      {owned > 0 && <CountTag kind="free" count={owned} title={ownedSplitTitle(owned, decked)} />}
+      {owned > 0 && <CountTag kind="free" count={owned} title={ownedSplitTitle(owned, decked, t)} />}
       <DecksTag decked={decked} otherDecks={otherDecks} />
     </span>
   );
 }
 
 /** Tooltip for the free count: loose copies, not in any deck, and the total owned. */
-function ownedSplitTitle(loose: number, decked: number | undefined): string {
-  return `Not in any deck · ${loose + (decked ?? 0)} owned in total`;
+function ownedSplitTitle(loose: number, decked: number | undefined, t: Translate): string {
+  return t('cardGrid.ownedSplit', { total: loose + (decked ?? 0) });
 }
 
-function playsetTitle(target: 'deck' | 'collection'): string {
+function playsetTitle(target: 'deck' | 'collection', t: Translate): string {
   return target === 'collection'
-    ? `Add ${PLAYSET_SIZE} copies to My Cards`
-    : `Add playset (${PLAYSET_SIZE} copies)`;
+    ? t('cardGrid.addCopiesToCollection', { count: PLAYSET_SIZE })
+    : t('cardGrid.addPlayset', { count: PLAYSET_SIZE });
 }
 
 function CardTile({ card, owned, inDeck, newCount, decked, otherDecks, selected, onClick, onView, onAdd, onAddPlayset, playsetTitle, onRemove }: TileProps) {
+  const { t } = useI18n();
   const [hover, setHover] = useState(false);
   const total = owned + (decked ?? 0);
   const hasImage = !!card.image_uri_normal;
   const tint = card.color_identity?.[0] ? getManaMeta(card.color_identity[0]) : null;
-  const rarityShort = RARITY_SHORT[card.rarity];
+  const rarityShortKey = RARITY_SHORT_KEYS[card.rarity];
   const removeControl = hover && onRemove && owned > 0 ? (
     <div style={cardHoverBar}>
       <div style={{ flex: 1 }} />
@@ -404,7 +413,7 @@ function CardTile({ card, owned, inDeck, newCount, decked, otherDecks, selected,
           if (!selected) e.currentTarget.style.borderColor = 'var(--border)';
         }}
       >
-        <CardImage src={card.image_uri_normal!} alt={card.name} />
+        <CardImage src={card.image_uri_normal!} alt={displayCardName(card)} />
         {inDeck > 0 && (
           <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', gap: 3 }}>
             <DeckTags inDeck={inDeck} newCount={newCount} overlay />
@@ -422,7 +431,7 @@ function CardTile({ card, owned, inDeck, newCount, decked, otherDecks, selected,
               gap: 3,
             }}
           >
-            {owned > 0 && <CountTag kind="free" count={owned} overlay title={ownedSplitTitle(owned, decked)} />}
+            {owned > 0 && <CountTag kind="free" count={owned} overlay title={ownedSplitTitle(owned, decked, t)} />}
             <DecksTag decked={decked} otherDecks={otherDecks} overlay />
           </div>
         )}
@@ -451,7 +460,7 @@ function CardTile({ card, owned, inDeck, newCount, decked, otherDecks, selected,
               transition: 'opacity 120ms',
               backdropFilter: 'blur(6px)',
             }}
-            title="View card details"
+            title={t('cardGrid.viewDetails')}
           >
             <ViewIcon size={13} />
           </button>
@@ -480,7 +489,7 @@ function CardTile({ card, owned, inDeck, newCount, decked, otherDecks, selected,
               transition: 'opacity 120ms',
               backdropFilter: 'blur(6px)',
             }}
-            title="Add to deck"
+            title={t('cardGrid.addToDeck')}
           >
             +
           </button>
@@ -565,7 +574,7 @@ function CardTile({ card, owned, inDeck, newCount, decked, otherDecks, selected,
             textOverflow: 'ellipsis',
           }}
         >
-          {card.name}
+          {displayCardName(card)}
         </span>
         <ManaSymbols cost={card.mana_cost} size={11} />
       </div>
@@ -592,7 +601,7 @@ function CardTile({ card, owned, inDeck, newCount, decked, otherDecks, selected,
             color: 'var(--text-faint)',
           }}
         >
-          art
+          {t('cardGrid.art')}
         </span>
         {card.power !== null && card.toughness !== null && (
           <span
@@ -632,7 +641,7 @@ function CardTile({ card, owned, inDeck, newCount, decked, otherDecks, selected,
         }}
       >
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{card.type_line}</span>
-        {rarityShort && <span style={{ color: 'var(--text-faint)' }}>{rarityShort}</span>}
+        {rarityShortKey && <span style={{ color: 'var(--text-faint)' }}>{t(rarityShortKey)}</span>}
       </div>
       <div
         style={{
@@ -668,7 +677,11 @@ function CardTile({ card, owned, inDeck, newCount, decked, otherDecks, selected,
 }
 
 function RemoveCollectionButton({ card, quantity, onRemove, tile = false }: { card: Card; quantity: number; onRemove: () => void; tile?: boolean }) {
-  const label = `Remove all ${quantity} copies of ${card.name} from My Cards`;
+  const { t } = useI18n();
+  const label = t(quantity === 1 ? 'cardGrid.removeFromCollectionOne' : 'cardGrid.removeFromCollectionOther', {
+    count: quantity,
+    name: displayCardName(card),
+  });
   return (
     <button
       onClick={(e) => {

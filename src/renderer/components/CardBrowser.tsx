@@ -1,13 +1,17 @@
-import { useMemo, useState, useCallback, useRef } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import type { Card } from '../../shared/types';
 import { useCards, useCardDetail } from '../hooks/useCards';
 import { useCollectionLookup, useInDeckLookup, useCollectionActions } from '../hooks/useCollection';
 import { useInfiniteScrollSentinel } from '../hooks/useInfiniteScrollSentinel';
+import { useScrollTopOnChange } from '../hooks/useScrollTopOnChange';
+import { useCardLanguage } from '../hooks/useCardLanguage';
+import { useI18n } from '../i18n/I18nProvider';
 import CardFilters from './CardFilters';
 import CardGrid from './CardGrid';
 import CardDetail from './CardDetail';
 import ViewToggle from './ViewToggle';
 import InfiniteScrollFooter from './InfiniteScrollFooter';
+import CardLanguageSelect from './CardLanguageSelect';
 import { PLAYSET_SIZE } from '../../shared/deckLimits';
 
 interface Props {
@@ -17,11 +21,17 @@ interface Props {
 }
 
 export default function CardBrowser({ onCollectionChanged, collectionVersion = 0 }: Props) {
+  const { t } = useI18n();
+  const { language, setLanguage, available } = useCardLanguage();
   const { filters, updateFilters, cards, total, loading, loadingMore, hasMore, loadMore } = useCards();
   const { card, open, showCard, close } = useCardDetail();
   const [colVersion, setColVersion] = useState(0);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (filters.lang !== language) updateFilters({ lang: language });
+  }, [language, filters.lang, updateFilters]);
 
   const cardIds = useMemo(() => cards.map((c) => c.id), [cards]);
   const ownedQuantities = useCollectionLookup(cardIds, colVersion + collectionVersion);
@@ -42,6 +52,7 @@ export default function CardBrowser({ onCollectionChanged, collectionVersion = 0
     loadingMore,
     onLoadMore: loadMore,
   });
+  useScrollTopOnChange(scrollRef, filters);
 
   return (
     <div
@@ -56,7 +67,6 @@ export default function CardBrowser({ onCollectionChanged, collectionVersion = 0
         height: '100%',
       }}
     >
-      {/* Header */}
       <div
         style={{
           padding: 'var(--pad) var(--pad) var(--pad-tight)',
@@ -74,16 +84,16 @@ export default function CardBrowser({ onCollectionChanged, collectionVersion = 0
               letterSpacing: '-0.01em',
             }}
           >
-            Card Browser
+            {t('cardBrowser.title')}
           </h1>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
             {total.toLocaleString()}
           </span>
           <div style={{ flex: 1 }} />
+          <CardLanguageSelect value={language} available={available} onChange={setLanguage} />
           <ViewToggle value={viewMode} onChange={setViewMode} />
         </div>
 
-        {/* Search */}
         <div
           style={{
             display: 'flex',
@@ -105,8 +115,8 @@ export default function CardBrowser({ onCollectionChanged, collectionVersion = 0
             type="text"
             value={filters.query || ''}
             onChange={(e) => updateFilters({ query: e.target.value || undefined })}
-            placeholder="Search cards… (name, text, or type)"
-            title="Words search name, rules text, and type. Prefixes: t: type, o: rules text, n: name. Quote phrases: t:&quot;human soldier&quot;"
+            placeholder={t('cardBrowser.searchPlaceholder')}
+            title={t('cardBrowser.searchTitle')}
             style={{
               flex: 1,
               minWidth: 0,
@@ -123,8 +133,7 @@ export default function CardBrowser({ onCollectionChanged, collectionVersion = 0
         <CardFilters filters={filters} onUpdate={updateFilters} />
       </div>
 
-      {/* Body */}
-      <div ref={scrollRef} className="scroll-hidden" style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>
         <CardGrid
           cards={cards}
           loading={loading}

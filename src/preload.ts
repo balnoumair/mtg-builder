@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
+  AppSettings,
   CardFilters,
   Deck,
   ElectronAPI,
@@ -28,6 +29,10 @@ const api: ElectronAPI = {
   getCard: (id: string) => ipcRenderer.invoke('cards:get', id),
   getSets: () => ipcRenderer.invoke('cards:sets'),
   getAllSets: () => ipcRenderer.invoke('cards:allSets'),
+  getAvailableCardLanguages: () => ipcRenderer.invoke('cards:languages'),
+  getAppSettings: () => ipcRenderer.invoke('app:getSettings'),
+  updateAppSettings: (updates: Partial<AppSettings>) =>
+    ipcRenderer.invoke('app:updateSettings', updates),
   getDecks: () => ipcRenderer.invoke('decks:list'),
   getTags: () => ipcRenderer.invoke('tags:list'),
   createTag: (input: { name: string; color?: string }) => ipcRenderer.invoke('tags:create', input),

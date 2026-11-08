@@ -1,14 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { CardFilters as Filters, CardSet } from '../../shared/types';
-import { buildSetDropdownEntries } from '../../shared/setOrdering';
+import { buildSetDropdownEntries, type SetDropdownEntry } from '../../shared/setOrdering';
 import { Mana } from './ManaSymbols';
-import { getManaMeta } from '../lib/mana';
+import { manaNameKey, typeCategoryKey } from '../lib/mana';
 import { useSets } from '../hooks/useSets';
+import { useI18n } from '../i18n/I18nProvider';
 
 const COLOR_KEYS = ['W', 'U', 'B', 'R', 'G'] as const;
 const COLOR_CATEGORY_FILTERS = [
-  { value: 'multicolor' as const, symbol: 'M', title: 'Multicolor', color: '#c9a86c' },
-  { value: 'colorless' as const, symbol: 'C', title: 'Colorless', color: '#bdb7af' },
+  { value: 'multicolor' as const, symbol: 'M', color: '#c9a86c' },
+  { value: 'colorless' as const, symbol: 'C', color: '#bdb7af' },
 ];
 const MANA_VALUE_VALUES: (number | '7+')[] = [0, 1, 2, 3, 4, 5, 6, '7+'];
 const TYPES = ['All', 'Creature', 'Instant', 'Sorcery', 'Enchantment', 'Artifact', 'Planeswalker', 'Land'];
@@ -168,11 +169,12 @@ function BlockHeader({ children, action }: { children: React.ReactNode; action?:
 }
 
 function BlockToggle({ allSelected, blockName, onClick }: { allSelected: boolean; blockName: string; onClick: () => void }) {
+  const { t } = useI18n();
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`${allSelected ? 'Deselect' : 'Select'} all sets in ${blockName}`}
+      aria-label={t(allSelected ? 'filters.deselectAllInBlock' : 'filters.selectAllInBlock', { block: blockName })}
       style={{
         padding: 0,
         background: 'transparent',
@@ -189,7 +191,7 @@ function BlockToggle({ allSelected, blockName, onClick }: { allSelected: boolean
         e.currentTarget.style.color = 'var(--text-mute)';
       }}
     >
-      {allSelected ? 'Deselect all' : 'Select all'}
+      {allSelected ? t('filters.deselectAll') : t('filters.selectAll')}
     </button>
   );
 }
@@ -198,12 +200,14 @@ const SET_MENU_W = 280;
 const SET_MENU_MARGIN = 8;
 
 export default function CardFilters({ filters, onUpdate }: Props) {
+  const { t } = useI18n();
   const sets = useSets();
   const [setMenuOpen, setSetMenuOpen] = useState(false);
   const [setSearch, setSetSearch] = useState('');
   const [setMenuPos, setSetMenuPos] = useState({ top: 0, left: 0, maxListHeight: 280 });
   const setMenuRef = useRef<HTMLDivElement>(null);
   const setMenuBtnRef = useRef<HTMLButtonElement>(null);
+  const setListRef = useRef<HTMLDivElement>(null);
 
   // The menu renders position:fixed so it can overlap neighboring panes
   // instead of being squeezed by a narrow search panel.
@@ -261,8 +265,8 @@ export default function CardFilters({ filters, onUpdate }: Props) {
     onUpdate({ colorCategories: next.length > 0 ? next : undefined });
   };
 
-  const setType = (t: string) => {
-    onUpdate({ types: t === 'All' ? undefined : [t] });
+  const setType = (type: string) => {
+    onUpdate({ types: type === 'All' ? undefined : [type] });
   };
 
   const toggleManaValue = (value: number | '7+') => {
@@ -305,15 +309,66 @@ export default function CardFilters({ filters, onUpdate }: Props) {
     );
   }, [sortedSets, setSearch]);
 
-  const selectedSets = useMemo(
-    () => sortedSets.filter((s) => activeSets.includes(s.code)),
-    [sortedSets, activeSets],
-  );
-
   const groupedEntries = useMemo(() => {
     if (setSearch) return null;
     return buildSetDropdownEntries(sets);
   }, [sets, setSearch]);
+
+  // Blocks with any selected set float to the top as a whole so the
+  // block-level select/deselect toggle stays within reach.
+  const [pinnedEntries, otherEntries] = useMemo(() => {
+    const pinned: SetDropdownEntry[] = [];
+    const rest: SetDropdownEntry[] = [];
+    for (const entry of groupedEntries ?? []) {
+      const codes = entry.kind === 'block' ? entry.group.sets.map((s) => s.code) : [entry.set.code];
+      (codes.some((code) => activeSets.includes(code)) ? pinned : rest).push(entry);
+    }
+    return [pinned, rest];
+  }, [groupedEntries, activeSets]);
+
+  // Follow a block to the top when it gets pinned, so the selection stays in view.
+  const prevPinnedKeysRef = useRef<string[] | null>(null);
+  useEffect(() => {
+    const keys = pinnedEntries.map((e) => (e.kind === 'block' ? e.group.blockCode : e.set.code));
+    const prev = prevPinnedKeysRef.current;
+    prevPinnedKeysRef.current = keys;
+    if (prev && keys.some((key) => !prev.includes(key))) {
+      setListRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' });
+    }
+  }, [pinnedEntries]);
+
+  const renderSetEntries = (entries: SetDropdownEntry[]) =>
+    entries.map((entry, idx) => {
+      if (entry.kind === 'block') {
+        const codes = entry.group.sets.map((s) => s.code);
+        return (
+          <div key={`b-${entry.group.blockCode}`}>
+            <BlockHeader
+              action={
+                <BlockToggle
+                  allSelected={codes.every((code) => activeSets.includes(code))}
+                  blockName={entry.group.blockName}
+                  onClick={() => toggleBlock(codes)}
+                />
+              }
+            >
+              {entry.group.blockName}
+            </BlockHeader>
+            {entry.group.sets.map((s) => (
+              <SetRow key={s.code} s={s} checked={activeSets.includes(s.code)} onToggle={toggleSet} />
+            ))}
+          </div>
+        );
+      }
+      const prev = entries[idx - 1];
+      const showHeader = !prev || prev.kind !== 'standalone';
+      return (
+        <div key={`s-${entry.set.code}`}>
+          {showHeader && <BlockHeader>{t('filters.standalone')}</BlockHeader>}
+          <SetRow s={entry.set} checked={activeSets.includes(entry.set.code)} onToggle={toggleSet} />
+        </div>
+      );
+    });
 
   const hasFilters =
     activeColors.length > 0 ||
@@ -343,17 +398,18 @@ export default function CardFilters({ filters, onUpdate }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {/* Row 1: Color · Mana value · Edition */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <FilterGroup label="Color">
+        <FilterGroup label={t('filters.color')}>
           <div style={{ display: 'flex', gap: 3 }}>
             {COLOR_KEYS.map((c) => {
               const active = activeColors.includes(c);
+              const name = t(manaNameKey(c));
               return (
                 <button
                   key={c}
                   type="button"
                   onClick={() => toggleColor(c)}
-                  title={getManaMeta(c).name}
-                  aria-label={getManaMeta(c).name}
+                  title={name}
+                  aria-label={name}
                   aria-pressed={active}
                   style={{
                     width: 22,
@@ -377,13 +433,14 @@ export default function CardFilters({ filters, onUpdate }: Props) {
             />
             {COLOR_CATEGORY_FILTERS.map((category) => {
               const active = activeColorCategories.includes(category.value);
+              const name = t(manaNameKey(category.symbol));
               return (
                 <button
                   key={category.value}
                   type="button"
                   onClick={() => toggleColorCategory(category.value)}
-                  title={category.title}
-                  aria-label={category.title}
+                  title={name}
+                  aria-label={name}
                   aria-pressed={active}
                   style={{
                     width: 22,
@@ -404,12 +461,14 @@ export default function CardFilters({ filters, onUpdate }: Props) {
           </div>
         </FilterGroup>
 
-        <FilterGroup label="Mana value">
+        <FilterGroup label={t('filters.manaValue')}>
           <div style={{ display: 'flex', gap: 2 }}>
             {MANA_VALUE_VALUES.map((value) => {
               const active = activeManaValues.includes(value);
               const label = value === '7+' ? '7+' : String(value);
-              const title = value === '7+' ? 'Mana value 7 or more' : `Mana value ${value}`;
+              const title = value === '7+'
+                ? t('filters.manaValueOrMoreTitle', { value: 7 })
+                : t('filters.manaValueTitle', { value });
               return (
                 <button
                   key={label}
@@ -466,7 +525,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
               <rect x="1" y="7" width="4" height="4" rx="0.8" fill="currentColor" />
               <rect x="7" y="7" width="4" height="4" rx="0.8" fill="currentColor" />
             </svg>
-            Edition{activeSets.length ? ` · ${activeSets.length}` : ''}
+            {t('filters.edition')}{activeSets.length ? ` · ${activeSets.length}` : ''}
             <svg
               width="8"
               height="8"
@@ -508,7 +567,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                   autoFocus
                   value={setSearch}
                   onChange={(e) => setSetSearch(e.target.value)}
-                  placeholder="Search sets…"
+                  placeholder={t('filters.searchSets')}
                   style={{
                     width: '100%',
                     background: 'transparent',
@@ -520,7 +579,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                   }}
                 />
               </div>
-              <div style={{ maxHeight: setMenuPos.maxListHeight, overflowY: 'auto', padding: 4 }}>
+              <div ref={setListRef} style={{ maxHeight: setMenuPos.maxListHeight, overflowY: 'auto', padding: 4 }}>
                 {groupedEntries ? (
                   groupedEntries.length === 0 ? (
                     <div
@@ -531,58 +590,22 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                         textAlign: 'center',
                       }}
                     >
-                      No sets found
+                      {t('filters.noSets')}
                     </div>
                   ) : (
                     <>
-                      {selectedSets.length > 0 && (
-                        <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 4, marginBottom: 4 }}>
-                          <BlockHeader>Selected</BlockHeader>
-                          {selectedSets.map((s) => (
-                            <SetRow key={s.code} s={s} checked onToggle={toggleSet} />
-                          ))}
+                      {pinnedEntries.length > 0 && (
+                        <div
+                          style={{
+                            borderBottom: otherEntries.length > 0 ? '1px solid var(--border)' : 'none',
+                            paddingBottom: 4,
+                            marginBottom: 4,
+                          }}
+                        >
+                          {renderSetEntries(pinnedEntries)}
                         </div>
                       )}
-                      {groupedEntries.map((entry, idx) => {
-                        if (entry.kind === 'block') {
-                          const codes = entry.group.sets.map((s) => s.code);
-                          return (
-                            <div key={`b-${entry.group.blockCode}`}>
-                              <BlockHeader
-                                action={
-                                  <BlockToggle
-                                    allSelected={codes.every((code) => activeSets.includes(code))}
-                                    blockName={entry.group.blockName}
-                                    onClick={() => toggleBlock(codes)}
-                                  />
-                                }
-                              >
-                                {entry.group.blockName}
-                              </BlockHeader>
-                              {entry.group.sets.map((s) => (
-                                <SetRow
-                                  key={s.code}
-                                  s={s}
-                                  checked={activeSets.includes(s.code)}
-                                  onToggle={toggleSet}
-                                />
-                              ))}
-                            </div>
-                          );
-                        }
-                        const prev = groupedEntries[idx - 1];
-                        const showHeader = !prev || prev.kind !== 'standalone';
-                        return (
-                          <div key={`s-${entry.set.code}`}>
-                            {showHeader && <BlockHeader>Standalone</BlockHeader>}
-                            <SetRow
-                              s={entry.set}
-                              checked={activeSets.includes(entry.set.code)}
-                              onToggle={toggleSet}
-                            />
-                          </div>
-                        );
-                      })}
+                      {renderSetEntries(otherEntries)}
                     </>
                   )
                 ) : filteredSets.length === 0 ? (
@@ -594,7 +617,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                       textAlign: 'center',
                     }}
                   >
-                    No sets found
+                    {t('filters.noSets')}
                   </div>
                 ) : (
                   filteredSets.map((s) => (
@@ -620,7 +643,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                   <span
                     style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-mute)' }}
                   >
-                    {activeSets.length} selected
+                    {t('filters.selectedCount', { count: activeSets.length })}
                   </span>
                   <button
                     type="button"
@@ -633,7 +656,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                       cursor: 'pointer',
                     }}
                   >
-                    Clear
+                    {t('filters.clear')}
                   </button>
                 </div>
               )}
@@ -666,20 +689,20 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                 strokeLinecap="round"
               />
             </svg>
-            Clear
+            {t('filters.clear')}
           </button>
         )}
       </div>
 
       {/* Row 2: Types */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-        {TYPES.map((t) => {
-          const active = activeType === t;
+        {TYPES.map((type) => {
+          const active = activeType === type;
           return (
             <button
-              key={t}
+              key={type}
               type="button"
-              onClick={() => setType(t)}
+              onClick={() => setType(type)}
               style={{
                 padding: '3px 8px',
                 background: active ? 'var(--bg-row-sel)' : 'transparent',
@@ -691,7 +714,7 @@ export default function CardFilters({ filters, onUpdate }: Props) {
                 cursor: 'pointer',
               }}
             >
-              {t}
+              {type === 'All' ? t('filters.all') : t(typeCategoryKey(type))}
             </button>
           );
         })}

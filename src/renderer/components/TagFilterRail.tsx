@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Tag } from '../../shared/types';
 import { TAG_COLOR_KEYS, tagColorTokens } from '../../shared/tagColors';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   tags: Tag[];
@@ -26,6 +27,7 @@ export default function TagFilterRail({
   onRecolor,
   onDelete,
 }: Props) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -110,10 +112,12 @@ export default function TagFilterRail({
               letterSpacing: '0.06em',
             }}
           >
-            Tags
+            {t('tags.label')}
           </span>
           <span style={{ color: 'var(--text-mute)' }}>
-            {selected.size > 0 ? `${selected.size} selected` : 'Filter decks'}
+            {selected.size > 0
+              ? t(selected.size === 1 ? 'tags.selectedCountOne' : 'tags.selectedCountOther', { count: selected.size })
+              : t('tags.filterDecks')}
           </span>
           <svg width="9" height="9" viewBox="0 0 9 9" fill="none" aria-hidden>
             <path
@@ -128,7 +132,7 @@ export default function TagFilterRail({
 
         {selected.size > 0 && (
           <button type="button" onClick={onClear} style={compactTextButton}>
-            Clear filters
+            {t('tags.clearFilters')}
           </button>
         )}
       </div>
@@ -136,7 +140,7 @@ export default function TagFilterRail({
       {open && (
         <div
           role="dialog"
-          aria-label="Filter decks by tag"
+          aria-label={t('tags.filterDialogLabel')}
           style={{
             position: 'absolute',
             zIndex: 30,
@@ -160,7 +164,7 @@ export default function TagFilterRail({
             }}
           >
             <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-              {editing ? 'Manage tags' : 'Filter decks'}
+              {editing ? t('tags.manageTags') : t('tags.filterDecks')}
             </span>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)' }}>
               {tags.length}
@@ -173,7 +177,7 @@ export default function TagFilterRail({
               }}
               style={{ ...compactTextButton, color: editing ? 'var(--text)' : 'var(--text-mute)' }}
             >
-              {editing ? 'Done' : 'Edit'}
+              {editing ? t('tags.done') : t('tags.edit')}
             </button>
           </div>
 
@@ -182,8 +186,8 @@ export default function TagFilterRail({
               ref={searchRef}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={editing ? 'Search tags to edit…' : 'Search tags…'}
-              aria-label="Search tags"
+              placeholder={editing ? t('tags.searchToEditPlaceholder') : t('tags.searchPlaceholder')}
+              aria-label={t('tags.searchLabel')}
               style={{
                 width: '100%',
                 boxSizing: 'border-box',
@@ -201,7 +205,7 @@ export default function TagFilterRail({
           <div style={{ maxHeight: 280, overflowY: 'auto', padding: 6 }}>
             {visible.length === 0 ? (
               <p style={{ margin: 0, padding: '12px 8px', color: 'var(--text-faint)', fontSize: 11 }}>
-                {query ? 'No matching tags.' : 'No tags are currently used by a deck.'}
+                {query ? t('tags.noMatches') : t('tags.noneInUse')}
               </p>
             ) : (
               visible.map((tag) => {
@@ -214,7 +218,13 @@ export default function TagFilterRail({
                     <button
                       type="button"
                       aria-pressed={editing ? undefined : isActive}
-                      title={editing ? `Edit ${tag.name}` : `${isActive ? 'Stop filtering' : 'Filter'} by ${tag.name}`}
+                      title={
+                        editing
+                          ? t('tags.editTag', { name: tag.name })
+                          : isActive
+                            ? t('tags.stopFilteringBy', { name: tag.name })
+                            : t('tags.filterBy', { name: tag.name })
+                      }
                       onClick={() => {
                         if (!editing) {
                           onToggle(tag.id);
@@ -324,7 +334,7 @@ export default function TagFilterRail({
                             <button
                               type="button"
                               key={key}
-                              title={key}
+                              title={t(`tags.colors.${key}`)}
                               onClick={() => onRecolor(tag.id, key)}
                               style={{
                                 width: 14,
@@ -344,8 +354,11 @@ export default function TagFilterRail({
                           onClick={() => {
                             const used = tag.deck_count ?? 0;
                             const warning = used
-                              ? `Delete "${tag.name}"? It will be removed from ${used} deck${used === 1 ? '' : 's'}.`
-                              : `Delete "${tag.name}"?`;
+                              ? t(used === 1 ? 'tags.confirmDeleteUsedOne' : 'tags.confirmDeleteUsedOther', {
+                                name: tag.name,
+                                count: used,
+                              })
+                              : t('tags.confirmDelete', { name: tag.name });
                             if (confirm(warning)) {
                               onDelete(tag.id);
                               setEditingId(null);
@@ -362,7 +375,7 @@ export default function TagFilterRail({
                             cursor: 'pointer',
                           }}
                         >
-                          Delete tag
+                          {t('tags.deleteTag')}
                         </button>
                       </div>
                     )}

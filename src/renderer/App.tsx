@@ -21,6 +21,7 @@ import WantsView from './components/WantsView';
 import ExternalDecksView from './components/ExternalDecksView';
 import { useDecks } from './hooks/useDecks';
 import { useTags } from './hooks/useTags';
+import { useI18n } from './i18n/I18nProvider';
 
 const SIDEBAR_DEFAULT_W = 224;
 const SIDEBAR_MIN_W = 170;
@@ -42,6 +43,7 @@ function loadSidebarWidth(): number {
 }
 
 export default function App() {
+  const { t } = useI18n();
   const [dbStatus, setDbStatus] = useState<DbStatus | null>(null);
   const [view, setView] = useState<View>('collection');
   const [activeDeckId, setActiveDeckId] = useState<number | null>(null);
@@ -167,14 +169,14 @@ export default function App() {
   const titleInfo = useMemo(() => {
     if (view === 'deck-editor' && activeDeckId) {
       const d = decks.find((x) => x.id === activeDeckId);
-      return { title: d?.name || 'Deck', subtitle: d?.format || '' };
+      return { title: d?.name || t('views.deck'), subtitle: d?.format || '' };
     }
-    if (view === 'collection') return { title: 'Card Browser', subtitle: '' };
-    if (view === 'my-cards') return { title: 'My Cards', subtitle: '' };
-    if (view === 'wants') return { title: 'Wants', subtitle: '' };
-    if (view === 'others-decks') return { title: "Others' Decks", subtitle: '' };
-    return { title: 'Decks', subtitle: '' };
-  }, [view, activeDeckId, decks]);
+    if (view === 'collection') return { title: t('views.cardBrowser'), subtitle: '' };
+    if (view === 'my-cards') return { title: t('views.myCards'), subtitle: '' };
+    if (view === 'wants') return { title: t('views.wants'), subtitle: '' };
+    if (view === 'others-decks') return { title: t('views.othersDecks'), subtitle: '' };
+    return { title: t('views.decks'), subtitle: '' };
+  }, [view, activeDeckId, decks, t]);
 
   if (dbStatus === null) {
     return (
@@ -189,7 +191,7 @@ export default function App() {
           fontSize: 13,
         }}
       >
-        Loading…
+        {t('app.loading')}
       </div>
     );
   }
@@ -239,7 +241,7 @@ export default function App() {
           onPointerUp={endSidebarDrag}
           onPointerCancel={endSidebarDrag}
           onDoubleClick={() => setSidebarWidth(SIDEBAR_DEFAULT_W)}
-          title="Drag to resize · Double-click to reset"
+          title={t('app.sidebarResizeTitle')}
           style={{
             width: 4,
             flexShrink: 0,

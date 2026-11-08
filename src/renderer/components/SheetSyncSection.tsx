@@ -3,6 +3,7 @@ import type { SheetPullPreview, SheetPushPlan, SheetSyncSettings } from '../../s
 import SheetMappings from './SheetMappings';
 import SheetPushPreview from './SheetPushPreview';
 import SheetPullPreviewView from './SheetPullPreview';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   onPulled?: () => void;
@@ -14,6 +15,7 @@ interface Props {
  * block/set mapping editor.
  */
 export default function SheetSyncSection({ onPulled }: Props) {
+  const { t } = useI18n();
   const [settings, setSettings] = useState<SheetSyncSettings | null>(null);
   const [playerDraft, setPlayerDraft] = useState('');
   const [sheetDraft, setSheetDraft] = useState('');
@@ -42,7 +44,7 @@ export default function SheetSyncSection({ onPulled }: Props) {
     setSheetDraft(next.spreadsheetId);
     setPlan(null);
     if (value && !next.spreadsheetId) {
-      setError("That doesn't look like a Google Sheets link or id.");
+      setError(t('sheetSync.invalidSheet'));
     }
   };
 
@@ -63,7 +65,7 @@ export default function SheetSyncSection({ onPulled }: Props) {
     } else if (result.preview) {
       setPullPreview(result.preview);
     } else {
-      setError('Pull preview failed: the sheet did not contain usable data.');
+      setError(t('sheetSync.pullPreviewFailed'));
     }
     setBusy(null);
   };
@@ -82,7 +84,10 @@ export default function SheetSyncSection({ onPulled }: Props) {
       setError(result.error);
     } else {
       setStatus(
-        `Pulled ${result.imported} deck${result.imported === 1 ? '' : 's'} from ${result.players.join(', ') || 'nobody'}.`,
+        t(result.imported === 1 ? 'sheetSync.pulledOne' : 'sheetSync.pulledOther', {
+          count: result.imported,
+          players: result.players.join(', ') || t('sheetSync.nobody'),
+        }),
       );
       setSettings(await window.electronAPI.getSheetSyncSettings());
       setPullPreview(null);
@@ -134,26 +139,25 @@ export default function SheetSyncSection({ onPulled }: Props) {
             fontWeight: 600,
           }}
         >
-          Playgroup sheet
+          {t('sheetSync.title')}
         </h2>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-mute)' }}>
           {settings.lastPulledAt
-            ? `pulled ${new Date(settings.lastPulledAt).toLocaleString()}`
-            : 'never pulled'}
+            ? t('sheetSync.lastPulled', { date: new Date(settings.lastPulledAt).toLocaleString() })
+            : t('sheetSync.neverPulled')}
         </span>
       </div>
       <p style={{ ...hint, marginTop: 0, marginBottom: 12 }}>
-        Pulling reads everyone else&rsquo;s decks. Pushing writes only rows under your name, and
-        only after you tick them.
+        {t('sheetSync.intro')}
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <Card title="Spreadsheet">
+        <Card title={t('sheetSync.spreadsheetCard')}>
           <input
             value={sheetDraft}
             onChange={(e) => setSheetDraft(e.target.value)}
             onBlur={() => void commitSpreadsheet()}
-            placeholder="Paste the Google Sheets link…"
+            placeholder={t('sheetSync.spreadsheetPlaceholder')}
             spellCheck={false}
             style={{
               width: '100%',
@@ -169,12 +173,12 @@ export default function SheetSyncSection({ onPulled }: Props) {
           />
           <p style={hint}>
             {hasSheet
-              ? 'Paste a full sheet link or its id; the link is stored as an id.'
-              : 'Required. The sheet must be shared with your service account.'}
+              ? t('sheetSync.spreadsheetHint')
+              : t('sheetSync.spreadsheetRequired')}
           </p>
         </Card>
 
-        <Card title="Who you are in the sheet">
+        <Card title={t('sheetSync.identityCard')}>
           <label
             style={{
               display: 'flex',
@@ -184,7 +188,7 @@ export default function SheetSyncSection({ onPulled }: Props) {
               color: 'var(--text-dim)',
             }}
           >
-            <span style={{ flexShrink: 0 }}>Jugador</span>
+            <span style={{ flexShrink: 0 }}>{t('sheetSync.playerLabel')}</span>
             <input
               value={playerDraft}
               onChange={(e) => setPlayerDraft(e.target.value)}
@@ -204,24 +208,24 @@ export default function SheetSyncSection({ onPulled }: Props) {
             />
           </label>
           <p style={hint}>
-            Must match column A exactly — rows under this name are the only ones a push writes.
+            {t('sheetSync.playerHint')}
           </p>
         </Card>
 
-        <Card title="Pull others' decks">
+        <Card title={t('sheetSync.pullCard')}>
           <button
             onClick={() => void handlePull()}
             disabled={busy !== null || !hasSheet || !hasKey}
             style={{ ...actionBtn, opacity: busy !== null || !hasSheet || !hasKey ? 0.5 : 1 }}
           >
-            {busy === 'pull' ? 'Pulling…' : 'Pull now'}
+            {busy === 'pull' ? t('sheetSync.pulling') : t('sheetSync.pullNow')}
           </button>
           <p style={hint}>
             {!hasSheet
-              ? 'Add the spreadsheet above first.'
+              ? t('sheetSync.pullNeedsSheet')
                 : !hasKey
-                  ? 'Set the service-account key below first. Viewer access is enough for pulling.'
-                : "Previews changes, then replaces only this device's cached copy of everyone else's decks."}
+                  ? t('sheetSync.pullNeedsKey')
+                : t('sheetSync.pullHint')}
           </p>
         </Card>
 
@@ -234,23 +238,27 @@ export default function SheetSyncSection({ onPulled }: Props) {
           />
         )}
 
-        <Card title="Push my decks">
+        <Card title={t('sheetSync.pushCard')}>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               onClick={() => void handlePlanPush()}
               disabled={busy !== null || !hasSheet || !hasKey}
               style={{ ...actionBtn, opacity: busy !== null || !hasSheet || !hasKey ? 0.5 : 1 }}
             >
-              {busy === 'plan' ? 'Preparing…' : plan ? 'Rebuild plan' : 'Prepare push'}
+              {busy === 'plan'
+                ? t('sheetSync.preparing')
+                : plan
+                  ? t('sheetSync.rebuildPlan')
+                  : t('sheetSync.preparePush')}
             </button>
             <button onClick={() => void handlePickKey()} style={ghostBtn}>
-              {hasKey ? 'Change key' : 'Set service-account key'}
+              {hasKey ? t('sheetSync.changeKey') : t('sheetSync.setKey')}
             </button>
           </div>
           <p style={{ ...hint, fontFamily: 'var(--font-mono)', fontSize: 9 }}>
             {hasKey
-              ? 'Key configured locally. The original JSON can be moved or deleted.'
-              : 'Pushing needs a service-account key with editor access to the sheet.'}
+              ? t('sheetSync.keyConfigured')
+              : t('sheetSync.keyNeeded')}
           </p>
         </Card>
 
@@ -267,10 +275,10 @@ export default function SheetSyncSection({ onPulled }: Props) {
         )}
 
         <Card
-          title="Set mappings"
+          title={t('sheetSync.mappingsCard')}
           action={
             <button onClick={() => setShowMappings((v) => !v)} style={ghostBtn}>
-              {showMappings ? 'Hide' : 'Show'}
+              {showMappings ? t('sheetSync.hide') : t('sheetSync.show')}
             </button>
           }
         >
@@ -280,8 +288,7 @@ export default function SheetSyncSection({ onPulled }: Props) {
             </div>
           ) : (
             <p style={{ ...hint, marginTop: 0 }}>
-              Which Scryfall sets each Spanish block label covers. Edit these if the group renames a
-              label or adds a new one.
+              {t('sheetSync.mappingsHint')}
             </p>
           )}
         </Card>
@@ -292,7 +299,7 @@ export default function SheetSyncSection({ onPulled }: Props) {
               setStatus(null);
               setError(null);
             }}
-            title="Dismiss"
+            title={t('settings.dismiss')}
             style={{
               margin: 0,
               fontFamily: 'var(--font-mono)',

@@ -1,4 +1,12 @@
 import type Database from 'better-sqlite3';
+import {
+  DEFAULT_CARD_LANGUAGE,
+  parseSyncLanguages,
+  serializeSyncLanguages,
+  type CardLanguageCode,
+} from '../../shared/cardLanguages';
+import { DEFAULT_APP_LOCALE, isAppLocale, type AppLocale } from '../../shared/i18n';
+import type { AppSettings } from '../../shared/types';
 
 export const SETTINGS_DEFAULTS = {
   'sheetSync.playerName': 'Bryan',
@@ -10,6 +18,9 @@ export const SETTINGS_DEFAULTS = {
   'driveSync.backupFileId': '',
   'driveSync.lastPushedAt': '',
   'driveSync.lastPulledAt': '',
+  'app.locale': DEFAULT_APP_LOCALE,
+  'cards.syncLanguages': serializeSyncLanguages([DEFAULT_CARD_LANGUAGE]),
+  'cards.browseLanguage': DEFAULT_CARD_LANGUAGE,
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS_DEFAULTS;
@@ -44,4 +55,38 @@ export function getDriveSyncSettings(db: Database.Database) {
     lastPushedAt: getSetting(db, 'driveSync.lastPushedAt'),
     lastPulledAt: getSetting(db, 'driveSync.lastPulledAt'),
   };
+}
+
+export function getAppSettings(db: Database.Database): AppSettings {
+  const localeRaw = getSetting(db, 'app.locale');
+  const browseRaw = getSetting(db, 'cards.browseLanguage');
+  return {
+    locale: isAppLocale(localeRaw) ? localeRaw : DEFAULT_APP_LOCALE,
+    syncLanguages: parseSyncLanguages(getSetting(db, 'cards.syncLanguages')),
+    browseLanguage: browseRaw || DEFAULT_CARD_LANGUAGE,
+  };
+}
+
+export function updateAppSettings(
+  db: Database.Database,
+  updates: Partial<AppSettings>,
+): AppSettings {
+  if (updates.locale !== undefined && isAppLocale(updates.locale)) {
+    setSetting(db, 'app.locale', updates.locale as AppLocale);
+  }
+  if (updates.syncLanguages !== undefined) {
+    setSetting(
+      db,
+      'cards.syncLanguages',
+      serializeSyncLanguages(updates.syncLanguages as CardLanguageCode[]),
+    );
+  }
+  if (updates.browseLanguage !== undefined) {
+    setSetting(db, 'cards.browseLanguage', updates.browseLanguage);
+  }
+  return getAppSettings(db);
+}
+
+export function getSyncLanguages(db: Database.Database): CardLanguageCode[] {
+  return parseSyncLanguages(getSetting(db, 'cards.syncLanguages'));
 }

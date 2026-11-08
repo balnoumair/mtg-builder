@@ -3,7 +3,9 @@ import type { DeckCard } from '../../shared/types';
 import { BASIC_LAND_NAMES } from '../../shared/basicLands';
 import { getCardTypeCategory, TYPE_ORDER } from '../lib/mana';
 import { copyText } from '../lib/clipboard';
+import { useI18n } from '../i18n/I18nProvider';
 import ManaSymbols from './ManaSymbols';
+import { formatGroupLabel } from './PillLabel';
 
 interface Props {
   deckName: string;
@@ -12,6 +14,7 @@ interface Props {
 }
 
 export default function ExportDeckModal({ deckName, deckCards, onClose }: Props) {
+  const { t } = useI18n();
   const [excludeBasicLands, setExcludeBasicLands] = useState(false);
   const [excludedCardIds, setExcludedCardIds] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
@@ -132,7 +135,7 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
         >
           <div>
             <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600 }}>
-              Export deck
+              {t('deckModals.export.title')}
             </h2>
             <p style={{ color: 'var(--text-mute)', fontSize: 12, marginTop: 2, marginBottom: 0 }}>
               {deckName}
@@ -177,7 +180,7 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
               checked={excludeBasicLands}
               onChange={(e) => setExcludeBasicLands(e.target.checked)}
             />
-            Exclude basic lands
+            {t('deckModals.export.excludeBasicLands')}
           </label>
           <span
             style={{
@@ -187,7 +190,8 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
               marginLeft: 'auto',
             }}
           >
-            {totalMain} main{totalSide > 0 ? ` · ${totalSide} side` : ''}
+            {t('deckModals.export.totalMain', { count: totalMain })}
+            {totalSide > 0 ? ` · ${t('deckModals.export.totalSide', { count: totalSide })}` : ''}
           </span>
         </div>
 
@@ -201,20 +205,24 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
                 fontSize: 12,
               }}
             >
-              No cards to export
+              {t('deckModals.export.empty')}
             </div>
           ) : (
             <>
               {groupedMain.map((group) => (
                 <ExportGroup
                   key={group.type}
-                  title={group.type}
+                  title={formatGroupLabel(group.type, t)}
                   cards={group.cards}
                   onExclude={toggleExclude}
                 />
               ))}
               {filteredSide.length > 0 && (
-                <ExportGroup title="Sideboard" cards={filteredSide} onExclude={toggleExclude} />
+                <ExportGroup
+                  title={t('deckModals.export.sideboard')}
+                  cards={filteredSide}
+                  onExclude={toggleExclude}
+                />
               )}
             </>
           )}
@@ -240,7 +248,7 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
               cursor: 'pointer',
             }}
           >
-            Cancel
+            {t('deckModals.cancel')}
           </button>
           <button
             onClick={handleCopy}
@@ -254,7 +262,7 @@ export default function ExportDeckModal({ deckName, deckCards, onClose }: Props)
               cursor: 'pointer',
             }}
           >
-            {copied ? 'Copied!' : 'Copy to clipboard'}
+            {copied ? t('deckModals.export.copied') : t('deckModals.export.copy')}
           </button>
         </div>
       </div>
@@ -271,6 +279,7 @@ function ExportGroup({
   cards: DeckCard[];
   onExclude: (id: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div style={{ marginBottom: 14 }}>
       <div
@@ -331,7 +340,7 @@ function ExportGroup({
           <button
             onClick={() => onExclude(dc.card_id)}
             className="opacity-0 group-hover:opacity-100"
-            title="Exclude from export"
+            title={t('deckModals.export.exclude')}
             style={{
               width: 18,
               height: 18,

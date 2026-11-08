@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useState } from 'react';
 import type { DeckCard } from '../../shared/types';
+import { useI18n } from '../i18n/I18nProvider';
 import ManaSymbols from './ManaSymbols';
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function ClaimDeckModal({ deckName, deckCards, ownedQuantities, onConfirm, onClose }: Props) {
+  const { t } = useI18n();
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
@@ -41,6 +43,11 @@ export default function ClaimDeckModal({ deckName, deckCards, ownedQuantities, o
   const fromCollection = aggregated.filter(([, c]) => c.ownedQty > 0);
   const cardsMoving = fromCollection.reduce((s, [, c]) => s + Math.min(c.deckQty, c.ownedQty), 0);
   const totalDeckCards = aggregated.reduce((s, [, c]) => s + c.deckQty, 0);
+  const remainingCount = totalDeckCards - cardsMoving;
+  const [subtitleBefore, subtitleAfter] = t('deckModals.claim.subtitle').split('{name}');
+  const [deductedBefore, deductedAfter] = t(
+    cardsMoving === 1 ? 'deckModals.claim.deductedOne' : 'deckModals.claim.deductedOther',
+  ).split('{count}');
 
   const handleConfirm = async () => {
     setConfirming(true);
@@ -93,25 +100,32 @@ export default function ClaimDeckModal({ deckName, deckCards, ownedQuantities, o
               fontWeight: 600,
             }}
           >
-            Claim as owned
+            {t('deckModals.claim.title')}
           </h2>
           <p style={{ color: 'var(--text-mute)', fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-            Mark <span style={{ color: 'var(--text-dim)' }}>{deckName}</span> as a deck you physically own
+            {subtitleBefore}
+            <span style={{ color: 'var(--text-dim)' }}>{deckName}</span>
+            {subtitleAfter}
           </p>
         </div>
 
         <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.5 }}>
           {fromCollection.length > 0 ? (
             <>
-              <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{cardsMoving}</span> cards from your collection will be deducted (they’re now part of this deck).
+              {deductedBefore}
+              <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{cardsMoving}</span>
+              {deductedAfter}
               {cardsMoving < totalDeckCards && (
                 <span style={{ color: 'var(--text-mute)' }}>
-                  {' '}The remaining {totalDeckCards - cardsMoving} are cards you don’t have in your singles collection.
+                  {' '}
+                  {t(remainingCount === 1 ? 'deckModals.claim.remainingOne' : 'deckModals.claim.remainingOther', {
+                    count: remainingCount,
+                  })}
                 </span>
               )}
             </>
           ) : (
-            <>None of this deck’s cards are in your singles collection. The deck will simply be marked as owned.</>
+            <>{t('deckModals.claim.noneInCollection')}</>
           )}
         </div>
 
@@ -127,7 +141,7 @@ export default function ClaimDeckModal({ deckName, deckCards, ownedQuantities, o
                 marginBottom: 8,
               }}
             >
-              Cards moving from collection
+              {t('deckModals.claim.movingFromCollection')}
             </div>
             {fromCollection.map(([cardId, c]) => {
               const moving = Math.min(c.deckQty, c.ownedQty);
@@ -161,10 +175,10 @@ export default function ClaimDeckModal({ deckName, deckCards, ownedQuantities, o
                   <ManaSymbols cost={c.manaCost} size={11} />
                   {remaining > 0 && (
                     <span
-                      title={`${remaining} will remain in collection`}
+                      title={t('deckModals.claim.willRemain', { count: remaining })}
                       style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-mute)' }}
                     >
-                      {remaining} left
+                      {t('deckModals.claim.left', { count: remaining })}
                     </span>
                   )}
                 </div>
@@ -194,7 +208,7 @@ export default function ClaimDeckModal({ deckName, deckCards, ownedQuantities, o
               cursor: 'pointer',
             }}
           >
-            Cancel
+            {t('deckModals.cancel')}
           </button>
           <button
             onClick={handleConfirm}
@@ -210,7 +224,7 @@ export default function ClaimDeckModal({ deckName, deckCards, ownedQuantities, o
               opacity: confirming ? 0.6 : 1,
             }}
           >
-            {confirming ? 'Claiming…' : 'Confirm & Claim'}
+            {confirming ? t('deckModals.claim.claiming') : t('deckModals.claim.confirm')}
           </button>
         </div>
       </div>

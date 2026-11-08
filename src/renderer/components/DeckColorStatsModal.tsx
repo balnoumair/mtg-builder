@@ -1,7 +1,19 @@
 import { useEffect, useMemo } from 'react';
 import type { Deck } from '../../shared/types';
 import { countDecksByColorCombo } from '../../shared/colorCombos';
+import type { MessageKey } from '../../shared/i18n';
+import { useI18n } from '../i18n/I18nProvider';
 import { ColorIdentity } from './ManaSymbols';
+
+const COMBO_NAME_KEYS: Record<string, MessageKey> = {
+  '': 'deckModals.colorStats.combos.colorless',
+  W: 'deckModals.colorStats.combos.monoWhite',
+  U: 'deckModals.colorStats.combos.monoBlue',
+  B: 'deckModals.colorStats.combos.monoBlack',
+  R: 'deckModals.colorStats.combos.monoRed',
+  G: 'deckModals.colorStats.combos.monoGreen',
+  WUBRG: 'deckModals.colorStats.combos.fiveColor',
+};
 
 interface Props {
   decks: Deck[];
@@ -11,6 +23,7 @@ interface Props {
 }
 
 export default function DeckColorStatsModal({ decks, filtered, onClose }: Props) {
+  const { t } = useI18n();
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -21,6 +34,10 @@ export default function DeckColorStatsModal({ decks, filtered, onClose }: Props)
 
   const rows = useMemo(() => countDecksByColorCombo(decks), [decks]);
   const max = Math.max(0, ...rows.map((r) => r.total));
+  const one = decks.length === 1;
+  const deckCountKey: MessageKey = filtered
+    ? (one ? 'deckModals.colorStats.shownDeckCountOne' : 'deckModals.colorStats.shownDeckCountOther')
+    : (one ? 'deckModals.colorStats.deckCountOne' : 'deckModals.colorStats.deckCountOther');
 
   return (
     <div
@@ -42,7 +59,7 @@ export default function DeckColorStatsModal({ decks, filtered, onClose }: Props)
     >
       <div
         role="dialog"
-        aria-label="Deck color stats"
+        aria-label={t('deckModals.colorStats.ariaLabel')}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%',
@@ -67,16 +84,15 @@ export default function DeckColorStatsModal({ decks, filtered, onClose }: Props)
           }}
         >
           <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 600 }}>
-            Deck colors
+            {t('deckModals.colorStats.title')}
           </h2>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
-            {decks.length} {decks.length === 1 ? 'deck' : 'decks'}
-            {filtered ? ' shown' : ''}
+            {t(deckCountKey, { count: decks.length })}
           </span>
           <div style={{ flex: 1 }} />
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t('deckModals.colorStats.close')}
             style={{
               background: 'transparent',
               border: 'none',
@@ -92,12 +108,14 @@ export default function DeckColorStatsModal({ decks, filtered, onClose }: Props)
 
         <div style={{ overflowY: 'auto', padding: '8px 0' }}>
           {rows.length === 0 ? (
-            <div style={{ padding: '18px', fontSize: 12, color: 'var(--text-mute)' }}>No decks.</div>
+            <div style={{ padding: '18px', fontSize: 12, color: 'var(--text-mute)' }}>
+              {t('deckModals.colorStats.empty')}
+            </div>
           ) : (
             rows.map((row) => (
               <div
                 key={row.key || 'colorless'}
-                title={`${row.owned} owned · ${row.wishlist} wishlist`}
+                title={t('deckModals.colorStats.rowTitle', { owned: row.owned, wishlist: row.wishlist })}
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '64px 1fr 90px 28px',
@@ -116,7 +134,7 @@ export default function DeckColorStatsModal({ decks, filtered, onClose }: Props)
                   )}
                 </span>
                 <span style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                  {row.name}
+                  {row.key in COMBO_NAME_KEYS ? t(COMBO_NAME_KEYS[row.key]) : row.name}
                   {row.key && (
                     <span style={{ marginLeft: 6, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-mute)' }}>
                       {row.key}

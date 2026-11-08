@@ -1,3 +1,5 @@
+import { useI18n } from '../i18n/I18nProvider';
+
 interface Props<T extends string> {
   value: T;
   onChange: (next: T) => void;
@@ -9,11 +11,12 @@ export default function ViewToggle<T extends string = 'grid' | 'list'>({
   onChange,
   options,
 }: Props<T>) {
+  const { t } = useI18n();
   const opts =
     options ??
     ([
-      { value: 'grid' as T, label: 'grid' },
-      { value: 'list' as T, label: 'list' },
+      { value: 'grid' as T, label: t('viewToggle.grid') },
+      { value: 'list' as T, label: t('viewToggle.list') },
     ] as { value: T; label: string }[]);
 
   return (

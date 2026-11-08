@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { Card } from '../../shared/types';
+import { displayCardName, displayOracleText, displayTypeLine } from '../../shared/cardDisplay';
 import ManaSymbols from './ManaSymbols';
 import CountTag from './CountTag';
 import { getManaMeta } from '../lib/mana';
-import { CARD_DETAIL_WIDTH, CARD_SIZE_LABELS, CARD_SIZE_ORDER, useCardSize } from '../lib/cardSize';
+import { CARD_DETAIL_WIDTH, CARD_SIZE_LABEL_KEYS, CARD_SIZE_ORDER, useCardSize } from '../lib/cardSize';
+import type { MessageKey } from '../../shared/i18n';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   card: Card;
@@ -18,11 +21,11 @@ interface Props {
   onRemoveFromCollection?: (cardId: string) => void;
 }
 
-const RARITY_LABEL: Record<string, string> = {
-  common: 'Common',
-  uncommon: 'Uncommon',
-  rare: 'Rare',
-  mythic: 'Mythic',
+const RARITY_LABEL_KEYS: Record<string, MessageKey> = {
+  common: 'cardDetail.rarities.common',
+  uncommon: 'cardDetail.rarities.uncommon',
+  rare: 'cardDetail.rarities.rare',
+  mythic: 'cardDetail.rarities.mythic',
 };
 
 const EXPANDED_SIZE_KEY = 'mtg-builder.card-preview-expanded-size';
@@ -37,6 +40,7 @@ export default function CardDetail({
   onUpdateCollectionQuantity,
   onRemoveFromCollection,
 }: Props) {
+  const { t } = useI18n();
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -46,7 +50,8 @@ export default function CardDetail({
   }, [onClose]);
 
   const tint = card.color_identity?.[0] ? getManaMeta(card.color_identity[0]) : null;
-  const rarity = RARITY_LABEL[card.rarity] || card.rarity;
+  const rarityKey = RARITY_LABEL_KEYS[card.rarity];
+  const rarity = rarityKey ? t(rarityKey) : card.rarity;
   const power = card.power;
   const toughness = card.toughness;
   const hasPT = power !== null && toughness !== null;
@@ -171,7 +176,7 @@ export default function CardDetail({
             {card.image_uri_normal ? (
               <img
                 src={card.image_uri_large || card.image_uri_normal}
-                alt={card.name}
+                alt={displayCardName(card)}
                 style={frontFace.image}
               />
             ) : (
@@ -197,7 +202,7 @@ export default function CardDetail({
                       textOverflow: 'ellipsis',
                     }}
                   >
-                    {card.name}
+                    {displayCardName(card)}
                   </span>
                   <ManaSymbols cost={card.mana_cost} size={12} />
                 </div>
@@ -223,7 +228,7 @@ export default function CardDetail({
                       color: 'var(--text-faint)',
                     }}
                   >
-                    art
+                    {t('cardDetail.art')}
                   </span>
                   {hasPT && (
                     <span
@@ -256,7 +261,7 @@ export default function CardDetail({
                     gap: 8,
                   }}
                 >
-                  <span>{card.type_line}</span>
+                  <span>{displayTypeLine(card)}</span>
                   <div style={{ flex: 1 }} />
                   {rarity && (
                     <span
@@ -282,7 +287,7 @@ export default function CardDetail({
                     flexShrink: 0,
                   }}
                 >
-                  {(card.oracle_text || '').split('\n').map((line, i) => (
+                  {displayOracleText(card).split('\n').map((line, i) => (
                     <p key={i} style={{ margin: i ? '6px 0 0' : 0 }}>
                       {line || ' '}
                     </p>
@@ -290,17 +295,17 @@ export default function CardDetail({
                 </div>
               </>
             )}
-            {hasBackFace && <span style={faceLabelStyle}>Front</span>}
+            {hasBackFace && <span style={faceLabelStyle}>{t('cardDetail.front')}</span>}
           </div>
 
           {hasBackFace && (
             <div onClick={(e) => e.stopPropagation()} style={backFace.frame}>
               <img
                 src={card.face_back_image_uri_normal!}
-                alt={card.face_back_name ? `${card.face_back_name} (back face)` : `${card.name} (back face)`}
+                alt={t('cardDetail.backFaceAlt', { name: card.face_back_name || displayCardName(card) })}
                 style={backFace.image}
               />
-              <span style={faceLabelStyle}>Back</span>
+              <span style={faceLabelStyle}>{t('cardDetail.back')}</span>
             </div>
           )}
         </div>
@@ -333,9 +338,9 @@ export default function CardDetail({
                   color: 'var(--text-mute)',
                 }}
               >
-                Card
+                {t('cardDetail.card')}
               </div>
-              <div role="group" aria-label="Card preview size" style={{ display: 'flex', gap: 4 }}>
+              <div role="group" aria-label={t('cardDetail.previewSize')} style={{ display: 'flex', gap: 4 }}>
                 {[...CARD_SIZE_ORDER, 'xl', 'fit'].map((size) => {
                   const selected = (expandedSize ?? cardSize) === size;
                   return (
@@ -348,7 +353,11 @@ export default function CardDetail({
                         }
                       }}
                       style={{ ...secondaryBtn, padding: '4px 6px', background: selected ? 'var(--accent-soft)' : 'transparent' }}>
-                      {size === 'xl' ? 'XL' : size === 'fit' ? 'Fit' : CARD_SIZE_LABELS[size as keyof typeof CARD_SIZE_LABELS]}
+                      {size === 'xl'
+                        ? t('cardSize.xl')
+                        : size === 'fit'
+                          ? t('cardSize.fit')
+                          : t(CARD_SIZE_LABEL_KEYS[size as keyof typeof CARD_SIZE_LABEL_KEYS])}
                     </button>
                   );
                 })}
@@ -363,21 +372,21 @@ export default function CardDetail({
                 lineHeight: 1.15,
               }}
             >
-              {card.name}
+              {displayCardName(card)}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{card.type_line}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{displayTypeLine(card)}</div>
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             <button onClick={() => setFrontRotation((value) => (value + 90) % 360)}
               disabled={!card.image_uri_normal}
-              style={secondaryBtn} title={`Rotate ${hasBackFace ? 'front face' : 'card'} 90° clockwise`}>
-              ↻ Rotate {hasBackFace ? 'front' : 'card'} · {frontRotation}°
+              style={secondaryBtn} title={hasBackFace ? t('cardDetail.rotateFrontTitle') : t('cardDetail.rotateCardTitle')}>
+              {t(hasBackFace ? 'cardDetail.rotateFront' : 'cardDetail.rotateCard', { degrees: frontRotation })}
             </button>
             {hasBackFace && (
               <button onClick={() => setBackRotation((value) => (value + 90) % 360)}
-                style={secondaryBtn} title="Rotate back face 90° clockwise">
-                ↻ Rotate back · {backRotation}°
+                style={secondaryBtn} title={t('cardDetail.rotateBackTitle')}>
+                {t('cardDetail.rotateBack', { degrees: backRotation })}
               </button>
             )}
           </div>
@@ -394,17 +403,17 @@ export default function CardDetail({
             }}
           >
             {[
-              { l: 'Cost', v: <ManaSymbols cost={card.mana_cost} size={11} /> },
-              { l: 'Rarity', v: rarity || '—' },
+              { l: t('cardDetail.cost'), v: <ManaSymbols cost={card.mana_cost} size={11} /> },
+              { l: t('cardDetail.rarity'), v: rarity || '—' },
               {
-                l: 'Owned',
+                l: t('cardDetail.owned'),
                 v: (
                   <span
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}
-                    title={`${owned + inDecksQuantity} owned in total`}
+                    title={t('cardDetail.ownedTotal', { count: owned + inDecksQuantity })}
                   >
                     {owned + inDecksQuantity === 0 && '0'}
-                    {owned > 0 && <CountTag kind="free" count={owned} title="Not in any deck" />}
+                    {owned > 0 && <CountTag kind="free" count={owned} title={t('counts.notInAnyDeck')} />}
                     {inDecksQuantity > 0 && <CountTag kind="inDecks" count={inDecksQuantity} />}
                   </span>
                 ),
@@ -441,12 +450,12 @@ export default function CardDetail({
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {onAddToDeck && (
               <button onClick={() => onAddToDeck(card)} style={primaryBtn}>
-                + Add to deck
+                {t('cardDetail.addToDeck')}
               </button>
             )}
             {onAddToCollection && owned === 0 && (
               <button onClick={() => onAddToCollection(card)} style={secondaryBtn}>
-                + Collection
+                {t('cardDetail.addToCollection')}
               </button>
             )}
             {owned > 0 && onUpdateCollectionQuantity && (
@@ -470,20 +479,20 @@ export default function CardDetail({
                     else onUpdateCollectionQuantity(card.id, next);
                   }}
                   style={stepBtn}
-                  aria-label="Decrease owned"
+                  aria-label={t('cardDetail.decreaseOwned')}
                 >
                   −
                 </button>
                 <span
                   style={{ minWidth: 18, textAlign: 'center', color: 'var(--text)' }}
-                  title={inDecksQuantity > 0 ? 'Loose copies, not in a deck' : undefined}
+                  title={inDecksQuantity > 0 ? t('cardDetail.looseCopies') : undefined}
                 >
                   ×{owned}
                 </span>
                 <button
                   onClick={() => onUpdateCollectionQuantity(card.id, owned + 1)}
                   style={stepBtn}
-                  aria-label="Increase owned"
+                  aria-label={t('cardDetail.increaseOwned')}
                 >
                   +
                 </button>
@@ -494,8 +503,8 @@ export default function CardDetail({
           {owned > 0 && onRemoveFromCollection && (
             <button onClick={() => onRemoveFromCollection(card.id)}
               style={{ ...secondaryBtn, color: 'var(--danger)' }}
-              title={`Remove all ${owned} copies from My Cards`}>
-              Remove all {owned} copies
+              title={t(owned === 1 ? 'cardDetail.removeAllTitleOne' : 'cardDetail.removeAllTitleOther', { count: owned })}>
+              {t(owned === 1 ? 'cardDetail.removeAllOne' : 'cardDetail.removeAllOther', { count: owned })}
             </button>
           )}
 
@@ -511,8 +520,8 @@ export default function CardDetail({
               color: 'var(--text-faint)',
             }}
           >
-            <span>{card.artist && `Art by ${card.artist}`}</span>
-            <span>esc to close</span>
+            <span>{card.artist && t('cardDetail.artBy', { artist: card.artist })}</span>
+            <span>{t('cardDetail.escToClose')}</span>
           </div>
         </div>
       </div>

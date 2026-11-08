@@ -22,6 +22,8 @@ export const MIXED_DECK_SET_GROUP: DeckSetGroup = {
   sortKey: '',
 };
 
+export const MIXED_DECK_SET_GROUP_LABEL_KEY = 'deckList.mixedSetGroup';
+
 function cardBlockInfo(card: DeckCardSetInfo): { blockCode: string; blockName: string } | null {
   if (!isBlockSet({ blockCode: card.block_code, blockName: card.block_name })) return null;
   return { blockCode: card.block_code!, blockName: card.block_name! };

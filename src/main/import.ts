@@ -7,9 +7,14 @@ import readline from 'node:readline';
 import { createGunzip } from 'node:zlib';
 import { app } from 'electron';
 import type Database from 'better-sqlite3';
+import type { CardLanguageCode } from '../shared/cardLanguages';
+import type { ImportProgress } from '../shared/types';
+import { DEFAULT_CARD_LANGUAGE } from '../shared/cardLanguages';
 import { createIndexes } from './database';
 import { dedupeCardPrints } from './dedupe';
 import { VALID_LAYOUTS } from './queries/cards';
+import { getSetting, getSyncLanguages } from './queries/settings';
+import { tMain } from './i18n';
 
 const STANDARD_SET_TYPES = new Set(['core', 'expansion']);
 
@@ -38,6 +43,9 @@ interface ScryCard {
   oracle_id: string;
   name: string;
   lang: string;
+  printed_name?: string;
+  printed_type_line?: string;
+  printed_text?: string;
   layout: string;
   mana_cost?: string;
   cmc?: number;
@@ -126,7 +134,7 @@ async function fetchSetMetadata(): Promise<SetMetadataMap> {
   let url: string | undefined = 'https://api.scryfall.com/sets';
   while (url) {
     const res = await fetch(url, { headers: SCRYFALL_HEADERS });
-    if (!res.ok) throw new Error(`Scryfall sets API error: ${res.status}`);
+    if (!res.ok) throw new Error(tMain('main.import.setsApiError', { status: res.status }));
     const body = (await res.json()) as SetsResponse;
     for (const s of body.data) {
       map.set(s.code.toLowerCase(), {
@@ -156,16 +164,34 @@ function syncSetsTable(db: Database.Database, setMetadata: SetMetadataMap): void
   insertMany([...setMetadata.entries()].map(([code, meta]) => ({ code, ...meta })));
 }
 
-type ProgressCallback = (current: number, total: number, phase: 'downloading' | 'reading' | 'indexing' | 'done') => void;
+type ProgressCallback = (current: number, total: number, phase: ImportProgress['phase']) => void;
 
-async function fetchBulkDataUrl(): Promise<string> {
+/** Downloads from a sync that was killed mid-way are never cleaned up otherwise (multi-GB). */
+function removeStaleBulkFiles(tmpDir: string): void {
+  try {
+    for (const name of fs.readdirSync(tmpDir)) {
+      if (/^scryfall-bulk-\d+\.json$/.test(name)) {
+        fs.rmSync(path.join(tmpDir, name), { force: true });
+      }
+    }
+  } catch {
+    // Best effort.
+  }
+}
+
+/**
+ * English-only syncs use Scryfall's smaller `default_cards` dump. Any other
+ * language needs `all_cards` (every print in every language).
+ */
+async function fetchBulkDataUrl(langs: CardLanguageCode[]): Promise<string> {
+  const bulkType = langs.length === 1 && langs[0] === 'en' ? 'default_cards' : 'all_cards';
   const res = await fetch('https://api.scryfall.com/bulk-data', { headers: SCRYFALL_HEADERS });
-  if (!res.ok) throw new Error(`Scryfall API error: ${res.status}`);
+  if (!res.ok) throw new Error(tMain('main.import.bulkApiError', { status: res.status }));
   const body = (await res.json()) as BulkDataResponse;
-  const entry = body.data.find((d) => d.type === 'default_cards');
-  if (!entry) throw new Error('default_cards bulk data not found');
+  const entry = body.data.find((d) => d.type === bulkType);
+  if (!entry) throw new Error(tMain('main.import.bulkNotFound', { type: bulkType }));
   const url = entry.download_uri || entry.jsonl_download_uri;
-  if (!url) throw new Error('default_cards bulk data has no download URL');
+  if (!url) throw new Error(tMain('main.import.bulkNoUrl', { type: bulkType }));
   return url;
 }
 
@@ -180,14 +206,14 @@ function downloadFile(
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         const location = res.headers.location;
         if (typeof location !== 'string') {
-          reject(new Error('Download redirect has no valid location'));
+          reject(new Error(tMain('main.import.redirectNoLocation')));
           return;
         }
         downloadFile(location, dest, onProgress).then(resolve, reject);
         return;
       }
       if (res.statusCode && res.statusCode >= 400) {
-        reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+        reject(new Error(tMain('main.import.downloadFailed', { status: res.statusCode })));
         return;
       }
       const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
@@ -228,14 +254,21 @@ export function importCardsFromFile(
   filePath: string,
   setMetadata: SetMetadataMap,
   onProgress: (current: number, total: number) => void,
+  languages: CardLanguageCode[] = [DEFAULT_CARD_LANGUAGE],
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    const allowedLangs = new Set(languages.length > 0 ? languages : [DEFAULT_CARD_LANGUAGE]);
     const fileSize = fs.statSync(filePath).size;
-    const estimatedTotal = Math.round(fileSize / 4700);
+    let bytesRead = 0;
+    // Most rows of the all-languages dump are filtered out, so a per-row size
+    // guess is way off; extrapolate the kept-card rate over the bytes read.
+    const estimatedTotal = () =>
+      bytesRead > 0 ? Math.max(count, Math.round((count * fileSize) / bytesRead)) : count;
 
     const insertStmt = db.prepare(`
       INSERT OR IGNORE INTO cards (
-        id, oracle_id, name, mana_cost, cmc, type_line, oracle_text,
+        id, oracle_id, name, lang, printed_name, printed_type_line, printed_text,
+        mana_cost, cmc, type_line, oracle_text,
         colors, color_identity, keywords, power, toughness,
         rarity, set_code, set_name, collector_number, layout,
         image_uri_small, image_uri_normal, image_uri_large, image_uri_art_crop,
@@ -243,7 +276,8 @@ export function importCardsFromFile(
         legalities, released_at, artist,
         block_code, block_name
       ) VALUES (
-        @id, @oracle_id, @name, @mana_cost, @cmc, @type_line, @oracle_text,
+        @id, @oracle_id, @name, @lang, @printed_name, @printed_type_line, @printed_text,
+        @mana_cost, @cmc, @type_line, @oracle_text,
         @colors, @color_identity, @keywords, @power, @toughness,
         @rarity, @set_code, @set_name, @collector_number, @layout,
         @image_uri_small, @image_uri_normal, @image_uri_large, @image_uri_art_crop,
@@ -270,7 +304,7 @@ export function importCardsFromFile(
     }
 
     function processCard(value: ScryCard) {
-      if (value.lang !== 'en') return;
+      if (!allowedLangs.has(value.lang as CardLanguageCode)) return;
       if (!VALID_LAYOUTS.has(value.layout)) return;
       if (!value.set_type || !STANDARD_SET_TYPES.has(value.set_type)) return;
       // Digital-only prints (Arena Alchemy rebalances) are not paper cards.
@@ -297,6 +331,10 @@ export function importCardsFromFile(
         id: value.id,
         oracle_id: value.oracle_id,
         name: value.name,
+        lang: value.lang || DEFAULT_CARD_LANGUAGE,
+        printed_name: value.printed_name || null,
+        printed_type_line: value.printed_type_line || null,
+        printed_text: value.printed_text || null,
         mana_cost: manaCost,
         cmc: value.cmc ?? 0,
         type_line: typeLine,
@@ -327,12 +365,16 @@ export function importCardsFromFile(
 
       if (batch.length >= BATCH_SIZE) {
         flushBatch();
-        onProgress(count, estimatedTotal);
+        onProgress(count, estimatedTotal());
       }
     }
 
+    const input = fs.createReadStream(filePath);
+    input.on('data', (chunk) => {
+      bytesRead += chunk.length;
+    });
     const rl = readline.createInterface({
-      input: fs.createReadStream(filePath),
+      input,
       crlfDelay: Infinity,
     });
 
@@ -366,11 +408,18 @@ export async function syncCards(
   db: Database.Database,
   onProgress: ProgressCallback,
 ): Promise<void> {
+  const syncLanguages = getSyncLanguages(db);
+  const preferredLang = getSetting(db, 'cards.browseLanguage') || syncLanguages[0] || DEFAULT_CARD_LANGUAGE;
+
   // 1. Fetch the download URL from Scryfall bulk data API and set metadata
-  const [downloadUrl, setMetadata] = await Promise.all([fetchBulkDataUrl(), fetchSetMetadata()]);
+  const [downloadUrl, setMetadata] = await Promise.all([
+    fetchBulkDataUrl(syncLanguages),
+    fetchSetMetadata(),
+  ]);
 
   // 2. Download the file to a temp location
   const tmpDir = os.tmpdir();
+  removeStaleBulkFiles(tmpDir);
   const tmpFile = path.join(tmpDir, `scryfall-bulk-${Date.now()}.json`);
 
   try {
@@ -424,6 +473,7 @@ export async function syncCards(
     db.exec('DELETE FROM collection');
     db.exec('DELETE FROM cards');
     db.exec('DROP INDEX IF EXISTS idx_cards_name');
+    db.exec('DROP INDEX IF EXISTS idx_cards_printed_name');
     db.exec('DROP INDEX IF EXISTS idx_cards_oracle_id');
     db.exec('DROP INDEX IF EXISTS idx_cards_set_code');
     db.exec('DROP INDEX IF EXISTS idx_cards_cmc');
@@ -434,7 +484,7 @@ export async function syncCards(
     // 5. Import cards from downloaded file
     await importCardsFromFile(db, tmpFile, setMetadata, (current, total) => {
       onProgress(current, total, 'reading');
-    });
+    }, syncLanguages);
 
     // 6. Sync set metadata (including edition icons)
     syncSetsTable(db, setMetadata);
@@ -443,15 +493,26 @@ export async function syncCards(
     onProgress(0, 0, 'indexing');
     createIndexes(db);
 
+    onProgress(0, 0, 'restoring');
+
     // 8. Restore decks/collection while every set still has its prints, so
     // set_code matching can land on the right set (not a newer reprint).
+    // When multiple langs exist for the same oracle/set, prefer the browse
+    // language, then English, then any other print.
+    const langOrder = `
+      CASE lang
+        WHEN @preferred_lang THEN 0
+        WHEN 'en' THEN 1
+        ELSE 2
+      END ASC
+    `;
     const survivorSql = `
       COALESCE(
         (SELECT id FROM cards WHERE id = @card_id),
         (SELECT id FROM cards WHERE oracle_id = @oracle_id AND set_code = @set_code
-           ORDER BY CAST(collector_number AS INTEGER) ASC, collector_number ASC LIMIT 1),
+           ORDER BY ${langOrder}, CAST(collector_number AS INTEGER) ASC, collector_number ASC LIMIT 1),
         (SELECT id FROM cards WHERE oracle_id = @oracle_id
-           ORDER BY released_at DESC, CAST(collector_number AS INTEGER) ASC LIMIT 1)
+           ORDER BY ${langOrder}, released_at DESC, CAST(collector_number AS INTEGER) ASC LIMIT 1)
       )
     `;
     const restoreDeckCard = db.prepare(`
@@ -479,10 +540,10 @@ export async function syncCards(
     `);
     const restoreMany = db.transaction(() => {
       for (const row of deckCards) {
-        restoreDeckCard.run(row);
+        restoreDeckCard.run({ ...row, preferred_lang: preferredLang });
       }
       for (const row of collectionCards) {
-        restoreCollectionCard.run(row);
+        restoreCollectionCard.run({ ...row, preferred_lang: preferredLang });
       }
     });
     restoreMany();
@@ -492,7 +553,7 @@ export async function syncCards(
       UPDATE decks SET cover_card_id = ${survivorSql} WHERE id = @id
     `);
     for (const row of coverCards) {
-      restoreCover.run(row);
+      restoreCover.run({ ...row, preferred_lang: preferredLang });
     }
 
     // 10. Collapse variant arts within each set only (not across sets)

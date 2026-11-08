@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import type { Tag } from '../../shared/types';
 import { DEFAULT_TAG_COLOR, isTagColor, nextTagColor } from '../../shared/tagColors';
+import { tMain } from '../i18n';
 
 interface TagRow {
   id: number;
@@ -41,7 +42,7 @@ function getTagById(db: Database.Database, id: number): Tag {
     WHERE t.id = ?
     GROUP BY t.id
   `).get(id) as TagRow | undefined;
-  if (!row) throw new Error(`Tag ${id} not found`);
+  if (!row) throw new Error(tMain('main.tags.notFound', { id }));
   return rowToTag(row);
 }
 
@@ -72,7 +73,7 @@ export function createTag(
   input: { name: string; color?: string },
 ): Tag {
   const name = input.name.trim();
-  if (!name) throw new Error('Tag name is required');
+  if (!name) throw new Error(tMain('main.tags.nameRequired'));
 
   const existing = db.prepare(
     'SELECT id FROM tags WHERE name = ? COLLATE NOCASE'
@@ -100,11 +101,11 @@ export function updateTag(
 
   if (updates.name !== undefined) {
     const name = updates.name.trim();
-    if (!name) throw new Error('Tag name is required');
+    if (!name) throw new Error(tMain('main.tags.nameRequired'));
     const clash = db.prepare(
       'SELECT id FROM tags WHERE name = ? COLLATE NOCASE AND id != ?'
     ).get(name, id) as { id: number } | undefined;
-    if (clash) throw new Error(`A tag named "${name}" already exists`);
+    if (clash) throw new Error(tMain('main.tags.nameTaken', { name }));
     fields.push('name = @name');
     params.name = name;
   }

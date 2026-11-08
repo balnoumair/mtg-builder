@@ -1,4 +1,5 @@
 import type { BackupApplyMode, BackupPreview as BackupPreviewData } from '../../shared/backup';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   preview: BackupPreviewData;
@@ -15,6 +16,12 @@ export default function BackupPreview({
   onCancel,
   onConfirm,
 }: Props) {
+  const { t } = useI18n();
+  const deckCards = (deck: { name: string; cardCount: number }) =>
+    t(deck.cardCount === 1 ? 'backup.deckCardsOne' : 'backup.deckCardsOther', {
+      name: deck.name,
+      count: deck.cardCount,
+    });
   const hasChanges = preview.decks.add.length > 0 ||
     preview.decks.overwrite.length > 0 ||
     preview.decks.remove.length > 0 ||
@@ -25,59 +32,70 @@ export default function BackupPreview({
     preview.tags.remove.length > 0;
 
   return (
-    <section style={panel} aria-label={`${sourceLabel} preview`}>
-      <div style={eyebrow}>Review before applying</div>
+    <section style={panel} aria-label={t('backup.ariaLabel', { source: sourceLabel })}>
+      <div style={eyebrow}>{t('backup.eyebrow')}</div>
       <h3 style={title}>{sourceLabel}</h3>
       <p style={copy}>
-        This preview is read-only. Choose whether to merge the JSON into this device or replace
-        the local data represented by the backup.
+        {t('backup.intro')}
       </p>
 
       {!hasChanges && (
-        <p style={{ ...copy, color: 'var(--text-dim)' }}>Nothing would change locally.</p>
+        <p style={{ ...copy, color: 'var(--text-dim)' }}>{t('backup.nothingChanges')}</p>
       )}
 
       <div style={summaryGrid}>
-        <Summary label="New decks" value={preview.decks.add.length} tone="add" />
-        <Summary label="Decks overwritten" value={preview.decks.overwrite.length} tone="overwrite" />
-        <Summary label="Collection entries" value={preview.collection.add.length + preview.collection.overwrite.length} />
-        <Summary label="New tags" value={preview.tags.add.length} tone="add" />
+        <Summary label={t('backup.newDecks')} value={preview.decks.add.length} tone="add" />
+        <Summary label={t('backup.decksOverwritten')} value={preview.decks.overwrite.length} tone="overwrite" />
+        <Summary label={t('backup.collectionEntries')} value={preview.collection.add.length + preview.collection.overwrite.length} />
+        <Summary label={t('backup.newTags')} value={preview.tags.add.length} tone="add" />
       </div>
 
       <ChangeGroup
-        title="Will be added"
+        title={t('backup.willAdd')}
         tone="add"
-        items={preview.decks.add.map((deck) => `${deck.name} · ${deck.cardCount} cards`)}
-        empty="No new decks"
+        items={preview.decks.add.map(deckCards)}
+        empty={t('backup.noNewDecks')}
       />
       <ChangeGroup
-        title="Will overwrite"
+        title={t('backup.willOverwrite')}
         tone="overwrite"
         items={preview.decks.overwrite.map((deck) =>
           deck.existingName && deck.existingName !== deck.name
             ? `${deck.existingName} → ${deck.name}`
-            : `${deck.name} · ${deck.cardCount} cards`,
+            : deckCards(deck),
         )}
-        empty="No existing decks matched"
+        empty={t('backup.noExistingMatched')}
       />
 
       {(preview.decks.remove.length > 0 || preview.collection.remove > 0 || preview.tags.remove.length > 0) && (
         <div style={warningBox}>
-          <strong>Replace mode would also remove:</strong>
+          <strong>{t('backup.replaceRemovesTitle')}</strong>
           <span>
-            {preview.decks.remove.length} local deck{preview.decks.remove.length === 1 ? '' : 's'},{' '}
-            {preview.collection.remove} collection entr{preview.collection.remove === 1 ? 'y' : 'ies'}, and{' '}
-            {preview.tags.remove.length} tag{preview.tags.remove.length === 1 ? '' : 's'} not represented by this JSON.
+            {t('backup.replaceRemoves', {
+              decks: t(preview.decks.remove.length === 1 ? 'backup.removeDecksOne' : 'backup.removeDecksOther', {
+                count: preview.decks.remove.length,
+              }),
+              entries: t(preview.collection.remove === 1 ? 'backup.removeEntriesOne' : 'backup.removeEntriesOther', {
+                count: preview.collection.remove,
+              }),
+              tags: t(preview.tags.remove.length === 1 ? 'backup.removeTagsOne' : 'backup.removeTagsOther', {
+                count: preview.tags.remove.length,
+              }),
+            })}
           </span>
           {preview.decks.remove.length > 0 && (
-            <span style={detail}>Decks: {preview.decks.remove.join(', ')}</span>
+            <span style={detail}>{t('backup.removeDeckList', { names: preview.decks.remove.join(', ') })}</span>
           )}
         </div>
       )}
 
       {preview.missing.length > 0 && (
         <div style={missingBox}>
-          <strong>{preview.missing.length} card entr{preview.missing.length === 1 ? 'y is' : 'ies are'} not in the local card database.</strong>
+          <strong>
+            {t(preview.missing.length === 1 ? 'backup.missingOne' : 'backup.missingOther', {
+              count: preview.missing.length,
+            })}
+          </strong>
           <span style={detail}>
             {preview.missing.map((item) => `${item.quantity}× ${item.card}`).join(', ')}
           </span>
@@ -86,18 +104,17 @@ export default function BackupPreview({
 
       <div style={actions}>
         <button onClick={onCancel} disabled={busy} style={secondaryBtn}>
-          Cancel
+          {t('backup.cancel')}
         </button>
         <button onClick={() => onConfirm('merge')} disabled={busy} style={primaryBtn}>
-          {busy ? 'Applying…' : 'Merge backup'}
+          {busy ? t('backup.applying') : t('backup.merge')}
         </button>
         <button onClick={() => onConfirm('replace')} disabled={busy} style={replaceBtn}>
-          {busy ? 'Applying…' : 'Replace local backup data'}
+          {busy ? t('backup.applying') : t('backup.replace')}
         </button>
       </div>
       <p style={footnote}>
-        Replace mode only clears decks, collection, tags, and deck filters represented by backup data.
-        Your card database, app settings, and others&rsquo; decks stay untouched.
+        {t('backup.footnote')}
       </p>
     </section>
   );

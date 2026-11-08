@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import { exportBackup, importBackup, previewBackup } from './backup';
 import { getAccessToken } from './sheet-sync/googleAuth';
 import { getDriveSyncSettings, getSheetSyncSettings, setSetting } from './queries/settings';
+import { tMain } from './i18n';
 import type { AppBackup, BackupApplyMode, BackupPreview } from '../shared/backup';
 import type { DrivePullResult, DrivePushResult } from '../shared/types';
 
@@ -52,7 +53,7 @@ export function parseDriveFileId(input: string): string {
 function requireBackupFileId(db: Database.Database): string {
   const { backupFileId } = getDriveSyncSettings(db);
   if (!backupFileId) {
-    throw new Error('No Drive backup file configured — paste the Drive file link in the backup settings first.');
+    throw new Error(tMain('main.drive.noBackupFile'));
   }
   return backupFileId;
 }
@@ -60,7 +61,7 @@ function requireBackupFileId(db: Database.Database): string {
 function requireServiceAccountKey(db: Database.Database): string {
   const { serviceAccountKeyPath } = getSheetSyncSettings(db);
   if (!serviceAccountKeyPath) {
-    throw new Error('No service-account key configured — pick the key in the Playgroup sheet settings first.');
+    throw new Error(tMain('main.drive.noServiceAccountKey'));
   }
   return serviceAccountKeyPath;
 }
@@ -81,15 +82,13 @@ function driveError(response: Response, body: unknown): Error {
     : undefined;
 
   if (response.status === 403) {
-    return new Error(
-      'Drive access denied — share the backup file with the service account as Editor and make sure the Drive API is enabled.',
-    );
+    return new Error(tMain('main.drive.accessDenied'));
   }
   if (response.status === 404) {
-    return new Error('Drive backup file not found — check the file link and its sharing permissions.');
+    return new Error(tMain('main.drive.fileNotFound'));
   }
 
-  return new Error(`Drive API error: ${error?.message ?? response.status}`);
+  return new Error(tMain('main.drive.apiError', { message: error?.message ?? response.status }));
 }
 
 async function driveRequest(
@@ -111,14 +110,14 @@ async function getBackupFile(token: string, fileId: string): Promise<DriveFile> 
     `${DRIVE_FILES_API}/${encodeURIComponent(fileId)}?fields=id,name,mimeType,modifiedTime&supportsAllDrives=true`,
   );
   const file = body as Partial<DriveFile>;
-  if (!file.id) throw new Error('Drive did not return a valid backup file.');
+  if (!file.id) throw new Error(tMain('main.drive.invalidFile'));
   return file as DriveFile;
 }
 
 export async function pushBackupToDrive(db: Database.Database): Promise<DrivePushResult> {
   const backup = exportBackup(db);
   if (backup.decks.length === 0 && backup.collection.length === 0) {
-    throw new Error('Nothing to back up');
+    throw new Error(tMain('main.backup.nothingToBackUp'));
   }
 
   const fileId = requireBackupFileId(db);

@@ -6,6 +6,7 @@ import { useCardDetail } from '../hooks/useCards';
 import CardDetail from './CardDetail';
 import ManaSymbols from './ManaSymbols';
 import FilterDropdown from './FilterDropdown';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   active: boolean;
@@ -15,6 +16,7 @@ interface Props {
 const GRID_COLUMNS = '40px minmax(0, 1fr) 88px';
 
 export default function WantsView({ active, collectionVersion }: Props) {
+  const { t } = useI18n();
   const [items, setItems] = useState<WantItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [excludeBasicLands, setExcludeBasicLands] = useState(true);
@@ -110,7 +112,7 @@ export default function WantsView({ active, collectionVersion }: Props) {
               letterSpacing: '-0.01em',
             }}
           >
-            Wants
+            {t('wants.title')}
           </h1>
           <div
             style={{
@@ -122,19 +124,21 @@ export default function WantsView({ active, collectionVersion }: Props) {
             }}
           >
             <span>
-              <span style={{ color: 'var(--text-dim)' }}>{visible.length}</span> cards
+              <span style={{ color: 'var(--text-dim)' }}>{visible.length}</span>{' '}
+              {visible.length === 1 ? t('wants.cardsOne') : t('wants.cardsOther')}
             </span>
             <span>
-              <span style={{ color: 'var(--text-dim)' }}>{totalCopies}</span> copies
+              <span style={{ color: 'var(--text-dim)' }}>{totalCopies}</span>{' '}
+              {totalCopies === 1 ? t('wants.copiesOne') : t('wants.copiesOther')}
             </span>
           </div>
           <div style={{ flex: 1 }} />
           <FilterDropdown
-            label="Decks"
+            label={t('wants.decksFilter')}
             options={decks}
             hidden={hiddenDecks.filter((id) => decks.some((deck) => deck.value === id))}
             onHiddenChange={setHiddenDecks}
-            emptyHint="No decks with wants"
+            emptyHint={t('wants.decksFilterEmpty')}
           />
           <label
             style={{
@@ -152,7 +156,7 @@ export default function WantsView({ active, collectionVersion }: Props) {
               checked={excludeBasicLands}
               onChange={(e) => setExcludeBasicLands(e.target.checked)}
             />
-            Exclude basic lands
+            {t('wants.excludeBasicLands')}
             {hiddenBasics > 0 && (
               <span style={{ color: 'var(--text-mute)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
                 ({hiddenBasics})
@@ -174,7 +178,7 @@ export default function WantsView({ active, collectionVersion }: Props) {
               whiteSpace: 'nowrap',
             }}
           >
-            {copied ? 'Copied!' : 'Copy list'}
+            {copied ? t('wants.copied') : t('wants.copyList')}
           </button>
         </div>
       </div>
@@ -182,7 +186,7 @@ export default function WantsView({ active, collectionVersion }: Props) {
       {/* Ledger */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {loading ? (
-          <p style={{ padding: 'var(--pad)', fontSize: 12, color: 'var(--text-mute)' }}>Loading…</p>
+          <p style={{ padding: 'var(--pad)', fontSize: 12, color: 'var(--text-mute)' }}>{t('app.loading')}</p>
         ) : visible.length === 0 ? (
           <div
             style={{
@@ -195,10 +199,9 @@ export default function WantsView({ active, collectionVersion }: Props) {
               textAlign: 'center',
             }}
           >
-            <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>{hiddenDecks.length > 0 ? 'Nothing to buy for the selected decks' : 'Nothing to buy'}</p>
+            <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>{hiddenDecks.length > 0 ? t('wants.emptySelected') : t('wants.empty')}</p>
             <p style={{ color: 'var(--text-mute)', fontSize: 11, margin: 0, maxWidth: 380 }}>
-              Cards you still need for wishlist decks and unconfirmed deck additions show up here
-              once they're missing from My Cards.
+              {t('wants.emptyHint')}
             </p>
           </div>
         ) : (
@@ -218,9 +221,9 @@ export default function WantsView({ active, collectionVersion }: Props) {
                 color: 'var(--text-mute)',
               }}
             >
-              <span style={{ textAlign: 'right' }}>Buy</span>
-              <span>Card</span>
-              <span style={{ textAlign: 'right' }}>Owned</span>
+              <span style={{ textAlign: 'right' }}>{t('wants.columnBuy')}</span>
+              <span>{t('wants.columnCard')}</span>
+              <span style={{ textAlign: 'right' }}>{t('wants.columnOwned')}</span>
             </div>
 
             {visible.map((item) => (
@@ -242,6 +245,7 @@ export default function WantsView({ active, collectionVersion }: Props) {
 }
 
 function WantRow({ item, onClick }: { item: WantItem; onClick: () => void }) {
+  const { t } = useI18n();
   return (
     <div
       onClick={onClick}
@@ -304,8 +308,8 @@ function WantRow({ item, onClick }: { item: WantItem; onClick: () => void }) {
               key={source.deck_id}
               title={
                 source.pending
-                  ? `Unconfirmed addition to ${source.deck_name}`
-                  : `Wanted by wishlist deck ${source.deck_name}`
+                  ? t('wants.sourcePending', { deck: source.deck_name })
+                  : t('wants.sourceWishlist', { deck: source.deck_name })
               }
               style={{
                 fontFamily: 'var(--font-mono)',
@@ -339,7 +343,7 @@ function WantRow({ item, onClick }: { item: WantItem; onClick: () => void }) {
                 fontVariantNumeric: 'tabular-nums',
               }}
             >
-              {item.owned} of {item.needed}
+              {t('wants.ownedOfNeeded', { owned: item.owned, needed: item.needed })}
             </span>
             <span
               style={{

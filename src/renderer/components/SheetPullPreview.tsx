@@ -1,4 +1,5 @@
 import type { SheetPullPreview as SheetPullPreviewData } from '../../shared/types';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface Props {
   preview: SheetPullPreviewData;
@@ -8,35 +9,52 @@ interface Props {
 }
 
 export default function SheetPullPreview({ preview, busy, onCancel, onConfirm }: Props) {
+  const { t } = useI18n();
   const { labels } = preview;
   const totalChanges = preview.added.length + preview.updated.length + preview.removed.length +
     labels.added.length + labels.removed.length;
 
   return (
-    <section style={panel} aria-label="Playgroup sheet pull preview">
-      <div style={eyebrow}>Read-only source review</div>
-      <h3 style={title}>Pull others&rsquo; decks</h3>
+    <section style={panel} aria-label={t('sheetPull.ariaLabel')}>
+      <div style={eyebrow}>{t('sheetPull.eyebrow')}</div>
+      <h3 style={title}>{t('sheetPull.title')}</h3>
       <p style={copy}>
-        Google Sheets is only read here. Applying this preview replaces the cached copy on this
-        device; it never edits the sheet or anyone else&rsquo;s deck.
+        {t('sheetPull.intro')}
       </p>
 
       <div style={summaryGrid}>
-        <Summary label="Added" value={preview.added.length} tone="add" />
-        <Summary label="Changed" value={preview.updated.length} tone="update" />
-        <Summary label="Removed" value={preview.removed.length} tone="remove" />
-        <Summary label="Total after pull" value={preview.rows.length} />
+        <Summary label={t('sheetPull.added')} value={preview.added.length} tone="add" />
+        <Summary label={t('sheetPull.changed')} value={preview.updated.length} tone="update" />
+        <Summary label={t('sheetPull.removed')} value={preview.removed.length} tone="remove" />
+        <Summary label={t('sheetPull.totalAfter')} value={preview.rows.length} />
       </div>
 
-      <ChangeGroup title="New in sheet" items={preview.added.map(formatRow)} tone="add" empty="No new decks" />
-      <ChangeGroup title="Changed in sheet" items={preview.updated.map((row) => `${formatRow(row)} · was ${formatRow(row.previous!)}`)} tone="update" empty="No changed decks" />
-      <ChangeGroup title="Removed from sheet" items={preview.removed.map(formatRow)} tone="remove" empty="No removed decks" />
+      <ChangeGroup
+        title={t('sheetPull.newInSheet')}
+        items={preview.added.map(formatRow)}
+        tone="add"
+        empty={t('sheetPull.noNewDecks')}
+      />
+      <ChangeGroup
+        title={t('sheetPull.changedInSheet')}
+        items={preview.updated.map((row) =>
+          t('sheetPull.changedRow', { row: formatRow(row), previous: formatRow(row.previous!) }),
+        )}
+        tone="update"
+        empty={t('sheetPull.noChangedDecks')}
+      />
+      <ChangeGroup
+        title={t('sheetPull.removedFromSheet')}
+        items={preview.removed.map(formatRow)}
+        tone="remove"
+        empty={t('sheetPull.noRemovedDecks')}
+      />
       {labels.added.length > 0 && (
-        <ChangeGroup title="New set labels" items={labels.added} tone="add" empty="" />
+        <ChangeGroup title={t('sheetPull.newLabels')} items={labels.added} tone="add" empty="" />
       )}
       {labels.removed.length > 0 && (
         <ChangeGroup
-          title="Set labels gone from sheet — kept, marked as removed"
+          title={t('sheetPull.labelsRemoved')}
           items={labels.removed}
           tone="remove"
           empty=""
@@ -44,7 +62,7 @@ export default function SheetPullPreview({ preview, busy, onCancel, onConfirm }:
       )}
       {labels.unmapped.length > 0 && (
         <ChangeGroup
-          title="Set labels with no sets — map them under Set mappings"
+          title={t('sheetPull.labelsUnmapped')}
           items={labels.unmapped}
           tone="update"
           marker="!"
@@ -53,13 +71,17 @@ export default function SheetPullPreview({ preview, busy, onCancel, onConfirm }:
       )}
 
       <div style={actions}>
-        <button onClick={onCancel} disabled={busy} style={secondaryBtn}>Cancel</button>
+        <button onClick={onCancel} disabled={busy} style={secondaryBtn}>{t('sheetPull.cancel')}</button>
         <button onClick={onConfirm} disabled={busy} style={primaryBtn}>
-          {busy ? 'Pulling…' : totalChanges === 0 ? 'Keep local cache in sync' : 'Apply pull locally'}
+          {busy
+            ? t('sheetPull.pulling')
+            : totalChanges === 0
+              ? t('sheetPull.keepInSync')
+              : t('sheetPull.apply')}
         </button>
       </div>
       <p style={footnote}>
-        The local cache, pull timestamp, and set-label mappings update only after you apply.
+        {t('sheetPull.footnote')}
       </p>
     </section>
   );

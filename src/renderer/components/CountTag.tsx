@@ -1,4 +1,6 @@
 import type { CSSProperties } from 'react';
+import { DEFAULT_APP_LOCALE, translate, type MessageKey } from '../../shared/i18n';
+import { useI18n } from '../i18n/I18nProvider';
 
 /**
  * Kinds of card counts. Each kind has one color, used on every page, so a
@@ -16,15 +18,20 @@ const KIND_COLOR: Record<CountKind, string> = {
   need: 'var(--count-need)',
 };
 
-export function countLabel(kind: CountKind, count: number): string {
-  const n = count.toLocaleString();
+type Translate = (key: MessageKey, vars?: Record<string, string | number>) => string;
+
+const englishT: Translate = (key, vars) => translate(DEFAULT_APP_LOCALE, key, vars);
+
+export function countLabel(kind: CountKind, count: number, t: Translate = englishT): string {
+  const vars = { count: count.toLocaleString() };
+  const one = count === 1;
   switch (kind) {
-    case 'free': return `${n} free`;
-    case 'inDeck': return `${n} in deck`;
-    case 'inDecks': return `${n} in decks`;
-    case 'inOtherDecks': return `${n} in other decks`;
-    case 'new': return `+${n} new`;
-    case 'need': return `need ${n}`;
+    case 'free': return t(one ? 'counts.freeOne' : 'counts.freeOther', vars);
+    case 'inDeck': return t('counts.inDeck', vars);
+    case 'inDecks': return t('counts.inDecks', vars);
+    case 'inOtherDecks': return t('counts.inOtherDecks', vars);
+    case 'new': return t(one ? 'counts.newOne' : 'counts.newOther', vars);
+    case 'need': return t(one ? 'counts.needOne' : 'counts.needOther', vars);
   }
 }
 
@@ -42,6 +49,7 @@ interface Props {
 }
 
 export default function CountTag({ kind, count, title, overlay = false, compact = false, suffix, style }: Props) {
+  const { t } = useI18n();
   const color = KIND_COLOR[kind];
   return (
     <span
@@ -67,7 +75,7 @@ export default function CountTag({ kind, count, title, overlay = false, compact 
         ...style,
       }}
     >
-      {countLabel(kind, count)}
+      {countLabel(kind, count, t)}
       {suffix}
     </span>
   );

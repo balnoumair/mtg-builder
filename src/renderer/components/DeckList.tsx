@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Deck, Tag } from '../../shared/types';
-import { groupDecksBySetGroup } from '../../shared/deckSetGroup';
+import { groupDecksBySetGroup, MIXED_DECK_SET_GROUP_LABEL_KEY } from '../../shared/deckSetGroup';
+import { useI18n } from '../i18n/I18nProvider';
 import DeckGroupLabel, { partitionDecks } from './DeckGroupLabel';
 import DeckColorStatsModal from './DeckColorStatsModal';
 import DeckRowColorIdentity from './DeckRowColorIdentity';
@@ -48,6 +49,7 @@ export default function DeckList({
   filterTags,
   onClearTagFilter,
 }: Props) {
+  const { t } = useI18n();
   const [showCreate, setShowCreate] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [name, setName] = useState('');
@@ -137,7 +139,7 @@ export default function DeckList({
               </span>
             )}
             {!renaming && deck.has_unconfirmed_changes && (
-              <PendingChangesIcon title="Unconfirmed changes" />
+              <PendingChangesIcon title={t('deckList.unconfirmedChanges')} />
             )}
           </div>
           {!renaming && deck.tags && deck.tags.length > 0 && (
@@ -147,7 +149,7 @@ export default function DeckList({
               ))}
               {deck.tags.length > 3 && (
                 <span
-                  title={deck.tags.slice(3).map((t) => t.name).join(', ')}
+                  title={deck.tags.slice(3).map((tag) => tag.name).join(', ')}
                   style={{ flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-faint)' }}
                 >
                   +{deck.tags.length - 3}
@@ -189,7 +191,7 @@ export default function DeckList({
               setRenameValue(deck.name);
             }}
             style={iconBtn}
-            title="Rename"
+            title={t('deckList.rename')}
           >
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
               <path
@@ -203,10 +205,10 @@ export default function DeckList({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              if (confirm(`Delete "${deck.name}"?`)) onDeleteDeck(deck.id);
+              if (confirm(t('deckList.confirmDelete', { name: deck.name }))) onDeleteDeck(deck.id);
             }}
             style={iconBtn}
-            title="Delete"
+            title={t('deckList.delete')}
           >
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
               <path
@@ -235,7 +237,9 @@ export default function DeckList({
         {
           subgroups.map(({ group: setGroup, decks: subgroupDecks }, subgroupIndex) => (
             <div key={`${group}-${setGroup.kind}-${setGroup.label}`} style={{ marginTop: subgroupIndex ? 14 : 0 }}>
-              <DeckSetGroupLabel label={setGroup.label} />
+              <DeckSetGroupLabel
+                label={setGroup.kind === 'mixed' ? t(MIXED_DECK_SET_GROUP_LABEL_KEY) : setGroup.label}
+              />
               <div
                 style={{
                   background: 'var(--bg-panel)',
@@ -280,7 +284,7 @@ export default function DeckList({
               letterSpacing: '-0.01em',
             }}
           >
-            Decks
+            {t('deckList.title')}
           </h1>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-mute)' }}>
             {hasDeckFilters ? `${decks.length}/${totalDeckCount}` : decks.length}
@@ -288,7 +292,7 @@ export default function DeckList({
           <div style={{ flex: 1 }} />
           <button
             onClick={() => setShowStats(true)}
-            title="Count decks by color combination"
+            title={t('deckList.statsTitle')}
             style={{
               padding: '5px 11px',
               background: 'var(--bg-chip)',
@@ -299,7 +303,7 @@ export default function DeckList({
               cursor: 'pointer',
             }}
           >
-            Stats
+            {t('deckList.stats')}
           </button>
           <button
             onClick={() => setShowCreate((v) => !v)}
@@ -313,7 +317,7 @@ export default function DeckList({
               cursor: 'pointer',
             }}
           >
-            + New Deck
+            {t('deckList.newDeck')}
           </button>
         </div>
 
@@ -328,7 +332,7 @@ export default function DeckList({
               gap: 6,
             }}
           >
-            <span style={{ fontSize: 11, color: 'var(--text-mute)' }}>Tagged</span>
+            <span style={{ fontSize: 11, color: 'var(--text-mute)' }}>{t('deckList.tagged')}</span>
             {filterTags.map((tag) => (
               <DeckTag key={tag.id} tag={tag} active />
             ))}
@@ -345,7 +349,7 @@ export default function DeckList({
                 textDecoration: 'underline',
               }}
             >
-              Show all
+              {t('deckList.showAll')}
             </button>
           </div>
         )}
@@ -355,7 +359,7 @@ export default function DeckList({
             type="button"
             aria-pressed={attentionFilterActive}
             onClick={() => onDeckListFilterChange(attentionFilterActive ? 'all' : 'attention')}
-            title="Show owned decks with unconfirmed changes and all wishlist decks"
+            title={t('deckList.needsAttentionTitle')}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -370,7 +374,7 @@ export default function DeckList({
             }}
           >
             <PendingChangesIcon />
-            <span>Needs attention</span>
+            <span>{t('deckList.needsAttention')}</span>
           </button>
           <TagFilterRail
             tags={tags}
@@ -396,7 +400,7 @@ export default function DeckList({
                   setName('');
                 }
               }}
-              placeholder="Deck name…"
+              placeholder={t('deckList.namePlaceholder')}
               style={{
                 flex: 1,
                 background: 'var(--bg-input)',
@@ -420,7 +424,7 @@ export default function DeckList({
                 cursor: 'pointer',
               }}
             >
-              Create
+              {t('deckList.create')}
             </button>
             <button
               onClick={() => {
@@ -436,7 +440,7 @@ export default function DeckList({
                 cursor: 'pointer',
               }}
             >
-              Cancel
+              {t('deckList.cancel')}
             </button>
           </div>
         )}
@@ -444,22 +448,22 @@ export default function DeckList({
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--pad)' }}>
         {loading ? (
-          <div style={{ color: 'var(--text-mute)', fontSize: 12 }}>Loading…</div>
+          <div style={{ color: 'var(--text-mute)', fontSize: 12 }}>{t('app.loading')}</div>
         ) : decks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 16px' }}>
             <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>
               {deckListFilter === 'attention'
-                ? 'No decks need attention'
+                ? t('deckList.emptyAttention')
                 : filterTags.length > 0
-                  ? 'No decks with these tags'
-                  : 'No decks yet'}
+                  ? t('deckList.emptyTagged')
+                  : t('deckList.empty')}
             </p>
             <p style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 6 }}>
               {deckListFilter === 'attention'
-                ? 'All owned decks are confirmed, and there are no wishlist decks.'
+                ? t('deckList.emptyAttentionHint')
                 : filterTags.length > 0
-                ? 'Pick a different tag, or show all decks.'
-                : 'Create your first deck to get started'}
+                ? t('deckList.emptyTaggedHint')
+                : t('deckList.emptyHint')}
             </p>
           </div>
         ) : (

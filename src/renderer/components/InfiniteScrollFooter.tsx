@@ -1,3 +1,5 @@
+import { useI18n } from '../i18n/I18nProvider';
+
 interface Props {
   loadingMore: boolean;
   hasMore: boolean;
@@ -6,6 +8,7 @@ interface Props {
 }
 
 export default function InfiniteScrollFooter({ loadingMore, hasMore, loadedCount, total }: Props) {
+  const { t } = useI18n();
   if (loadedCount === 0) return null;
 
   return (
@@ -20,11 +23,14 @@ export default function InfiniteScrollFooter({ loadingMore, hasMore, loadedCount
       }}
     >
       {loadingMore ? (
-        'Loading more…'
+        t('pagination.loadingMore')
       ) : hasMore ? (
-        'Scroll for more'
+        t('pagination.scrollForMore')
       ) : (
-        `${loadedCount.toLocaleString()} of ${total.toLocaleString()} cards`
+        t('common.of', {
+          current: loadedCount.toLocaleString(),
+          total: total.toLocaleString(),
+        })
       )}
     </div>
   );

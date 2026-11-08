@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CardSet, SheetBlockMapping } from '../../shared/types';
+import { useI18n } from '../i18n/I18nProvider';
 
 /**
  * The sheet's block/edition vocabulary and the Scryfall sets each label covers.
@@ -7,6 +8,7 @@ import type { CardSet, SheetBlockMapping } from '../../shared/types';
  * ever contain real set codes.
  */
 export default function SheetMappings() {
+  const { t } = useI18n();
   const [mappings, setMappings] = useState<SheetBlockMapping[]>([]);
   const [sets, setSets] = useState<CardSet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,14 +65,14 @@ export default function SheetMappings() {
 
   const unmappedCount = mappings.filter(isUnmapped).length;
 
-  if (loading) return <div style={{ color: 'var(--text-mute)', fontSize: 12 }}>Loading…</div>;
+  if (loading) return <div style={{ color: 'var(--text-mute)', fontSize: 12 }}>{t('sheetMappings.loading')}</div>;
 
   if (mappings.length === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '24px 16px' }}>
-        <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>No mappings yet</p>
+        <p style={{ color: 'var(--text-dim)', fontSize: 13, margin: 0 }}>{t('sheetMappings.emptyTitle')}</p>
         <p style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 6 }}>
-          Pull the sheet once — these labels come from its EDICIONES tab.
+          {t('sheetMappings.emptyHint')}
         </p>
       </div>
     );
@@ -82,7 +84,7 @@ export default function SheetMappings() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search label or set…"
+          placeholder={t('sheetMappings.searchPlaceholder')}
           style={{
             flex: 1,
             minWidth: 150,
@@ -111,7 +113,9 @@ export default function SheetMappings() {
             onChange={(e) => setOnlyUnmapped(e.target.checked)}
             style={{ accentColor: 'var(--accent)' }}
           />
-          Unmapped only{unmappedCount > 0 ? ` (${unmappedCount})` : ''}
+          {unmappedCount > 0
+            ? t('sheetMappings.unmappedOnlyCount', { count: unmappedCount })
+            : t('sheetMappings.unmappedOnly')}
         </label>
       </div>
 
@@ -138,15 +142,13 @@ export default function SheetMappings() {
         ))}
         {visible.length === 0 && (
           <div style={{ padding: '14px 12px', fontSize: 11, color: 'var(--text-mute)' }}>
-            No labels match that search.
+            {t('sheetMappings.noMatches')}
           </div>
         )}
       </div>
 
       <p style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 8, marginBottom: 0 }}>
-        Labels come from the sheet's EDICIONES tab plus any label a MAZOS row uses, and refresh on
-        every applied pull. Your edits are kept; unedited labels are re-seeded from the built-in
-        dictionary. Labels gone from the sheet stay listed so their mapping isn't lost.
+        {t('sheetMappings.footnote')}
       </p>
     </div>
   );
@@ -171,6 +173,7 @@ function MappingRow({
   onSave: (codes: string[]) => void;
   onReset: () => void;
 }) {
+  const { t } = useI18n();
   const [search, setSearch] = useState('');
   const codes = mapping.setCodes.map((c) => c.toLowerCase());
   const removed = mapping.sheetStatus === 'removed';
@@ -206,7 +209,7 @@ function MappingRow({
             </span>
             {mapping.manual && (
               <span
-                title="Edited by you; survives pulls"
+                title={t('sheetMappings.editedTitle')}
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: 9,
@@ -217,17 +220,17 @@ function MappingRow({
                   flexShrink: 0,
                 }}
               >
-                edited
+                {t('sheetMappings.edited')}
               </span>
             )}
             {mapping.sheetStatus === 'mazos' && (
-              <StatusBadge title="Used by decks in MAZOS but not listed in the EDICIONES tab">
-                MAZOS only
+              <StatusBadge title={t('sheetMappings.mazosOnlyTitle')}>
+                {t('sheetMappings.mazosOnly')}
               </StatusBadge>
             )}
             {removed && (
-              <StatusBadge title="No longer in the sheet; kept so its mapping is back if the label returns. Not used for pushes.">
-                not in sheet
+              <StatusBadge title={t('sheetMappings.notInSheetTitle')}>
+                {t('sheetMappings.notInSheet')}
               </StatusBadge>
             )}
           </div>
@@ -235,8 +238,8 @@ function MappingRow({
           {mapping.setCodes.length === 0 ? (
             <div style={{ fontSize: 10, color: removed ? 'var(--text-mute)' : 'var(--danger)', marginTop: 3 }}>
               {removed
-                ? 'No sets mapped.'
-                : 'No sets mapped — decks from this block cannot be pushed. Add the sets it covers.'}
+                ? t('sheetMappings.noSetsRemoved')
+                : t('sheetMappings.noSetsBlocking')}
             </div>
           ) : (
             <div
@@ -252,7 +255,7 @@ function MappingRow({
                 return (
                   <span
                     key={code}
-                    title={set ? `${set.name} (${code})` : `${code} — not in the set catalog`}
+                    title={set ? `${set.name} (${code})` : t('sheetMappings.codeNotInCatalog', { code })}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -267,12 +270,12 @@ function MappingRow({
                     }}
                   >
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {set ? set.name : `${code} — unknown code`}
+                      {set ? set.name : t('sheetMappings.unknownCode', { code })}
                     </span>
                     {editing && (
                       <button
                         onClick={() => onSave(mapping.setCodes.filter((c) => c !== code))}
-                        title="Remove this set"
+                        title={t('sheetMappings.removeSet')}
                         style={{
                           background: 'transparent',
                           border: 'none',
@@ -295,11 +298,11 @@ function MappingRow({
 
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
           <button onClick={onEdit} style={editing ? primaryBtn : smallBtn}>
-            {editing ? 'Done' : 'Edit'}
+            {editing ? t('sheetMappings.done') : t('sheetMappings.edit')}
           </button>
           {mapping.manual && mapping.hasDefault && (
-            <button onClick={onReset} title="Restore the built-in mapping" style={smallBtn}>
-              Reset
+            <button onClick={onReset} title={t('sheetMappings.resetTitle')} style={smallBtn}>
+              {t('sheetMappings.reset')}
             </button>
           )}
         </div>
@@ -311,7 +314,7 @@ function MappingRow({
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Add a set — search by name, code or block…"
+            placeholder={t('sheetMappings.addSetPlaceholder')}
             style={{
               width: '100%',
               padding: '5px 9px',
@@ -375,7 +378,7 @@ function MappingRow({
             ))}
             {matches.length === 0 && (
               <div style={{ padding: '8px', fontSize: 10, color: 'var(--text-mute)' }}>
-                No sets match “{search}”.
+                {t('sheetMappings.noSetsMatch', { query: search })}
               </div>
             )}
           </div>

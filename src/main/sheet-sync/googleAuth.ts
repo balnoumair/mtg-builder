@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createSign } from 'node:crypto';
+import { tMain } from '../i18n';
 
 // Service-account auth without googleapis: sign a JWT with the key's RS256
 // private key and exchange it for a short-lived access token. Keeps the
@@ -29,17 +30,20 @@ function base64url(input: Buffer | string): string {
 
 export function readServiceAccountKey(keyPath: string): ServiceAccountKey {
   if (!keyPath) {
-    throw new Error('No service-account key configured. Pick the key JSON file in the sync settings.');
+    throw new Error(tMain('main.googleAuth.noKey'));
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
   } catch (err) {
-    throw new Error(`Could not read service-account key at ${keyPath}: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(tMain('main.googleAuth.readKeyFailed', {
+      path: keyPath,
+      message: err instanceof Error ? err.message : String(err),
+    }));
   }
   const key = parsed as Partial<ServiceAccountKey>;
   if (!key.client_email || !key.private_key) {
-    throw new Error('The selected file is not a Google service-account key (missing client_email/private_key).');
+    throw new Error(tMain('main.googleAuth.notServiceAccountKey'));
   }
   return key as ServiceAccountKey;
 }
@@ -98,7 +102,9 @@ export async function getAccessToken(keyPath: string): Promise<string> {
   });
   const body = (await res.json()) as { access_token?: string; error_description?: string; error?: string };
   if (!res.ok || !body.access_token) {
-    throw new Error(`Google auth failed: ${body.error_description ?? body.error ?? res.status}`);
+    throw new Error(tMain('main.googleAuth.authFailed', {
+      message: body.error_description ?? body.error ?? res.status,
+    }));
   }
   cached = { token: body.access_token, expiresAt: now + 3600_000, keyPath };
   return body.access_token;

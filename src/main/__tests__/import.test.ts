@@ -23,6 +23,9 @@ interface BulkCardOverrides {
   oracle_id?: string;
   name?: string;
   lang?: string;
+  printed_name?: string;
+  printed_type_line?: string;
+  printed_text?: string;
   layout?: string;
   set?: string;
   set_type?: string;
@@ -117,12 +120,35 @@ describe('importCardsFromFile filters', () => {
     expect(cardNames(db)).toEqual([]);
   });
 
-  it('excludes non-English prints and non-standard set types', async () => {
+  it('excludes non-selected languages and non-standard set types by default', async () => {
     await importCards(db, [
       bulkCard({ name: 'Non English', lang: 'ja' }),
       bulkCard({ name: 'Commander Set Card', set_type: 'commander' }),
     ]);
     expect(cardNames(db)).toEqual([]);
+  });
+
+  it('imports selected non-English prints when languages include them', async () => {
+    const file = writeBulkFile([
+      bulkCard({ name: 'Lightning Bolt', lang: 'en' }),
+      bulkCard({
+        name: 'Lightning Bolt',
+        lang: 'es',
+        printed_name: 'Rayo',
+        printed_type_line: 'Instantáneo',
+        printed_text: 'Rayo hace 3 puntos de daño',
+      }),
+      bulkCard({ name: 'Japanese Only', lang: 'ja' }),
+    ]);
+    await importCardsFromFile(db, file, new Map(), () => {}, ['en', 'es']);
+    const rows = db.prepare('SELECT lang, printed_name FROM cards ORDER BY lang').all() as Array<{
+      lang: string;
+      printed_name: string | null;
+    }>;
+    expect(rows).toEqual([
+      { lang: 'en', printed_name: null },
+      { lang: 'es', printed_name: 'Rayo' },
+    ]);
   });
 
   it('imports prepare-layout cards (SOS), using the front face for oracle_text and the top-level image', async () => {
@@ -210,6 +236,18 @@ describe('syncCards', () => {
 });
 
 describe('dedupeCardPrints', () => {
+  it('keeps one print per language within a set', async () => {
+    const file = writeBulkFile([
+      bulkCard({ id: 'b-en', name: 'Wilds', oracle_id: 'o-1', lang: 'en', collector_number: '242' }),
+      bulkCard({ id: 'a-es', name: 'Wilds', oracle_id: 'o-1', lang: 'es', collector_number: '242' }),
+      bulkCard({ id: 'c-en-art', name: 'Wilds', oracle_id: 'o-1', lang: 'en', collector_number: '300' }),
+    ]);
+    await importCardsFromFile(db, file, new Map(), () => {}, ['en', 'es']);
+    dedupeCardPrints(db);
+    const rows = db.prepare('SELECT id, lang FROM cards ORDER BY lang').all();
+    expect(rows).toEqual([{ id: 'b-en', lang: 'en' }, { id: 'a-es', lang: 'es' }]);
+  });
+
   it('keeps reprints across different sets (only collapses arts within a set)', async () => {
     await importCards(db, [
       bulkCard({ name: 'Reprint', oracle_id: 'o-1', set: 'aaa', released_at: '2020-01-01' }),

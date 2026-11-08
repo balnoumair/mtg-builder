@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import type { AppBackup, BackupApplyMode, BackupPreview } from '../../shared/backup';
+import {
+  CARD_LANGUAGES,
+  DEFAULT_CARD_LANGUAGE,
+  type CardLanguageCode,
+} from '../../shared/cardLanguages';
+import { APP_LOCALES, type AppLocale } from '../../shared/i18n';
 import type { ImportProgress } from '../../shared/types';
+import { useI18n } from '../i18n/I18nProvider';
 import DriveBackupSection from './DriveBackupSection';
 import SheetSyncSection from './SheetSyncSection';
 import BackupPreviewView from './BackupPreview';
@@ -19,12 +26,33 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
+const sectionStyle: React.CSSProperties = {
+  marginTop: 22,
+  paddingTop: 16,
+  borderTop: '1px solid var(--border)',
+  textAlign: 'left',
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  margin: '0 0 4px',
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'var(--text)',
+};
+
+const sectionHintStyle: React.CSSProperties = {
+  color: 'var(--text-mute)',
+  fontSize: 11,
+  margin: '0 0 12px',
+};
+
 export default function ImportScreen({
   onComplete,
   onCancel,
   onBackupImported,
   onSheetPulled,
 }: Props) {
+  const { t, locale, setLocale } = useI18n();
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,23 +60,32 @@ export default function ImportScreen({
   const [backupPreview, setBackupPreview] = useState<BackupPreview | null>(null);
   const [pendingBackup, setPendingBackup] = useState<AppBackup | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [syncLanguages, setSyncLanguages] = useState<CardLanguageCode[]>([DEFAULT_CARD_LANGUAGE]);
+
+  useEffect(() => {
+    void window.electronAPI.getAppSettings().then((s) => {
+      if (s.syncLanguages?.length) {
+        setSyncLanguages(s.syncLanguages as CardLanguageCode[]);
+      }
+    }).catch(() => {});
+  }, []);
 
   const handleBackup = async () => {
     const result = await window.electronAPI.exportBackup();
-    if (result.error) setBackupStatus(`Backup failed: ${result.error}`);
-    else if (result.saved) setBackupStatus(`Backup saved to ${result.path}`);
+    if (result.error) setBackupStatus(t('settings.backupFailed', { error: result.error }));
+    else if (result.saved) setBackupStatus(t('settings.backupSaved', { path: result.path ?? '' }));
   };
 
   const handleImportBackup = async () => {
     setBackupStatus(null);
     const result = await window.electronAPI.previewBackupImport();
     if (result.error) {
-      setBackupStatus(`Import failed: ${result.error}`);
+      setBackupStatus(t('settings.importFailed', { error: result.error }));
       return;
     }
     if (result.canceled) return;
     if (!result.preview || !result.backup) {
-      setBackupStatus('Import preview failed: the backup did not contain usable data.');
+      setBackupStatus(t('settings.importPreviewFailed'));
       return;
     }
     setBackupPreview(result.preview);
@@ -62,32 +99,35 @@ export default function ImportScreen({
     try {
       const result = await window.electronAPI.applyBackupImport(pendingBackup, mode);
       if (result.error) {
-        setBackupStatus(`Import failed: ${result.error}`);
+        setBackupStatus(t('settings.importFailed', { error: result.error }));
         return;
       }
       onBackupImported?.();
       const parts: string[] = [];
       if (result.decksImported > 0) {
-        parts.push(`${result.decksImported} new deck${result.decksImported === 1 ? '' : 's'}`);
+        parts.push(t(result.decksImported === 1 ? 'backup.summary.newDecksOne' : 'backup.summary.newDecksOther', { count: result.decksImported }));
       }
       if (result.decksUpdated > 0) {
-        parts.push(`${result.decksUpdated} deck${result.decksUpdated === 1 ? '' : 's'} updated`);
+        parts.push(t(result.decksUpdated === 1 ? 'backup.summary.decksUpdatedOne' : 'backup.summary.decksUpdatedOther', { count: result.decksUpdated }));
       }
-      if (result.decksImported === 0 && result.decksUpdated === 0) parts.push('0 decks');
-      parts.push(`${result.collectionCards} collection card${result.collectionCards === 1 ? '' : 's'}`);
-      if (result.tagsImported > 0) parts.push(`${result.tagsImported} new tag${result.tagsImported === 1 ? '' : 's'}`);
+      if (result.decksImported === 0 && result.decksUpdated === 0) parts.push(t('backup.summary.noDecks'));
+      parts.push(t(result.collectionCards === 1 ? 'backup.summary.collectionCardsOne' : 'backup.summary.collectionCardsOther', { count: result.collectionCards }));
+      if (result.tagsImported > 0) {
+        parts.push(t(result.tagsImported === 1 ? 'backup.summary.newTagsOne' : 'backup.summary.newTagsOther', { count: result.tagsImported }));
+      }
       const summary = parts.join(', ');
       setBackupStatus(
         result.missing.length === 0
-          ? `${mode === 'replace' ? 'Replaced local data' : 'Imported'} — ${summary}`
-          : `${mode === 'replace' ? 'Replaced local data' : 'Imported'} — ${summary}; not in database: ${result.missing
-              .map((m) => `${m.quantity}× ${m.card}`)
-              .join(', ')}`,
+          ? t(mode === 'replace' ? 'settings.replacedSummary' : 'settings.importedSummary', { summary })
+          : t(mode === 'replace' ? 'settings.replacedSummaryMissing' : 'settings.importedSummaryMissing', {
+              summary,
+              missing: result.missing.map((m) => `${m.quantity}× ${m.card}`).join(', '),
+            }),
       );
       setBackupPreview(null);
       setPendingBackup(null);
     } catch (err) {
-      setBackupStatus(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+      setBackupStatus(t('settings.importFailed', { error: err instanceof Error ? err.message : String(err) }));
     } finally {
       setBackupBusy(false);
     }
@@ -112,13 +152,27 @@ export default function ImportScreen({
     return () => window.removeEventListener('keydown', handler);
   }, [onCancel, syncing]);
 
+  const persistSyncLanguages = async (next: CardLanguageCode[]) => {
+    const langs = next.length > 0 ? next : [DEFAULT_CARD_LANGUAGE];
+    setSyncLanguages(langs);
+    await window.electronAPI.updateAppSettings({ syncLanguages: langs });
+  };
+
+  const toggleSyncLanguage = (code: CardLanguageCode) => {
+    const next = syncLanguages.includes(code)
+      ? syncLanguages.filter((l) => l !== code)
+      : [...syncLanguages, code];
+    void persistSyncLanguages(next);
+  };
+
   const handleSync = async () => {
     setSyncing(true);
     setError(null);
     try {
+      await window.electronAPI.updateAppSettings({ syncLanguages });
       await window.electronAPI.syncCards();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sync failed');
+      setError(err instanceof Error ? err.message : t('settings.syncFailed'));
       setSyncing(false);
     }
   };
@@ -132,19 +186,25 @@ export default function ImportScreen({
     if (!progress) return '';
     switch (progress.phase) {
       case 'downloading':
-        return `Downloading… ${formatBytes(progress.current)}${progress.total > 0 ? ` / ${formatBytes(progress.total)}` : ''}`;
+        return t('settings.downloading', {
+          current: formatBytes(progress.current),
+          total: progress.total > 0 ? ` / ${formatBytes(progress.total)}` : '',
+        });
       case 'reading':
-        return `Importing… ${progress.current.toLocaleString()} cards`;
+        return t('settings.importing', { count: progress.current.toLocaleString() });
       case 'indexing':
-        return 'Building indexes…';
+        return t('settings.indexing');
+      case 'restoring':
+        return t('settings.restoring');
       case 'done':
-        return 'Done.';
+        return t('settings.done');
     }
   })();
 
-  // Opened from inside the app (Back available) this doubles as the manage
-  // screen: backups plus playgroup sheet sync, so it needs room and scroll.
+  // Opened from inside the app (Back available) this doubles as settings:
+  // language, sync, backups, playgroup sheet — needs room and scroll.
   const manageMode = !!onCancel && !syncing;
+  const showConfig = !syncing;
 
   return (
     <div
@@ -154,8 +214,8 @@ export default function ImportScreen({
         height: '100vh',
         alignItems: manageMode ? 'flex-start' : 'center',
         justifyContent: 'center',
-        overflowY: manageMode ? 'auto' : 'hidden',
-        padding: manageMode ? 'calc(var(--titlebar-h) + 52px) 0 40px' : 0,
+        overflowY: manageMode || showConfig ? 'auto' : 'hidden',
+        padding: manageMode || (showConfig && onCancel) ? 'calc(var(--titlebar-h) + 52px) 0 40px' : 'calc(var(--titlebar-h) + 24px) 0 40px',
         background: 'var(--bg-window)',
         color: 'var(--text)',
         fontFamily: 'var(--font-ui)',
@@ -164,7 +224,7 @@ export default function ImportScreen({
       {onCancel && !syncing && (
         <button
           onClick={onCancel}
-          title="Back (Esc)"
+          title={t('settings.backTitle')}
           style={{
             position: 'absolute',
             top: 'calc(var(--titlebar-h) + 12px)',
@@ -190,13 +250,13 @@ export default function ImportScreen({
               strokeLinejoin="round"
             />
           </svg>
-          Back
+          {t('settings.back')}
         </button>
       )}
       <div
         style={{
           width: '100%',
-          maxWidth: manageMode ? 680 : 420,
+          maxWidth: manageMode || showConfig ? 680 : 420,
           margin: '0 24px',
           padding: 28,
           background: 'var(--bg-panel)',
@@ -214,10 +274,10 @@ export default function ImportScreen({
             letterSpacing: '-0.01em',
           }}
         >
-          MTG Builder
+          {onCancel ? t('sidebar.settings') : t('app.brand')}
         </h1>
         <p style={{ color: 'var(--text-dim)', fontSize: 12, marginTop: 6, marginBottom: 22 }}>
-          Sync your card database from Scryfall to begin.
+          {onCancel ? t('settings.introManage') : t('settings.introFirstRun')}
         </p>
 
         {error && (
@@ -237,24 +297,95 @@ export default function ImportScreen({
           </div>
         )}
 
-        {!syncing ? (
-          <button
-            onClick={handleSync}
-            style={{
-              padding: '8px 16px',
-              background: 'var(--accent-soft)',
-              color: 'var(--accent)',
-              border: '1px solid var(--accent-line)',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: 12,
-              cursor: 'pointer',
-              fontFamily: 'var(--font-ui)',
-            }}
-          >
-            Sync from Scryfall
-          </button>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {showConfig && (
+          <div style={{ ...sectionStyle, marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+            <h2 style={sectionTitleStyle}>{t('settings.appLanguage')}</h2>
+            <p style={sectionHintStyle}>{t('settings.appLanguageHint')}</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {APP_LOCALES.map((opt) => (
+                <button
+                  key={opt.code}
+                  type="button"
+                  onClick={() => setLocale(opt.code as AppLocale)}
+                  style={{
+                    ...backupBtn,
+                    borderColor: locale === opt.code ? 'var(--accent-line)' : 'var(--border-strong)',
+                    color: locale === opt.code ? 'var(--accent)' : 'var(--text-dim)',
+                    background: locale === opt.code ? 'var(--accent-soft)' : 'transparent',
+                  }}
+                >
+                  {t(opt.labelKey)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {showConfig && (
+          <div style={sectionStyle}>
+            <h2 style={sectionTitleStyle}>{t('settings.syncSection')}</h2>
+            <p style={sectionHintStyle}>{t('settings.syncHint')}</p>
+            <p style={{ ...sectionHintStyle, marginBottom: 8, color: 'var(--text-dim)' }}>
+              {t('settings.cardLanguages')}
+            </p>
+            <p style={sectionHintStyle}>{t('settings.cardLanguagesHint')}</p>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                gap: 6,
+                marginBottom: 14,
+              }}
+            >
+              {CARD_LANGUAGES.map((lang) => {
+                const checked = syncLanguages.includes(lang.code);
+                return (
+                  <label
+                    key={lang.code}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      fontSize: 12,
+                      color: 'var(--text-dim)',
+                      cursor: 'pointer',
+                      padding: '4px 6px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: checked ? 'var(--accent-soft)' : 'transparent',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleSyncLanguage(lang.code)}
+                    />
+                    {t(`cardLanguage.names.${lang.code}`)}
+                  </label>
+                );
+              })}
+            </div>
+            {!syncing ? (
+              <button
+                onClick={() => void handleSync()}
+                style={{
+                  padding: '8px 16px',
+                  background: 'var(--accent-soft)',
+                  color: 'var(--accent)',
+                  border: '1px solid var(--accent-line)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                }}
+              >
+                {t('settings.syncButton')}
+              </button>
+            ) : null}
+          </div>
+        )}
+
+        {syncing && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
             <p style={{ color: 'var(--text-dim)', fontSize: 12, margin: 0 }}>{statusText}</p>
             <div
               style={{
@@ -290,22 +421,22 @@ export default function ImportScreen({
         )}
 
         {!syncing && onCancel && (
-          <div style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-            <p style={{ color: 'var(--text-mute)', fontSize: 11, marginTop: 0, marginBottom: 10 }}>
-              Back up your decks and collection to a file, or restore from one.
+          <div style={sectionStyle}>
+            <p style={{ ...sectionHintStyle, marginBottom: 10 }}>
+              {t('settings.backupHint')}
             </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start' }}>
               <button onClick={() => void handleBackup()} style={backupBtn}>
-                Backup
+                {t('settings.backup')}
               </button>
               <button onClick={() => void handleImportBackup()} style={backupBtn}>
-                Import backup
+                {t('settings.importBackup')}
               </button>
             </div>
             {backupStatus && (
               <p
                 onClick={() => setBackupStatus(null)}
-                title="Dismiss"
+                title={t('settings.dismiss')}
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: 10,
@@ -322,7 +453,7 @@ export default function ImportScreen({
             {backupPreview && pendingBackup && (
               <BackupPreviewView
                 preview={backupPreview}
-                sourceLabel="Local backup file"
+                sourceLabel={t('settings.localBackupFile')}
                 busy={backupBusy}
                 onCancel={() => {
                   setBackupPreview(null);

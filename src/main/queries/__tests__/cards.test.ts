@@ -26,6 +26,18 @@ describe('searchCards', () => {
     expect(result.cards[0].name).toBe('Lightning Bolt');
   });
 
+  it('filters by language and matches printed names', () => {
+    insertTestCard(db, { name: 'Lightning Bolt', lang: 'en' });
+    insertTestCard(db, {
+      name: 'Lightning Bolt',
+      lang: 'es',
+      printed_name: 'Rayo',
+    });
+    expect(searchCards(db, { lang: 'es' }).total).toBe(1);
+    expect(searchCards(db, { lang: 'es', query: 'Rayo' }).cards[0].printed_name).toBe('Rayo');
+    expect(searchCards(db, { lang: 'en', query: 'Rayo' }).total).toBe(0);
+  });
+
   it('filters by oracle_text query', () => {
     insertTestCard(db, { name: 'Bolt', oracle_text: 'deals 3 damage' });
     insertTestCard(db, { name: 'Counter', oracle_text: 'counter target spell' });

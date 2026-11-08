@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Deck } from '../../shared/types';
-import { groupDecksBySetGroup } from '../../shared/deckSetGroup';
+import { groupDecksBySetGroup, MIXED_DECK_SET_GROUP_LABEL_KEY } from '../../shared/deckSetGroup';
+import { useI18n } from '../i18n/I18nProvider';
 import DeckGroupLabel, { partitionDecks } from './DeckGroupLabel';
 import DeckRowColorIdentity from './DeckRowColorIdentity';
 import DeckSetGroupLabel from './DeckSetGroupLabel';
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function DeckSwitcherModal({ decks, activeDeckId, onOpenDeck, onClose }: Props) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -21,11 +23,15 @@ export default function DeckSwitcherModal({ decks, activeDeckId, onOpenDeck, onC
     const normalized = query.trim().toLowerCase();
     if (!normalized) return decks;
     return decks.filter((deck) =>
-      [deck.name, deck.format, deck.set_group?.label]
+      [
+        deck.name,
+        deck.format,
+        deck.set_group?.kind === 'mixed' ? t(MIXED_DECK_SET_GROUP_LABEL_KEY) : deck.set_group?.label,
+      ]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(normalized)),
     );
-  }, [decks, query]);
+  }, [decks, query, t]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -81,7 +87,10 @@ export default function DeckSwitcherModal({ decks, activeDeckId, onOpenDeck, onC
         <DeckGroupLabel group={group} count={sectionDecks.length} compact />
         {subgroups.map(({ group: setGroup, decks: subgroupDecks }) => (
           <div key={`${group}-${setGroup.kind}-${setGroup.label}`}>
-            <DeckSetGroupLabel label={setGroup.label} compact />
+            <DeckSetGroupLabel
+              label={setGroup.kind === 'mixed' ? t(MIXED_DECK_SET_GROUP_LABEL_KEY) : setGroup.label}
+              compact
+            />
             {subgroupDecks.map((deck) => {
               const index = filteredDecks.findIndex((candidate) => candidate.id === deck.id);
               const selected = index === selectedIndex;
@@ -127,7 +136,10 @@ export default function DeckSwitcherModal({ decks, activeDeckId, onOpenDeck, onC
                       color: 'var(--text-mute)',
                     }}
                   >
-                    {deck.format || `${deck.card_count ?? 0} cards`}
+                    {deck.format ||
+                      t((deck.card_count ?? 0) === 1 ? 'deckSwitcher.cardCountOne' : 'deckSwitcher.cardCountOther', {
+                        count: deck.card_count ?? 0,
+                      })}
                   </span>
                 </div>
               );
@@ -159,7 +171,7 @@ export default function DeckSwitcherModal({ decks, activeDeckId, onOpenDeck, onC
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Switch deck"
+        aria-label={t('deckSwitcher.dialogLabel')}
         onClick={(event) => event.stopPropagation()}
         style={{
           width: 'min(100%, 560px)',
@@ -196,8 +208,8 @@ export default function DeckSwitcherModal({ decks, activeDeckId, onOpenDeck, onC
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={handleInputKeyDown}
-              placeholder="Type a deck name…"
-              aria-label="Search decks"
+              placeholder={t('deckSwitcher.searchPlaceholder')}
+              aria-label={t('deckSwitcher.searchLabel')}
               style={{
                 flex: 1,
                 minWidth: 0,
@@ -227,12 +239,12 @@ export default function DeckSwitcherModal({ decks, activeDeckId, onOpenDeck, onC
 
         <div
           role="listbox"
-          aria-label="Decks"
+          aria-label={t('deckSwitcher.listLabel')}
           style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 10px 12px' }}
         >
           {filteredDecks.length === 0 ? (
             <p style={{ margin: 0, padding: '24px 10px', textAlign: 'center', color: 'var(--text-mute)', fontSize: 12 }}>
-              No decks match “{query}”.
+              {t('deckSwitcher.noMatches', { query })}
             </p>
           ) : (
             <>
@@ -254,8 +266,8 @@ export default function DeckSwitcherModal({ decks, activeDeckId, onOpenDeck, onC
             fontSize: 9.5,
           }}
         >
-          <span><b style={{ color: 'var(--text-mute)' }}>↑↓</b> navigate</span>
-          <span><b style={{ color: 'var(--text-mute)' }}>↵</b> open</span>
+          <span><b style={{ color: 'var(--text-mute)' }}>↑↓</b> {t('deckSwitcher.navigate')}</span>
+          <span><b style={{ color: 'var(--text-mute)' }}>↵</b> {t('deckSwitcher.open')}</span>
           <span style={{ marginLeft: 'auto' }}>⌘E / Ctrl+E</span>
         </div>
       </div>
