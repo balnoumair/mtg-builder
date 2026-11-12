@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { SheetPushPlan, SheetPushRowChange } from '../../shared/types';
 import type { MessageKey } from '../../shared/i18n';
 import { useI18n } from '../i18n/I18nProvider';
+import { placeAppends } from '../../shared/sheetPushRows';
 
 interface Props {
   plan: SheetPushPlan;
@@ -98,7 +99,13 @@ export default function SheetPushPreview({
   const [error, setError] = useState<string | null>(null);
 
   const changesFor = (kind: ChangeKind): SheetPushRowChange[] =>
-    kind === 'update' ? plan.updates : kind === 'append' ? plan.appends : plan.clears;
+    kind === 'update'
+      ? plan.updates
+      : kind === 'append'
+        ? plan.appends
+        : kind === 'matched'
+          ? plan.matched
+          : plan.clears;
 
   const allKeys = useMemo(
     () => SECTIONS.flatMap(({ kind }) => changesFor(kind).map((c) => keyOf(kind, c))),
@@ -143,6 +150,27 @@ export default function SheetPushPreview({
   const selectedRemovals = plan.matched.filter((c) => selected.has(keyOf('matched', c)));
   const selectedCount = allKeys.filter((k) => selected.has(k)).length + selectedRemovals.length;
 
+  // New decks are placed against what's ticked: a ticked removal frees its
+  // row, so an add (e.g. the other half of a rename) reuses it, then blank
+  // gaps, then rows past the end. Unticked adds take no row.
+  const pickedAppends = plan.appends.filter((c) => selected.has(keyOf('append', c)));
+  const placement = useMemo(
+    () =>
+      placeAppends(
+        {
+          updates: plan.updates.filter((c) => selected.has(keyOf('update', c))),
+          appends: pickedAppends,
+          // Rows the user chose to take back out of the sheet clear the same
+          // way as decks that no longer exist locally.
+          clears: [...plan.clears.filter((c) => selected.has(keyOf('clear', c))), ...selectedRemovals],
+        },
+        plan.blankRows,
+        plan.endRow,
+      ),
+    [plan, selected],
+  );
+  const placedRow = new Map(pickedAppends.map((c, i) => [keyOf('append', c), placement.placements[i]]));
+
   const handleAssign = async (deckId: number, setCodes: string[], label: string) => {
     if (!label) return;
     setAssignments((prev) => ({ ...prev, [deckId]: label }));
@@ -152,23 +180,8 @@ export default function SheetPushPreview({
   const handleConfirm = async () => {
     setPushing(true);
     setError(null);
-
-    // Appends were numbered sequentially from the first free row; keeping only
-    // some of them would leave blank rows behind, so re-number what survives.
-    const firstFreeRow = plan.appends.length
-      ? Math.min(...plan.appends.map((c) => c.sheetRow))
-      : 0;
-    const selectedPlan: SheetPushPlan = {
-      ...plan,
-      updates: plan.updates.filter((c) => selected.has(keyOf('update', c))),
-      // Rows the user chose to take back out of the sheet clear the same way
-      // as decks that no longer exist locally.
-      clears: [...plan.clears.filter((c) => selected.has(keyOf('clear', c))), ...selectedRemovals],
-      appends: plan.appends
-        .filter((c) => selected.has(keyOf('append', c)))
-        .sort((a, b) => a.sheetRow - b.sheetRow)
-        .map((c, i) => ({ ...c, sheetRow: firstFreeRow + i })),
-    };
+    const { updates, appends, clears } = placement;
+    const selectedPlan: SheetPushPlan = { ...plan, updates, appends, clears };
 
     const result = await window.electronAPI.executeSheetPush(selectedPlan);
     if (result.error) {
@@ -247,7 +260,9 @@ export default function SheetPushPreview({
                       onChange={() => toggle(key)}
                       style={{ accentColor: 'var(--accent)', flexShrink: 0 }}
                     />
-                    <span style={{ color: 'var(--text-subtle)', minWidth: 42 }}>{t('sheetPush.rowNumber', { row: c.sheetRow })}</span>
+                    <span style={{ color: 'var(--text-subtle)', minWidth: 42 }}>
+                      {t('sheetPush.rowNumber', { row: kind === 'append' ? (placedRow.get(key) ?? c.sheetRow) : c.sheetRow })}
+                    </span>
                     <span style={rowValue}>
                       {kind === 'update' ? (
                         <>
@@ -274,11 +289,21 @@ export default function SheetPushPreview({
 
         {plan.matched.length > 0 && (
           <section style={secondaryGroup}>
-            <div
-              style={sectionHeadingMuted}
-            >
-              {t('sheetPush.matchedHeading')} <span style={sectionCount}>{plan.matched.length}</span>
-            </div>
+            {(() => {
+              const allOn = plan.matched.every((c) => selected.has(keyOf('matched', c)));
+              return (
+                <button
+                  onClick={() => toggleSection('matched')}
+                  title={allOn ? t('sheetPush.untickGroup') : t('sheetPush.tickGroup')}
+                  style={{ ...sectionToggle, marginBottom: 7 }}
+                >
+                  <span style={{ ...sectionHeadingMuted, marginBottom: 0 }}>
+                    {t('sheetPush.matchedHeading')} <span style={sectionCount}>{plan.matched.length}</span>
+                  </span>
+                  <span style={sectionAction}>{allOn ? t('sheetPush.clearGroup') : t('sheetPush.selectGroup')}</span>
+                </button>
+              );
+            })()}
             <p style={sectionDescription}>
               {t('sheetPush.matchedHint')}
             </p>

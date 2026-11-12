@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type Database from 'better-sqlite3';
 import { createTestDb, insertTestCard, insertTestSet } from '../../queries/__tests__/helpers';
-import { computePushPlan } from '../push';
+import { computePushPlan, findBlankRows } from '../push';
 import { refreshSheetBlocks } from '../pull';
 import type { MazosRow } from '../pull';
 
@@ -34,8 +34,8 @@ function row(sheetRow: number, player: string, blockLabel: string, colors: strin
   return { sheetRow, player, blockLabel, colors, deckName };
 }
 
-function plan(existing: MazosRow[], player = 'Bryan') {
-  return computePushPlan(db, player, 'sheet-id', existing);
+function plan(existing: MazosRow[], player = 'Bryan', blankRows: number[] = []) {
+  return computePushPlan(db, player, 'sheet-id', existing, blankRows);
 }
 
 beforeEach(() => {
@@ -162,5 +162,46 @@ describe('computePushPlan', () => {
     const result = plan([row(2001, 'Toni', 'Bloomburrow', '⚫🟢', 'Elfos')]);
     expect(result.appends[0].sheetRow).toBe(2002);
     expect(result.warnings.join(' ')).toMatch(/2001/);
+  });
+
+  it('fills blank rows above the last used row before appending at the end', () => {
+    addDeck('Ratones', { setCode: 'blb' });
+    addDeck('Enanos', { setCode: 'khm' });
+    addDeck('Ardillas', { setCode: 'blb' });
+    const result = plan(
+      [row(2, 'Toni', 'Bloomburrow', '⚫🟢', 'Elfos'), row(5, 'Kevin', 'Kaldheim', '🔵', 'Gigantes')],
+      'Bryan',
+      [4, 3, 9],
+    );
+    expect(result.appends.map((a) => a.sheetRow).sort((a, b) => a - b)).toEqual([3, 4, 6]);
+    expect(result.blankRows).toEqual([3, 4]);
+    expect(result.endRow).toBe(6);
+  });
+
+  it('orders new decks by EDICIONES position, then deck name', () => {
+    addDeck('Zeta', { setCode: 'khm' });
+    addDeck('beta', { setCode: 'blb' });
+    addDeck('Alfa', { setCode: 'blb' });
+    const result = plan([row(2, 'Toni', 'Bloomburrow', '⚫🟢', 'Elfos')]);
+
+    expect(result.appends.map((a) => [a.sheetRow, a.row[1], a.row[3]])).toEqual([
+      [3, 'Bloomburrow', 'Alfa'],
+      [4, 'Bloomburrow', 'beta'],
+      [5, 'Kaldheim', 'Zeta'],
+    ]);
+  });
+});
+
+describe('findBlankRows', () => {
+  it('lists data rows whose A:D cells are all empty, skipping the header', () => {
+    const mazos = [
+      ['JUGADOR', 'BLOQUE', 'COLORES', 'MAZO'],
+      ['Toni', 'Bloomburrow', '⚫🟢', 'Elfos'],
+      [],
+      ['', ' ', '', ''],
+      ['', 'Kaldheim', '', ''],
+      ['Kevin', 'Kaldheim', '🔵', 'Gigantes'],
+    ];
+    expect(findBlankRows(mazos)).toEqual([3, 4]);
   });
 });

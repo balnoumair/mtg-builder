@@ -346,6 +346,10 @@ export interface SheetPushPlan {
   clears: SheetPushRowChange[];
   /** Rows already matching a local deck, as ready-made clear operations. */
   matched: SheetPushRowChange[];
+  /** Fully blank rows above the last used row, ascending; new decks fill these first. */
+  blankRows: number[];
+  /** First row past the last used one; new decks go here once no gap is left. */
+  endRow: number;
   /** Owned decks whose sets match no sheet label; need a manual assignment. */
   unmapped: Array<{ deckId: number; deckName: string; setCodes: string[] }>;
   duplicates: string[];
