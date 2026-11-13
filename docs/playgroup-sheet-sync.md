@@ -69,8 +69,13 @@ be uploaded as the backup file.
 
 ## Safety properties worth knowing
 
-- Only rows whose Jugador is your configured name are ever written, plus new
-  rows appended below the last used row. The main process re-checks each target
+- Only rows whose Jugador is your configured name are ever written, plus rows
+  for new decks. New decks are added in EDICIONES order, then by deck name. A
+  row you're clearing in the same push goes first to a new deck from the same
+  block, so a renamed deck stays in its row. The rest take, lowest row first,
+  any remaining cleared rows, then fully blank rows (A:D empty) above the last
+  used row, then rows past the end. The preview's row numbers follow what you
+  tick. The main process re-checks each target
   row's current contents immediately before writing and aborts if anything moved
   since the preview.
 - Only columns A:D of MAZOS are touched. ESTADÍSTICAS, RESUMEN, and EDICIONES

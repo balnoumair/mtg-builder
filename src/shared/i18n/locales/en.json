@@ -533,6 +533,7 @@
       "noPlayerName": "Set a player name before pushing.",
       "rowsPastLimit": "Some rows land past row {row}, outside the sheet's stats formulas — extend EDICIONES/ESTADÍSTICAS ranges first.",
       "rowChanged": "Row {row} changed since the preview — run the preview again before pushing.",
+      "rowTargetedTwice": "Row {row} would be written twice in one push — run the preview again.",
       "rowOwnedByOther": "Refusing to write row {row}: it belongs to {owner}, not {player}."
     },
     "tags": {

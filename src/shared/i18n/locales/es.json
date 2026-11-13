@@ -533,6 +533,7 @@
       "noPlayerName": "Indica un nombre de jugador antes de subir.",
       "rowsPastLimit": "Algunas filas quedan más allá de la fila {row}, fuera de las fórmulas de estadísticas de la hoja: amplía antes los rangos de EDICIONES/ESTADÍSTICAS.",
       "rowChanged": "La fila {row} ha cambiado desde la vista previa: vuelve a generar la vista previa antes de subir.",
+      "rowTargetedTwice": "La fila {row} se escribiría dos veces en una misma subida: vuelve a generar la vista previa.",
       "rowOwnedByOther": "No se escribirá la fila {row}: pertenece a {owner}, no a {player}."
     },
     "tags": {
